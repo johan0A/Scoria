@@ -1,39 +1,38 @@
 const std = @import("std");
 const build_options = @import("options");
-const gpu = @import("sf_minimal.zig");
-const to_gpu = @import("bridge.zig").to_gpu;
+const sf = @import("sf_minimal.zig");
+const to_sf = @import("bridge.zig").to_sf;
 const to_vk = @import("bridge.zig").to_vk;
 const sfir = @import("sfir.zig");
 const vk = @import("vulkan");
 const VulkanLoader = @import("VulkanLoader.zig");
 const symbol_map = @import("driver_symbol_map.zig");
-const target = @import("builtin").target;
 
-pub fn Header(T: type) type {
+pub fn Object(T: type) type {
     return extern struct {
-        table: *anyopaque,
-        bytes: [@sizeOf(T)]u8 align(@alignOf(T)),
+        header: *anyopaque,
+        body_bytes: [@sizeOf(T)]u8 align(@alignOf(T)),
 
         pub fn body(handle: *@This()) *T {
-            return @ptrCast(&handle.bytes);
+            return @ptrCast(&handle.body_bytes);
         }
 
         pub fn set(handle: *@This(), table: *anyopaque, body_value: T) void {
-            handle.table = table;
+            handle.header = table;
             handle.body().* = body_value;
         }
     };
 }
 
 pub const Instance = struct {
-    instance: vk.InstanceProxy,
+    handle: vk.InstanceProxy,
     loader: VulkanLoader,
     surface_support: SurfaceSupport,
     debug_messenger: vk.DebugUtilsMessengerEXT,
-    sf_gpa: gpu.HostAllocator,
+    sf_gpa: sf.HostAllocator,
     gpa: std.mem.Allocator,
 
-    devices: std.heap.MemoryPool(Header(Device)),
+    devices: std.heap.MemoryPool(Object(Device)),
 
     const SurfaceSupport = packed struct {
         surface: bool = false,
@@ -41,14 +40,14 @@ pub const Instance = struct {
         win32: bool = false,
     };
 
-    pub fn sfCreateInstance(
-        host_allocator: ?*gpu.HostAllocator,
-    ) *Header(Instance) {
-        return create(host_allocator) catch @panic("TODO");
+    pub fn create(
+        host_allocator: ?*sf.HostAllocator,
+    ) *Object(Instance) {
+        return createInner(host_allocator) catch @panic("TODO");
     }
-    fn create(
-        host_allocator: ?*gpu.HostAllocator,
-    ) !*Header(Instance) {
+    fn createInner(
+        host_allocator: ?*sf.HostAllocator,
+    ) !*Object(Instance) {
         const gpa: std.mem.Allocator = if (host_allocator) |ha| .{
             .ptr = @ptrCast(@alignCast(ha)),
             .vtable = wrap_sf_allocator_vtable,
@@ -127,9 +126,9 @@ pub const Instance = struct {
         };
         const debug_messenger = try handle.createDebugUtilsMessengerEXT(&debug_messenger_info, null);
 
-        const instance = try gpa.create(Header(Instance));
+        const instance = try gpa.create(Object(Instance));
         instance.set(undefined, .{
-            .instance = handle,
+            .handle = handle,
             .loader = loader,
             .surface_support = surface_support,
             .debug_messenger = debug_messenger,
@@ -143,20 +142,21 @@ pub const Instance = struct {
         return instance;
     }
 
-    pub fn sfDestroyInstance(instance: *Header(Instance)) void {
-        instance.body().instance.destroyDebugUtilsMessengerEXT(instance.body().debug_messenger, null);
-        instance.body().instance.destroyInstance(null);
-        instance.body().loader.close();
-        instance.body().gpa.destroy(instance.body().instance.wrapper);
-        instance.body().gpa.destroy(instance);
+    pub fn destroyInstance(instance_obj: *Object(Instance)) void {
+        const instance = instance_obj.body();
+        instance.handle.destroyDebugUtilsMessengerEXT(instance.debug_messenger, null);
+        instance.handle.destroyInstance(null);
+        instance.loader.close();
+        instance.gpa.destroy(instance.handle.wrapper);
+        instance.gpa.destroy(instance_obj);
     }
 
-    pub fn sfEnumerateAdapters(instance: *Header(Instance), adapters_buffer_size: usize, adapters_buffer: ?[*]*Adapter, adapters_count: *usize) void {
-        enumerateAdapters(instance.body(), if (adapters_buffer) |buf| buf[0..adapters_buffer_size] else null, adapters_count) catch @panic("TODO");
+    pub fn enumerateAdapters(instance: *Object(Instance), adapters_buffer_size: usize, adapters_buffer: ?[*]*Adapter, adapters_count: *usize) void {
+        enumerateAdaptersInner(instance.body(), if (adapters_buffer) |buf| buf[0..adapters_buffer_size] else null, adapters_count) catch @panic("TODO");
     }
-    fn enumerateAdapters(instance: *Instance, adapters_buffer_opt: ?[]*Adapter, adapters_count: *usize) !void {
+    fn enumerateAdaptersInner(instance: *Instance, adapters_buffer_opt: ?[]*Adapter, adapters_count: *usize) !void {
         // TODO: filter incompatible devices
-        const physical_devices = try instance.instance.enumeratePhysicalDevicesAlloc(instance.gpa);
+        const physical_devices = try instance.handle.enumeratePhysicalDevicesAlloc(instance.gpa);
         defer instance.gpa.free(physical_devices);
         adapters_count.* = physical_devices.len;
         errdefer adapters_count.* = 0;
@@ -166,18 +166,18 @@ pub const Instance = struct {
         }
     }
 
-    pub fn sfAdapterInfo(instance: *Header(Instance), adapter: *Adapter) gpu.AdpaterInfo {
-        return adapterInfo(instance.body(), adapter);
+    pub fn adapterInfo(instance: *Object(Instance), adapter: *Adapter) sf.AdpaterInfo {
+        return adapterInfoInner(instance.body(), adapter);
     }
-    pub fn adapterInfo(instance: *Instance, adapter: *Adapter) gpu.AdpaterInfo {
+    pub fn adapterInfoInner(instance: *Instance, adapter: *Adapter) sf.AdpaterInfo {
         const physical_device = adapter.asPhysicalDevice();
-        const properties = instance.instance.getPhysicalDeviceProperties(physical_device);
+        const properties = instance.handle.getPhysicalDeviceProperties(physical_device);
         return .{
-            .name_lenght = @intCast(std.mem.findScalar(u8, &properties.device_name, 0) orelse
+            .name_length = @intCast(std.mem.findScalar(u8, &properties.device_name, 0) orelse
                 properties.device_name.len),
             .name = properties.device_name,
             .type = switch (properties.device_type) {
-                inline else => |t| @field(gpu.AdapterType, @tagName(t)),
+                inline else => |t| @field(sf.AdapterType, @tagName(t)),
                 _ => .other,
             },
         };
@@ -185,34 +185,34 @@ pub const Instance = struct {
 };
 
 pub const Surface = struct {
-    surface: vk.SurfaceKHR,
+    handle: vk.SurfaceKHR,
     d: *Device,
 
-    pub fn sfCreateSurfaceWin32(d: *Header(Device), desc: gpu.SurfaceWin32Desc) *Header(Surface) {
-        return createWin32(d.body(), desc) catch @panic("TODO");
+    pub fn createSurfaceWin32(d: *Object(Device), desc: sf.SurfaceWin32Desc) *Object(Surface) {
+        return createWin32Inner(d.body(), desc) catch @panic("TODO");
     }
-    fn createWin32(d: *Device, desc: gpu.SurfaceWin32Desc) !*Header(Surface) {
+    fn createWin32Inner(d: *Device, desc: sf.SurfaceWin32Desc) !*Object(Surface) {
         const info: vk.Win32SurfaceCreateInfoKHR = .{ .hinstance = @ptrCast(desc.hinstance), .hwnd = @ptrCast(desc.hwnd) };
         const surface = try d.surfaces.create(d.gpa);
-        surface.set(d.table, .{ .surface = try d.instance.instance.createWin32SurfaceKHR(&info, null), .d = d });
+        surface.set(d.table, .{ .handle = try d.instance.handle.createWin32SurfaceKHR(&info, null), .d = d });
         return surface;
     }
 
-    pub fn sfCreateSurfaceXlib(device: *Header(Device), desc: gpu.SurfaceXlibDesc) *Header(Surface) {
-        return createXlib(device.body(), desc) catch @panic("TODO");
+    pub fn createSurfaceXlib(device: *Object(Device), desc: sf.SurfaceXlibDesc) *Object(Surface) {
+        return createXlibInner(device.body(), desc) catch @panic("TODO");
     }
-    fn createXlib(d: *Device, desc: gpu.SurfaceXlibDesc) !*Header(Surface) {
+    fn createXlibInner(d: *Device, desc: sf.SurfaceXlibDesc) !*Object(Surface) {
         const info: vk.XlibSurfaceCreateInfoKHR = .{ .dpy = @ptrCast(desc.display), .window = @intCast(desc.window) };
         const surface = try d.surfaces.create(d.gpa);
-        surface.set(d.table, .{ .surface = try d.instance.instance.createXlibSurfaceKHR(&info, null), .d = d });
+        surface.set(d.table, .{ .handle = try d.instance.handle.createXlibSurfaceKHR(&info, null), .d = d });
         return surface;
     }
 
-    pub fn sfDestroySurface(surface: *Header(Surface)) void {
-        destroy(surface.body());
+    pub fn destroy(surface: *Object(Surface)) void {
+        destroyInner(surface.body());
     }
-    fn destroy(surface: *Surface) void {
-        surface.d.instance.instance.destroySurfaceKHR(surface.surface, null);
+    fn destroyInner(surface: *Surface) void {
+        surface.d.instance.handle.destroySurfaceKHR(surface.handle, null);
         surface.d.gpa.destroy(surface);
     }
 };
@@ -230,14 +230,14 @@ pub const Adapter = opaque {
 };
 
 pub const Device = struct {
+    handle: vk.DeviceProxy,
     instance: *Instance,
-    device: vk.DeviceProxy,
     physical_device: vk.PhysicalDevice,
 
     queue_states: [max_queue_state_count]QueueState,
     queue_state_count: u8,
-    queue_id_from_type: std.EnumArray(gpu.QueueType, QueueId),
-    queues: std.EnumArray(gpu.QueueType, Header(Queue)),
+    queue_id_from_type: std.EnumArray(sf.QueueType, QueueId),
+    queues: std.EnumArray(sf.QueueType, Object(Queue)),
 
     gpa: std.mem.Allocator,
 
@@ -247,7 +247,7 @@ pub const Device = struct {
 
     texture_heap_set_layout: vk.DescriptorSetLayout,
 
-    pending_texture_inits: std.array_hash_map.Auto(vk.Image, gpu.TextureDesc),
+    pending_texture_inits: std.array_hash_map.Auto(vk.Image, sf.TextureDesc),
     texture_init_timeline: struct {
         semaphore: Semaphore,
         value: u64,
@@ -256,17 +256,17 @@ pub const Device = struct {
     memory_properties: vk.PhysicalDeviceMemoryProperties,
     has_host_visible_device_local: bool,
 
-    surfaces: std.heap.MemoryPool(Header(Surface)),
-    semaphores: std.heap.MemoryPool(Header(Semaphore)),
-    swapchains: std.heap.MemoryPool(Header(Swapchain)),
-    command_buffers: std.heap.MemoryPool(Header(CommandBuffer)),
-    textures: std.heap.MemoryPool(Header(Texture)),
-    pipelines: std.heap.MemoryPool(Header(Pipeline)),
-    depth_stencil_states: std.heap.MemoryPool(Header(DepthStencilState)),
+    surfaces: std.heap.MemoryPool(Object(Surface)),
+    semaphores: std.heap.MemoryPool(Object(Semaphore)),
+    swapchains: std.heap.MemoryPool(Object(Swapchain)),
+    command_buffers: std.heap.MemoryPool(Object(CommandBuffer)),
+    textures: std.heap.MemoryPool(Object(Texture)),
+    pipelines: std.heap.MemoryPool(Object(Pipeline)),
+    depth_stencil_states: std.heap.MemoryPool(Object(DepthStencilState)),
 
     table: *anyopaque,
 
-    const max_queue_state_count = @typeInfo(gpu.QueueType).@"enum".field_names.len;
+    const max_queue_state_count = @typeInfo(sf.QueueType).@"enum".field_names.len;
 
     const QueueId = enum(u8) { _ };
 
@@ -294,27 +294,27 @@ pub const Device = struct {
             buffer: vk.Buffer,
             memory: vk.DeviceMemory,
             size: usize,
-            device_addr: gpu.DeviceAddress,
+            device_addr: sf.DeviceAddress,
             host_addr: ?usize,
 
             fn destroy(entry: *Entry, d: Device) void {
-                d.device.destroyBuffer(entry.buffer, null);
-                d.device.freeMemory(entry.memory, null);
+                d.handle.destroyBuffer(entry.buffer, null);
+                d.handle.freeMemory(entry.memory, null);
                 entry.* = undefined;
             }
         };
 
-        fn addrToEntryAndOffset(map: *const AddressMap, device_addr: gpu.DeviceAddress) struct { Entry, vk.DeviceSize } {
+        fn addrToEntryAndOffset(map: *const AddressMap, device_addr: sf.DeviceAddress) struct { Entry, vk.DeviceSize } {
             const entry = map.addrToEntry(device_addr);
             const offset = device_addr - entry.device_addr;
             return .{ entry, @intCast(offset) };
         }
 
-        fn addrToEntry(map: *const AddressMap, device_addr: gpu.DeviceAddress) Entry {
+        fn addrToEntry(map: *const AddressMap, device_addr: sf.DeviceAddress) Entry {
             return map.entries.items[map.indexFromAddr(device_addr)];
         }
 
-        fn indexFromAddr(map: *const AddressMap, device_addr: gpu.DeviceAddress) usize {
+        fn indexFromAddr(map: *const AddressMap, device_addr: sf.DeviceAddress) usize {
             return std.sort.upperBound(
                 Entry,
                 map.entries.items,
@@ -342,21 +342,18 @@ pub const Device = struct {
         }
     };
 
-    pub fn sfCreateDevice(
-        instance: *Header(Instance),
-        adapter: *Adapter,
-    ) *Header(Device) {
-        return create(
+    pub fn create(instance: *Object(Instance), adapter: *Adapter) *Object(Device) {
+        return createInner(
             instance.body(),
-            instance.table,
+            instance.header,
             adapter,
         ) catch @panic("TODO");
     }
-    fn create(
+    fn createInner(
         instance: *Instance,
         table: *anyopaque,
         adapter: *Adapter,
-    ) !*Header(Device) {
+    ) !*Object(Device) {
         var arena_impl: std.heap.ArenaAllocator = .init(instance.gpa);
         defer arena_impl.deinit();
         const arena = arena_impl.allocator();
@@ -364,11 +361,11 @@ pub const Device = struct {
         const device_handle = try createLogicalDevice(
             arena,
             adapter.asPhysicalDevice(),
-            instance.instance.wrapper,
+            instance.handle.wrapper,
             instance.surface_support.surface,
         );
         const device_dispatch = try instance.gpa.create(vk.DeviceWrapper);
-        device_dispatch.* = .load(device_handle, instance.instance.wrapper.dispatch.vkGetDeviceProcAddr.?);
+        device_dispatch.* = .load(device_handle, instance.handle.wrapper.dispatch.vkGetDeviceProcAddr.?);
         const handle: vk.DeviceProxy = .init(device_handle, device_dispatch);
 
         var bindings = [_]vk.DescriptorSetLayoutBinding{.{
@@ -408,13 +405,13 @@ pub const Device = struct {
         bindings[0].descriptor_count = variable_support.max_variable_descriptor_count;
         const descriptor_set_layout = try handle.createDescriptorSetLayout(&layout_info, null);
 
-        const queue_family_indices = try findQueueFamilies(arena, adapter.asPhysicalDevice(), instance.instance.wrapper);
+        const queue_family_indices = try findQueueFamilies(arena, adapter.asPhysicalDevice(), instance.handle.wrapper);
 
         var queue_states: [max_queue_state_count]QueueState = undefined;
         var queue_state_count: u8 = 0;
-        var queue_of_type: std.EnumArray(gpu.QueueType, QueueId) = .initUndefined();
+        var queue_of_type: std.EnumArray(sf.QueueType, QueueId) = .initUndefined();
 
-        for (std.enums.values(gpu.QueueType)) |queue_type| {
+        for (std.enums.values(sf.QueueType)) |queue_type| {
             const family_index = queue_family_indices.get(queue_type);
             const existing: ?QueueId = for (queue_states[0..queue_state_count], 0..) |q, i| {
                 if (q.family == family_index) break @fromBackingInt(@intCast(i));
@@ -441,7 +438,7 @@ pub const Device = struct {
             });
         }
 
-        const memory_properties = instance.instance.getPhysicalDeviceMemoryProperties(adapter.asPhysicalDevice());
+        const memory_properties = instance.handle.getPhysicalDeviceMemoryProperties(adapter.asPhysicalDevice());
 
         const has_host_visible_device_local = for (0..memory_properties.memory_type_count) |i| {
             const t = memory_properties.memory_types[i];
@@ -451,10 +448,10 @@ pub const Device = struct {
             }
         } else false;
 
-        const device = try instance.gpa.create(Header(Device));
+        const device = try instance.gpa.create(Object(Device));
         device.set(table, .{
+            .handle = handle,
             .instance = instance,
-            .device = handle,
             .physical_device = adapter.asPhysicalDevice(),
 
             .queue_states = queue_states,
@@ -489,21 +486,19 @@ pub const Device = struct {
         return device;
     }
 
-    pub fn sfDestroyDevice(d: *Header(Device)) void {
-        return destroy(d.body());
-    }
-    fn destroy(d: *Device) void {
-        d.device.deviceWaitIdle() catch {};
+    pub fn destroy(d_obj: *Object(Device)) void {
+        const d = d_obj.body();
+        d.handle.deviceWaitIdle() catch {};
         for (d.queue_states[0..d.queue_state_count]) |*queue| {
-            queue.timeline.destroyVkDevice(d.*.device);
-            d.device.destroyCommandPool(queue.command_pool, null);
+            queue.timeline.destroyVkDevice(d.*.handle);
+            d.handle.destroyCommandPool(queue.command_pool, null);
             queue.free_command_buffers.deinit(d.gpa);
             queue.pending_command_buffers.deinit(d.gpa);
         }
-        d.texture_init_timeline.semaphore.destroyVkDevice(d.device);
-        d.device.destroyDescriptorSetLayout(d.texture_heap_set_layout, null);
-        d.device.destroyDevice(null);
-        d.gpa.destroy(d.device.wrapper);
+        d.texture_init_timeline.semaphore.destroyVkDevice(d.handle);
+        d.handle.destroyDescriptorSetLayout(d.texture_heap_set_layout, null);
+        d.handle.destroyDevice(null);
+        d.gpa.destroy(d.handle.wrapper);
         // TODO: make a debug gpa and uncomment next line
         // for (d.heap.entries.items) |entry| entry.destroy(d);
         d.heap.entries.deinit(d.gpa);
@@ -512,46 +507,46 @@ pub const Device = struct {
         gpa.destroy(d);
     }
 
-    pub fn sfSurfaceSupportedUsage(d: *Header(Device), surface: *Header(Surface)) gpu.TextureUsage {
-        return surfaceUsage(d.body(), surface.body()) catch @panic("TODO"); // TODO: move errors to surface creation
+    pub fn surfaceSupportedUsage(d: *Object(Device), surface: *Object(Surface)) sf.TextureUsage {
+        return surfaceSupportedUsageInner(d.body(), surface.body()) catch @panic("TODO"); // TODO: move errors to surface creation
     }
-    fn surfaceUsage(d: *Device, surface: *Surface) !gpu.TextureUsage {
-        const vk_capabilities = try d.instance.instance.getPhysicalDeviceSurfaceCapabilitiesKHR(d.physical_device, surface.surface);
-        return to_gpu.usageFlags(vk_capabilities.supported_usage_flags);
+    fn surfaceSupportedUsageInner(d: *Device, surface: *Surface) !sf.TextureUsage {
+        const vk_capabilities = try d.instance.handle.getPhysicalDeviceSurfaceCapabilitiesKHR(d.physical_device, surface.handle);
+        return to_sf.usageFlags(vk_capabilities.supported_usage_flags);
     }
 
-    pub fn sfSurfaceFormats(
-        d: *Header(Device),
-        surface: *Header(Surface),
+    pub fn surfaceFormats(
+        d: *Object(Device),
+        surface: *Object(Surface),
         formats_buffer_size: usize,
-        formats_buffer: ?[*]gpu.Format,
+        formats_buffer: ?[*]sf.Format,
         formats_count: *usize,
     ) void {
-        surfaceFormats(
+        surfaceFormatsInner(
             d.body(),
             surface.body(),
             if (formats_buffer) |buf| buf[0..formats_buffer_size] else null,
             formats_count,
         ) catch @panic("TODO"); // TODO: move errors to surface creation
     }
-    fn surfaceFormats(
+    fn surfaceFormatsInner(
         d: *Device,
         surface: *Surface,
-        formats_buffer_opt: ?[]gpu.Format,
+        formats_buffer_opt: ?[]sf.Format,
         formats_count: *usize,
     ) !void {
         var arena_impl: std.heap.ArenaAllocator = .init(d.gpa);
         defer arena_impl.deinit();
         const arena = arena_impl.allocator();
 
-        const vk_formats = try d.instance.instance.getPhysicalDeviceSurfaceFormatsAllocKHR(
+        const vk_formats = try d.instance.handle.getPhysicalDeviceSurfaceFormatsAllocKHR(
             d.physical_device,
-            surface.surface,
+            surface.handle,
             arena,
         );
-        var formats: std.ArrayList(gpu.Format) = try .initCapacity(arena, vk_formats.len);
+        var formats: std.ArrayList(sf.Format) = try .initCapacity(arena, vk_formats.len);
         for (vk_formats) |vk_format| {
-            formats.appendAssumeCapacity(to_gpu.format(vk_format.format) orelse continue);
+            formats.appendAssumeCapacity(to_sf.format(vk_format.format) orelse continue);
         }
 
         formats_count.* = formats.items.len;
@@ -563,38 +558,38 @@ pub const Device = struct {
         );
     }
 
-    pub fn sfSurfacePresentModes(
-        d: *Header(Device),
-        surface: *Header(Surface),
+    pub fn surfacePresentModes(
+        d: *Object(Device),
+        surface: *Object(Surface),
         modes_buffer_size: usize,
-        modes_buffer: ?[*]gpu.PresentMode,
+        modes_buffer: ?[*]sf.PresentMode,
         modes_count: *usize,
     ) void {
-        surfacePresentModes(
+        surfacePresentModesInner(
             d.body(),
             surface.body(),
             if (modes_buffer) |buf| buf[0..modes_buffer_size] else null,
             modes_count,
         ) catch @panic("TODO"); // TODO: move errors to surface creation
     }
-    fn surfacePresentModes(
+    fn surfacePresentModesInner(
         d: *Device,
         surface: *Surface,
-        modes_buffer_opt: ?[]gpu.PresentMode,
+        modes_buffer_opt: ?[]sf.PresentMode,
         modes_count: *usize,
     ) !void {
         var arena_impl: std.heap.ArenaAllocator = .init(d.gpa);
         defer arena_impl.deinit();
         const arena = arena_impl.allocator();
 
-        const vk_modes = try d.instance.instance.getPhysicalDeviceSurfacePresentModesAllocKHR(
+        const vk_modes = try d.instance.handle.getPhysicalDeviceSurfacePresentModesAllocKHR(
             d.physical_device,
-            surface.surface,
+            surface.handle,
             arena,
         );
-        var modes: std.ArrayList(gpu.PresentMode) = try .initCapacity(arena, vk_modes.len);
+        var modes: std.ArrayList(sf.PresentMode) = try .initCapacity(arena, vk_modes.len);
         for (vk_modes) |vk_mode| {
-            modes.appendAssumeCapacity(to_gpu.presentMode(vk_mode) orelse continue);
+            modes.appendAssumeCapacity(to_sf.presentMode(vk_mode) orelse continue);
         }
 
         modes_count.* = modes.items.len;
@@ -606,20 +601,20 @@ pub const Device = struct {
         );
     }
 
-    pub fn sfDeviceToHostPointer(d: *Header(Device), ptr: gpu.DeviceAddress) *anyopaque {
+    pub fn deviceToHostPointer(d: *Object(Device), ptr: sf.DeviceAddress) *anyopaque {
         const entry = d.body().heap.addrToEntry(ptr);
         const offset = ptr - entry.device_addr;
         return @ptrFromInt(entry.host_addr.? + offset);
     }
 
-    pub fn sfAlloc(
-        d: *Header(Device),
+    pub fn alloc(
+        d: *Object(Device),
         bytes: usize,
         alignment: usize,
-        memory: gpu.MemoryType,
-        mapped_memory: *gpu.HostDeviceAddress,
+        memory: sf.MemoryType,
+        mapped_memory: *sf.HostDeviceAddress,
     ) !void {
-        mapped_memory.* = alloc(d.body(), bytes, .fromByteUnits(alignment), memory) catch |err| return switch (err) {
+        mapped_memory.* = allocInner(d.body(), bytes, .fromByteUnits(alignment), memory) catch |err| return switch (err) {
             // TODO: inverstigate:
             error.Unknown,
             error.InvalidOpaqueCaptureAddressKHR,
@@ -632,12 +627,12 @@ pub const Device = struct {
             error.OutOfDeviceMemory => error.OutOfDeviceMemory,
         };
     }
-    fn alloc(
+    fn allocInner(
         d: *Device,
         bytes: usize,
         alignment: std.mem.Alignment,
-        memory: gpu.MemoryType,
-    ) !gpu.HostDeviceAddress {
+        memory: sf.MemoryType,
+    ) !sf.HostDeviceAddress {
         std.debug.assert(bytes > 0);
 
         const usage: vk.BufferUsageFlags = switch (memory) {
@@ -676,17 +671,17 @@ pub const Device = struct {
             .queue_family_index_count = if (concurrent) @intCast(families.len) else 0,
             .p_queue_family_indices = if (concurrent) families.ptr else null,
         };
-        var buffer = try d.device.createBuffer(&buffer_info, null);
-        errdefer d.device.destroyBuffer(buffer, null);
+        var buffer = try d.handle.createBuffer(&buffer_info, null);
+        errdefer d.handle.destroyBuffer(buffer, null);
 
-        var buffer_memory_requirements = d.device.getBufferMemoryRequirements(buffer);
+        var buffer_memory_requirements = d.handle.getBufferMemoryRequirements(buffer);
 
         const padded = buffer_memory_requirements.alignment < alignment.toByteUnits();
         if (padded) {
-            d.device.destroyBuffer(buffer, null);
+            d.handle.destroyBuffer(buffer, null);
             buffer_info.size = bytes + alignment.toByteUnits() - 1;
-            buffer = try d.device.createBuffer(&buffer_info, null);
-            buffer_memory_requirements = d.device.getBufferMemoryRequirements(buffer);
+            buffer = try d.handle.createBuffer(&buffer_info, null);
+            buffer_memory_requirements = d.handle.getBufferMemoryRequirements(buffer);
         }
 
         const memory_types = switch (memory) {
@@ -724,16 +719,16 @@ pub const Device = struct {
             .flags = .{ .device_address = true },
             .device_mask = 0,
         };
-        const buffer_memory = try d.device.allocateMemory(&.{
+        const buffer_memory = try d.handle.allocateMemory(&.{
             .p_next = &alloc_flags,
             .allocation_size = buffer_memory_requirements.size,
             .memory_type_index = findMemoryType(d.*, memory_types, properties),
         }, null);
-        errdefer d.device.freeMemory(buffer_memory, null);
+        errdefer d.handle.freeMemory(buffer_memory, null);
 
-        try d.device.bindBufferMemory(buffer, buffer_memory, 0);
+        try d.handle.bindBufferMemory(buffer, buffer_memory, 0);
 
-        const raw_device_addr = d.device.getBufferDeviceAddress(&.{ .buffer = buffer });
+        const raw_device_addr = d.handle.getBufferDeviceAddress(&.{ .buffer = buffer });
         const device_addr = std.mem.alignForward(u64, raw_device_addr, alignment.toByteUnits());
         const delta: usize = @intCast(device_addr - raw_device_addr);
         if (!padded) std.debug.assert(delta == 0);
@@ -741,7 +736,7 @@ pub const Device = struct {
 
         const host_addr: ?usize = switch (memory) {
             .readback, .upload => @intFromPtr(
-                try d.device.mapMemory(buffer_memory, 0, vk.WHOLE_SIZE, .{}),
+                try d.handle.mapMemory(buffer_memory, 0, vk.WHOLE_SIZE, .{}),
             ) + delta,
             .device_local => null,
         };
@@ -760,13 +755,10 @@ pub const Device = struct {
         };
     }
 
-    pub fn sfFree(d: *Header(Device), ptr: gpu.DeviceAddress) void {
-        free(d.body(), ptr);
-    }
-    fn free(d: *Device, ptr: gpu.DeviceAddress) void {
-        const index = d.heap.indexFromAddr(ptr);
-        var entry = d.heap.entries.orderedRemove(index);
-        entry.destroy(d.*);
+    pub fn free(d: *Object(Device), ptr: sf.DeviceAddress) void {
+        const index = d.body().heap.indexFromAddr(ptr);
+        var entry = d.body().heap.entries.orderedRemove(index);
+        entry.destroy(d.body().*);
     }
 
     // TODO: cache this
@@ -796,7 +788,7 @@ pub const Device = struct {
             .initial_layout = .undefined,
         };
         var req: vk.MemoryRequirements2 = .{ .memory_requirements = undefined };
-        d.device.getDeviceImageMemoryRequirements(&.{ .plane_aspect = .{}, .p_create_info = &ici }, &req);
+        d.handle.getDeviceImageMemoryRequirements(&.{ .plane_aspect = .{}, .p_create_info = &ici }, &req);
         return req.memory_requirements.memory_type_bits;
     }
 
@@ -804,7 +796,7 @@ pub const Device = struct {
         if (d.descriptor_buffer_properties == null) {
             var buffer_properties = std.mem.zeroInit(vk.PhysicalDeviceDescriptorBufferPropertiesEXT, .{});
             var properties_2: vk.PhysicalDeviceProperties2 = .{ .p_next = &buffer_properties, .properties = undefined };
-            d.instance.instance.getPhysicalDeviceProperties2(d.physical_device, &properties_2);
+            d.instance.handle.getPhysicalDeviceProperties2(d.physical_device, &properties_2);
             d.descriptor_buffer_properties = buffer_properties;
         }
         return &d.descriptor_buffer_properties.?;
@@ -893,7 +885,7 @@ pub const Device = struct {
         arena: std.mem.Allocator,
         physical_device: vk.PhysicalDevice,
         instance_dispatch: *const vk.InstanceWrapper,
-    ) !std.EnumArray(gpu.QueueType, u32) {
+    ) !std.EnumArray(sf.QueueType, u32) {
         const queue_family_indices = try instance_dispatch.getPhysicalDeviceQueueFamilyPropertiesAlloc(physical_device, arena);
 
         var graphics: u32 = std.math.maxInt(u32);
@@ -930,7 +922,7 @@ pub const Device = struct {
         });
     }
 
-    fn queueStateForQueueType(d: *Device, queue_type: gpu.QueueType) *QueueState {
+    fn queueStateForQueueType(d: *Device, queue_type: sf.QueueType) *QueueState {
         const queue_id = d.queue_id_from_type.get(queue_type);
         return d.queueStateForQueueId(queue_id);
     }
@@ -939,11 +931,11 @@ pub const Device = struct {
         return &d.queue_states[@backingInt(queue_id)];
     }
 
-    fn acquireCommandBuffer(d: *Device, queue_type: gpu.QueueType) !CommandBuffer {
+    fn acquireCommandBuffer(d: *Device, queue_type: sf.QueueType) !CommandBuffer {
         const queue_id = d.queue_id_from_type.get(queue_type);
         if (d.queueStateForQueueId(queue_id).free_command_buffers.pop()) |command_buffer| {
-            try d.device.resetCommandBuffer(command_buffer, .{});
-            return .{ .command_buffer = command_buffer, .queue_id = queue_id, .d = d };
+            try d.handle.resetCommandBuffer(command_buffer, .{});
+            return .{ .handle = command_buffer, .queue_id = queue_id, .d = d };
         }
 
         const alloc_info: vk.CommandBufferAllocateInfo = .{
@@ -952,14 +944,14 @@ pub const Device = struct {
             .command_buffer_count = 1,
         };
         var command_buffer: vk.CommandBuffer = undefined;
-        try d.device.allocateCommandBuffers(&alloc_info, (&command_buffer)[0..1]);
-        return .{ .command_buffer = command_buffer, .queue_id = queue_id, .d = d };
+        try d.handle.allocateCommandBuffers(&alloc_info, (&command_buffer)[0..1]);
+        return .{ .handle = command_buffer, .queue_id = queue_id, .d = d };
     }
 
     fn releaseCommandBuffer(d: *Device, command_buffer: CommandBuffer) void {
         const queue_state = d.queueStateForQueueId(command_buffer.queue_id);
-        queue_state.free_command_buffers.append(d.gpa, command_buffer.command_buffer) catch {
-            d.device.freeCommandBuffers(queue_state.command_pool, &.{command_buffer.command_buffer});
+        queue_state.free_command_buffers.append(d.gpa, command_buffer.handle) catch {
+            d.handle.freeCommandBuffers(queue_state.command_pool, &.{command_buffer.handle});
         };
     }
 
@@ -969,11 +961,11 @@ pub const Device = struct {
             const list = &queue_state.pending_command_buffers;
             if (list.items.len == 0) continue;
             const timeline = queue_state.timeline;
-            const completed = d.device.getSemaphoreCounterValue(timeline.semaphore) catch continue;
+            const completed = d.handle.getSemaphoreCounterValue(timeline.handle) catch continue;
             var n: usize = 0;
             while (n < list.items.len and list.items[n].value <= completed) : (n += 1) {
                 d.releaseCommandBuffer(.{
-                    .command_buffer = list.items[n].command_buffer,
+                    .handle = list.items[n].command_buffer,
                     .queue_id = queue_id,
                     .d = d,
                 });
@@ -987,45 +979,43 @@ pub const Device = struct {
 
 pub const Queue = struct {
     id: Device.QueueId,
-    queue_type: gpu.QueueType,
+    queue_type: sf.QueueType,
     d: *Device,
 
-    pub fn sfGetQueue(d: *Header(Device), queue_type: gpu.QueueType) *Header(Queue) {
-        return create(d.body(), queue_type);
-    }
-    fn create(d: *Device, queue_type: gpu.QueueType) *Header(Queue) {
+    pub fn getQueue(d_obj: *Object(Device), queue_type: sf.QueueType) *Object(Queue) {
+        const d = d_obj.body();
         const id = d.queue_id_from_type.get(queue_type);
         const queue = d.queues.getPtr(queue_type);
         queue.set(d.table, .{ .id = id, .queue_type = queue_type, .d = d });
         return queue;
     }
 
-    pub fn sfStartCommandRecording(queue: *Header(Queue), command_buffer: **Header(CommandBuffer)) !void {
+    pub fn startCommandRecording(queue: *Object(Queue), command_buffer: **Object(CommandBuffer)) !void {
         const d = queue.body().d;
         const cb = try d.command_buffers.create(d.gpa);
-        cb.set(d.table, startCommandRecording(queue.body()) catch |err| return switch (err) {
+        cb.set(d.table, startCommandRecordingInner(queue.body()) catch |err| return switch (err) {
             error.OutOfHostMemory => error.OutOfMemory,
             error.OutOfDeviceMemory, error.Unknown => |e| e,
         });
         command_buffer.* = cb;
     }
-    fn startCommandRecording(queue: *const Queue) !CommandBuffer {
+    fn startCommandRecordingInner(queue: *const Queue) !CommandBuffer {
         queue.d.reclaimCompletedCommandBuffers();
         const command_buffer = try queue.d.acquireCommandBuffer(queue.queue_type);
         errdefer queue.d.releaseCommandBuffer(command_buffer);
 
         const begin_info: vk.CommandBufferBeginInfo = .{ .flags = .{ .one_time_submit = true } };
-        try queue.d.device.beginCommandBuffer(command_buffer.command_buffer, &begin_info);
+        try queue.d.handle.beginCommandBuffer(command_buffer.handle, &begin_info);
 
         return command_buffer;
     }
 
-    pub fn sfSubmit(
-        queue: *Header(Queue),
+    pub fn submit(
+        queue: *Object(Queue),
         command_buffer_count: usize,
-        command_buffers: [*]const *Header(CommandBuffer),
+        command_buffers: [*]const *Object(CommandBuffer),
     ) !void {
-        submit(
+        submitInner(
             queue.body(),
             command_buffers[0..command_buffer_count],
             null,
@@ -1036,14 +1026,14 @@ pub const Queue = struct {
         };
     }
 
-    pub fn sfSubmitAndSignal(
-        queue: *Header(Queue),
+    pub fn submitAndSignal(
+        queue: *Object(Queue),
         command_buffer_count: usize,
-        command_buffers: [*]const *Header(CommandBuffer),
-        signal_semaphore: *Header(Semaphore),
+        command_buffers: [*]const *Object(CommandBuffer),
+        signal_semaphore: *Object(Semaphore),
         signal_value: u64,
     ) !void {
-        submit(
+        submitInner(
             queue.body(),
             command_buffers[0..command_buffer_count],
             .{ .semaphore = signal_semaphore.body(), .value = signal_value },
@@ -1058,10 +1048,9 @@ pub const Queue = struct {
         semaphore: *Semaphore,
         value: u64,
     };
-
-    fn submit(
+    fn submitInner(
         queue: *Queue,
-        command_buffers: []const *Header(CommandBuffer),
+        command_buffers: []const *Object(CommandBuffer),
         extra_signal: ?Signal,
     ) !void {
         const d = queue.d;
@@ -1104,22 +1093,22 @@ pub const Queue = struct {
                 };
             }
 
-            const cb = try queue.startCommandRecording();
+            const cb = try queue.startCommandRecordingInner();
             texture_init_command_buffer = cb;
 
-            d.device.cmdPipelineBarrier2(cb.command_buffer, &.{
+            d.handle.cmdPipelineBarrier2(cb.handle, &.{
                 .image_memory_barrier_count = @intCast(barriers.len),
                 .p_image_memory_barriers = barriers.ptr,
             });
-            try d.device.endCommandBuffer(cb.command_buffer);
+            try d.handle.endCommandBuffer(cb.handle);
         }
 
         const submit_buffers = try gpa.alloc(vk.CommandBufferSubmitInfo, command_buffers.len);
         defer gpa.free(submit_buffers);
         for (command_buffers, submit_buffers) |command_buffer, *submit_buffer| {
-            try d.device.endCommandBuffer(command_buffer.body().command_buffer);
+            try d.handle.endCommandBuffer(command_buffer.body().handle);
             submit_buffer.* = .{
-                .command_buffer = command_buffer.body().command_buffer,
+                .command_buffer = command_buffer.body().handle,
                 .device_mask = 0,
             };
         }
@@ -1144,22 +1133,22 @@ pub const Queue = struct {
         var transition_signals: [2]vk.SemaphoreSubmitInfo = undefined;
 
         if (texture_init_command_buffer) |cb| {
-            transition_submit_buffer = .{ .command_buffer = cb.command_buffer, .device_mask = 0 };
+            transition_submit_buffer = .{ .command_buffer = cb.handle, .device_mask = 0 };
 
             transition_waits[0] = .{
-                .semaphore = texture_init_timeline.semaphore.semaphore,
+                .semaphore = texture_init_timeline.semaphore.handle,
                 .value = init_previous,
                 .stage_mask = .{ .all_commands = true },
                 .device_index = 0,
             };
             transition_signals[0] = .{
-                .semaphore = timeline.semaphore,
+                .semaphore = timeline.handle,
                 .value = transition_value,
                 .stage_mask = .{ .all_commands = true },
                 .device_index = 0,
             };
             transition_signals[1] = .{
-                .semaphore = texture_init_timeline.semaphore.semaphore,
+                .semaphore = texture_init_timeline.semaphore.handle,
                 .value = init_target,
                 .stage_mask = .{ .all_commands = true },
                 .device_index = 0,
@@ -1177,7 +1166,7 @@ pub const Queue = struct {
         }
 
         var work_waits: [1]vk.SemaphoreSubmitInfo = .{.{
-            .semaphore = texture_init_timeline.semaphore.semaphore,
+            .semaphore = texture_init_timeline.semaphore.handle,
             .value = init_target,
             .stage_mask = .{ .all_commands = true },
             .device_index = 0,
@@ -1186,14 +1175,14 @@ pub const Queue = struct {
         var work_signals: [2]vk.SemaphoreSubmitInfo = undefined;
         var work_signal_count: u32 = 1;
         work_signals[0] = .{
-            .semaphore = timeline.semaphore,
+            .semaphore = timeline.handle,
             .value = work_value,
             .stage_mask = .{ .all_commands = true },
             .device_index = 0,
         };
         if (extra_signal) |signal| {
             work_signals[1] = .{
-                .semaphore = signal.semaphore.semaphore,
+                .semaphore = signal.semaphore.handle,
                 .value = signal.value,
                 .stage_mask = .{ .all_commands = true },
                 .device_index = 0,
@@ -1211,7 +1200,7 @@ pub const Queue = struct {
         };
         submit_count += 1;
 
-        try d.device.queueSubmit2(queue_state.queue, submits[0..submit_count], .null);
+        try d.handle.queueSubmit2(queue_state.queue, submits[0..submit_count], .null);
 
         texture_init_timeline.value = init_target;
         queue_state.last_submitted = work_value;
@@ -1220,14 +1209,14 @@ pub const Queue = struct {
             d.pending_texture_inits.clearRetainingCapacity();
             queue_state.pending_command_buffers.appendAssumeCapacity(.{
                 .value = transition_value,
-                .command_buffer = cb.command_buffer,
+                .command_buffer = cb.handle,
             });
             texture_init_command_buffer = null;
         }
         for (command_buffers) |command_buffer| {
             queue_state.pending_command_buffers.appendAssumeCapacity(.{
                 .value = work_value,
-                .command_buffer = command_buffer.body().command_buffer,
+                .command_buffer = command_buffer.body().handle,
             });
             d.command_buffers.destroy(command_buffer);
         }
@@ -1235,44 +1224,41 @@ pub const Queue = struct {
 };
 
 pub const Semaphore = struct {
-    semaphore: vk.Semaphore,
+    handle: vk.Semaphore,
     d: *Device,
 
-    pub fn sfCreateSemaphore(d: *Header(Device), init_value: u64, semaphore: **Header(Semaphore)) !void {
-        semaphore.* = create(d.body(), init_value) catch |err| return switch (err) {
+    pub fn create(d: *Object(Device), init_value: u64, semaphore: **Object(Semaphore)) !void {
+        semaphore.* = createInner(d.body(), init_value) catch |err| return switch (err) {
             error.OutOfMemory, error.OutOfHostMemory => error.OutOfMemory,
             error.OutOfDeviceMemory => |e| e,
             error.Unknown => error.Unknown,
         };
     }
-    fn create(d: *Device, init_value: u64) !*Header(Semaphore) {
+    fn createInner(d: *Device, init_value: u64) !*Object(Semaphore) {
         const semaphore = try d.semaphores.create(d.gpa);
-        semaphore.set(d.table, try createVkDevice(d.device, init_value));
+        semaphore.set(d.table, try createVkDevice(d.handle, init_value));
         semaphore.body().d = d;
         return semaphore;
     }
 
-    pub fn sfDestroySemaphore(semaphore: *Header(Semaphore)) void {
-        destroy(semaphore.body());
+    pub fn destroy(semaphore: *Object(Semaphore)) void {
+        destroyVkDevice(semaphore.body(), semaphore.body().d.handle);
         semaphore.body().d.semaphores.destroy(semaphore);
     }
-    fn destroy(semaphore: *Semaphore) void {
-        destroyVkDevice(semaphore, semaphore.d.device);
-    }
 
-    pub fn sfWaitSemaphore(semaphore: *Header(Semaphore), value: u64) !void {
-        wait(semaphore.body(), value) catch |err| return switch (err) {
+    pub fn wait(semaphore: *Object(Semaphore), value: u64) !void {
+        waitInner(semaphore.body(), value) catch |err| return switch (err) {
             error.OutOfHostMemory => error.OutOfMemory,
             error.OutOfDeviceMemory, error.Unknown, error.DeviceLost => |e| e,
         };
     }
-    fn wait(semaphore: *const Semaphore, value: u64) !void {
+    fn waitInner(semaphore: *Semaphore, value: u64) !void {
         const wait_info: vk.SemaphoreWaitInfo = .{
             .semaphore_count = 1,
-            .p_semaphores = &.{semaphore.semaphore},
+            .p_semaphores = &.{semaphore.handle},
             .p_values = &.{value},
         };
-        _ = try semaphore.d.device.waitSemaphores(&wait_info, std.math.maxInt(u64));
+        _ = try semaphore.d.handle.waitSemaphores(&wait_info, std.math.maxInt(u64));
     }
 
     fn createVkDevice(device: vk.DeviceProxy, init_value: u64) !Semaphore {
@@ -1282,18 +1268,18 @@ pub const Semaphore = struct {
         };
         const timeline_create_info: vk.SemaphoreCreateInfo = .{ .p_next = &semaphore_type };
         const semaphore = try device.createSemaphore(&timeline_create_info, null);
-        return .{ .semaphore = semaphore, .d = undefined };
+        return .{ .handle = semaphore, .d = undefined };
     }
 
     fn destroyVkDevice(semaphore: *Semaphore, device: vk.DeviceProxy) void {
-        device.destroySemaphore(semaphore.semaphore, null);
+        device.destroySemaphore(semaphore.handle, null);
     }
 };
 
 pub const Swapchain = struct {
-    swapchain: vk.SwapchainKHR,
+    handle: vk.SwapchainKHR,
     surface: vk.SurfaceKHR,
-    desc: gpu.SwapchainDesc,
+    desc: sf.SwapchainDesc,
     queue: *Queue,
 
     textures: []SwapchainTexture,
@@ -1305,43 +1291,41 @@ pub const Swapchain = struct {
     d: *Device,
 
     const SwapchainTexture = struct {
-        texture: Header(Texture),
+        texture: Object(Texture),
         /// general -> present_src
         present_command_buffer: CommandBuffer,
         /// binary
         present_semaphore: vk.Semaphore,
     };
 
-    pub fn sfCreateSwapchain(
-        queue: *Header(Queue),
-        surface: *Header(Surface),
-        options: gpu.SwapchainDesc,
-        swapchain: **Header(Swapchain),
+    pub fn create(
+        queue: *Object(Queue),
+        surface: *Object(Surface),
+        options: sf.SwapchainDesc,
+        swapchain: **Object(Swapchain),
     ) !void {
-        swapchain.* = create(queue.body(), surface.body(), options) catch |err| return switch (err) {
+        swapchain.* = createInner(queue.body(), surface.body(), options) catch |err| return switch (err) {
             error.OutOfMemory, error.OutOfHostMemory => error.OutOfMemory,
             error.OutOfDeviceMemory, error.Unknown => |e| e,
             error.SurfaceLostKHR => error.SurfaceLost,
         };
     }
-    fn create(
+    fn createInner(
         queue: *Queue,
         surface: *Surface,
-        options: gpu.SwapchainDesc,
-    ) !*Header(Swapchain) {
+        options: sf.SwapchainDesc,
+    ) !*Object(Swapchain) {
         const queue_family = queue.d.queueStateForQueueId(queue.id).family;
-
         // TODO: move to adapter picking
-        std.debug.assert(try queue.d.instance.instance.getPhysicalDeviceSurfaceSupportKHR(queue.d.physical_device, queue_family, surface.surface) == .true);
-
+        std.debug.assert(try queue.d.instance.handle.getPhysicalDeviceSurfaceSupportKHR(queue.d.physical_device, queue_family, surface.handle) == .true);
         const swapchain = try queue.d.swapchains.create(queue.d.gpa);
         swapchain.set(queue.d.table, .{
-            .swapchain = .null,
-            .surface = surface.surface,
+            .handle = .null,
+            .surface = surface.handle,
             .desc = options,
             .queue = queue,
             .textures = &.{},
-            .acquire_fence = try queue.d.device.createFence(&.{}, null),
+            .acquire_fence = try queue.d.handle.createFence(&.{}, null),
             .current = undefined,
             .needs_recreate = true,
             .d = queue.d,
@@ -1349,24 +1333,22 @@ pub const Swapchain = struct {
         return swapchain;
     }
 
-    pub fn sfDestroySwapchain(swapchain: *Header(Swapchain)) void {
-        destroy(swapchain.body());
-    }
-    fn destroy(swapchain: *Swapchain) void {
-        _ = swapchain.d.device.queueWaitIdle(swapchain.d.queueStateForQueueId(swapchain.queue.id).queue) catch {};
+    pub fn destroy(swapchain_obj: *Object(Swapchain)) void {
+        const swapchain = swapchain_obj.body();
+        _ = swapchain.d.handle.queueWaitIdle(swapchain.d.queueStateForQueueId(swapchain.queue.id).queue) catch {};
         swapchain.destroyImageResources();
-        swapchain.d.device.destroySwapchainKHR(swapchain.swapchain, null);
-        swapchain.d.device.destroyFence(swapchain.acquire_fence, null);
+        swapchain.d.handle.destroySwapchainKHR(swapchain.handle, null);
+        swapchain.d.handle.destroyFence(swapchain.acquire_fence, null);
         swapchain.d.gpa.destroy(swapchain);
     }
 
-    pub fn sfAcquireBackBuffer(
-        swapchain: *Header(Swapchain),
+    pub fn acquireBackBuffer(
+        swapchain: *Object(Swapchain),
         width: u32,
         height: u32,
-        back_buffer: **Header(Texture),
+        back_buffer: **Object(Texture),
     ) !void {
-        back_buffer.* = acquireNextTexture(
+        back_buffer.* = acquireBackBufferInner(
             swapchain.body(),
             width,
             height,
@@ -1384,19 +1366,19 @@ pub const Swapchain = struct {
             => @panic("TODO"),
         };
     }
-    fn acquireNextTexture(
+    fn acquireBackBufferInner(
         swapchain: *Swapchain,
         width: u32,
         height: u32,
-    ) !*Header(Texture) {
+    ) !*Object(Texture) {
         const queue = swapchain.queue;
         var attempts: u32 = 0;
         while (true) : (attempts += 1) {
             if (attempts > 32) return error.SurfaceLost;
             if (swapchain.needs_recreate) try swapchain.recreate(queue, width, height);
 
-            const result = swapchain.d.device.acquireNextImageKHR(
-                swapchain.swapchain,
+            const result = swapchain.d.handle.acquireNextImageKHR(
+                swapchain.handle,
                 std.math.maxInt(u64),
                 .null,
                 swapchain.acquire_fence,
@@ -1411,8 +1393,8 @@ pub const Swapchain = struct {
             if (result.result == .suboptimal_khr) swapchain.needs_recreate = true;
 
             // TODO: make async
-            _ = try swapchain.d.device.waitForFences(&.{swapchain.acquire_fence}, .true, std.math.maxInt(u64));
-            try swapchain.d.device.resetFences(&.{swapchain.acquire_fence});
+            _ = try swapchain.d.handle.waitForFences(&.{swapchain.acquire_fence}, .true, std.math.maxInt(u64));
+            try swapchain.d.handle.resetFences(&.{swapchain.acquire_fence});
 
             swapchain.current = index;
             const texture = &swapchain.textures[index].texture;
@@ -1423,12 +1405,8 @@ pub const Swapchain = struct {
         }
     }
 
-    pub fn sfPresent(
-        swapchain: *Header(Swapchain),
-    ) !void {
-        present(
-            swapchain.body(),
-        ) catch |err| return switch (err) {
+    pub fn present(swapchain: *Object(Swapchain)) !void {
+        presentInner(swapchain.body()) catch |err| return switch (err) {
             error.OutOfHostMemory => error.OutOfMemory,
             error.OutOfDeviceMemory, error.DeviceLost, error.Unknown => |e| e,
             error.SurfaceLostKHR => error.SurfaceLost,
@@ -1438,19 +1416,17 @@ pub const Swapchain = struct {
             => @panic("TODO"),
         };
     }
-    fn present(
-        swapchain: *Swapchain,
-    ) !void {
+    fn presentInner(swapchain: *Swapchain) !void {
         const queue = swapchain.queue;
         const texture = &swapchain.textures[swapchain.current];
         const queue_state = swapchain.d.queueStateForQueueId(queue.id);
 
-        try swapchain.d.device.queueSubmit2(
+        try swapchain.d.handle.queueSubmit2(
             queue_state.queue,
             &.{.{
                 .command_buffer_info_count = 1,
                 .p_command_buffer_infos = &.{.{
-                    .command_buffer = texture.present_command_buffer.command_buffer,
+                    .command_buffer = texture.present_command_buffer.handle,
                     .device_mask = 0,
                 }},
                 .signal_semaphore_info_count = 1,
@@ -1464,11 +1440,11 @@ pub const Swapchain = struct {
             .null,
         );
 
-        _ = swapchain.d.device.queuePresentKHR(queue_state.queue, &.{
+        _ = swapchain.d.handle.queuePresentKHR(queue_state.queue, &.{
             .wait_semaphore_count = 1,
             .p_wait_semaphores = &.{texture.present_semaphore},
             .swapchain_count = 1,
-            .p_swapchains = &.{swapchain.swapchain},
+            .p_swapchains = &.{swapchain.handle},
             .p_image_indices = &.{swapchain.current},
         }) catch |err| switch (err) {
             error.OutOfDateKHR => { // TODO: can we avoid the frame drop?
@@ -1481,11 +1457,11 @@ pub const Swapchain = struct {
 
     fn recreate(swapchain: *Swapchain, queue: *Queue, width: u32, height: u32) !void {
         const d = swapchain.d;
-        try d.device.queueWaitIdle(d.queueStateForQueueId(queue.id).queue);
+        try d.handle.queueWaitIdle(d.queueStateForQueueId(queue.id).queue);
 
         swapchain.destroyImageResources();
 
-        const capabilities = try d.instance.instance.getPhysicalDeviceSurfaceCapabilitiesKHR(d.physical_device, swapchain.surface);
+        const capabilities = try d.instance.handle.getPhysicalDeviceSurfaceCapabilitiesKHR(d.physical_device, swapchain.surface);
 
         const min_image_extent = capabilities.min_image_extent;
         const max_image_extent = capabilities.max_image_extent;
@@ -1520,21 +1496,21 @@ pub const Swapchain = struct {
                 .fifo_relaxed => .fifo_relaxed_khr,
             },
             .clipped = .true,
-            .old_swapchain = swapchain.swapchain,
+            .old_swapchain = swapchain.handle,
         };
 
-        const old = swapchain.swapchain;
-        swapchain.swapchain = try d.device.createSwapchainKHR(&create_info, null);
-        if (old != .null) d.device.destroySwapchainKHR(old, null);
+        const old = swapchain.handle;
+        swapchain.handle = try d.handle.createSwapchainKHR(&create_info, null);
+        if (old != .null) d.handle.destroySwapchainKHR(old, null);
 
-        const images = try d.device.getSwapchainImagesAllocKHR(swapchain.swapchain, d.gpa);
+        const images = try d.handle.getSwapchainImagesAllocKHR(swapchain.handle, d.gpa);
         defer d.gpa.free(images);
 
         const textures = try d.gpa.alloc(SwapchainTexture, images.len);
         errdefer d.gpa.free(textures);
 
         for (textures, images) |*texture, image| {
-            const texture_info: gpu.TextureDesc = .{
+            const texture_info: sf.TextureDesc = .{
                 .type = .@"2d",
                 .dimensions = .{ surface_extent.width, surface_extent.height, 1 },
                 .mip_count = 1,
@@ -1546,7 +1522,7 @@ pub const Swapchain = struct {
             const present_command_buffer = try d.acquireCommandBuffer(queue.queue_type);
 
             const begin_info: vk.CommandBufferBeginInfo = .{ .flags = .{ .simultaneous_use = true } };
-            try d.device.beginCommandBuffer(present_command_buffer.command_buffer, &begin_info);
+            try d.handle.beginCommandBuffer(present_command_buffer.handle, &begin_info);
 
             const image_barrier: vk.ImageMemoryBarrier2 = .{
                 .src_stage_mask = .{ .all_commands = true },
@@ -1568,15 +1544,15 @@ pub const Swapchain = struct {
                 .image_memory_barrier_count = 1,
                 .p_image_memory_barriers = &.{image_barrier},
             };
-            d.device.cmdPipelineBarrier2(present_command_buffer.command_buffer, &dependency_info);
+            d.handle.cmdPipelineBarrier2(present_command_buffer.handle, &dependency_info);
 
-            try d.device.endCommandBuffer(present_command_buffer.command_buffer);
+            try d.handle.endCommandBuffer(present_command_buffer.handle);
 
             const default_view = try Texture.createView(d, image, texture_info, .{});
 
             texture.* = .{
                 .texture = undefined,
-                .present_semaphore = try d.device.createSemaphore(&.{}, null),
+                .present_semaphore = try d.handle.createSemaphore(&.{}, null),
                 .present_command_buffer = present_command_buffer,
             };
             texture.texture.set(swapchain.d.table, .{
@@ -1594,7 +1570,7 @@ pub const Swapchain = struct {
 
     fn destroyImageResources(swapchain: *Swapchain) void {
         for (swapchain.textures) |*texture| {
-            swapchain.d.device.destroySemaphore(texture.present_semaphore, null);
+            swapchain.d.handle.destroySemaphore(texture.present_semaphore, null);
             swapchain.d.releaseCommandBuffer(texture.present_command_buffer);
             texture.texture.body().destroyOptions(false);
         }
@@ -1604,7 +1580,7 @@ pub const Swapchain = struct {
 };
 
 pub const CommandBuffer = struct {
-    command_buffer: vk.CommandBuffer,
+    handle: vk.CommandBuffer,
     queue_id: Device.QueueId,
 
     pipeline_layout: vk.PipelineLayout = .null,
@@ -1613,80 +1589,60 @@ pub const CommandBuffer = struct {
 
     d: *Device,
 
-    pub fn sfSetActiveTextureHeap(
-        command_buffer: *Header(CommandBuffer),
-        heap_ptr: gpu.DeviceAddress,
-    ) void {
-        setActiveTextureHeap(command_buffer.body(), heap_ptr);
-    }
-    fn setActiveTextureHeap(
-        command_buffer: *CommandBuffer,
-        heap_ptr: gpu.DeviceAddress,
-    ) void {
+    pub fn setActiveTextureHeap(cb_obj: *Object(CommandBuffer), heap_ptr: sf.DeviceAddress) void {
+        const cb = cb_obj.body();
         const address: vk.DeviceAddress = heap_ptr;
-        if (command_buffer.texture_heap_ptr == address) return;
+        if (cb.texture_heap_ptr == address) return;
         const binding_info: vk.DescriptorBufferBindingInfoEXT = .{
             .address = address,
             .usage = .{ .resource_descriptor_buffer_ext = true },
         };
-        command_buffer.d.device.cmdBindDescriptorBuffersEXT(
-            command_buffer.command_buffer,
+        cb.d.handle.cmdBindDescriptorBuffersEXT(
+            cb.handle,
             &.{binding_info},
         );
-        command_buffer.texture_heap_ptr = address;
-        if (command_buffer.pipeline_layout != .null) {
-            command_buffer.setDescriptorBufferOffsets();
+        cb.texture_heap_ptr = address;
+        if (cb.pipeline_layout != .null) {
+            cb.setDescriptorBufferOffsets();
         }
     }
 
-    pub fn sfSetPipeline(command_buffer: *Header(CommandBuffer), pipeline: *Header(Pipeline)) void {
-        return setPipeline(command_buffer.body(), pipeline.body());
-    }
-    fn setPipeline(command_buffer: *CommandBuffer, pipeline: *Pipeline) void {
-        command_buffer.d.device.cmdBindPipeline(
-            command_buffer.command_buffer,
+    pub fn setPipeline(cb_obj: *Object(CommandBuffer), pipeline_obj: *Object(Pipeline)) void {
+        const cb = cb_obj.body();
+        const pipeline = pipeline_obj.body();
+        cb.d.handle.cmdBindPipeline(
+            cb.handle,
             pipeline.bind_point,
-            pipeline.pipeline,
+            pipeline.handle,
         );
-        command_buffer.pipeline_layout = pipeline.pipeline_layout;
-        command_buffer.pipeline_bind_point = pipeline.bind_point;
-        command_buffer.d.device.cmdBindDescriptorBufferEmbeddedSamplersEXT(
-            command_buffer.command_buffer,
+        cb.pipeline_layout = pipeline.pipeline_layout;
+        cb.pipeline_bind_point = pipeline.bind_point;
+        cb.d.handle.cmdBindDescriptorBufferEmbeddedSamplersEXT(
+            cb.handle,
             pipeline.bind_point,
             pipeline.pipeline_layout,
             1,
         );
-        if (command_buffer.texture_heap_ptr != null) {
-            command_buffer.setDescriptorBufferOffsets();
+        if (cb.texture_heap_ptr != null) {
+            cb.setDescriptorBufferOffsets();
         }
     }
 
-    pub fn sfSetDepthStencilState(
-        cb: *Header(CommandBuffer),
-        depth_stencil_state: *Header(DepthStencilState),
-    ) void {
-        setDepthStencilState(cb.body(), depth_stencil_state.body());
-    }
-    fn setDepthStencilState(cb: *CommandBuffer, depth_stencil_state: *const DepthStencilState) void {
-        const device = cb.d.device;
-        const vk_cb = cb.command_buffer;
-        const desc = &depth_stencil_state.desc;
+    pub fn setDepthStencilState(cb_obj: *Object(CommandBuffer), depth_stencil_state: *Object(DepthStencilState)) void {
+        const cb = cb_obj.body();
+        const desc = &depth_stencil_state.body().desc;
 
         const depth_test_enable = desc.depth_mode.read or desc.depth_mode.write;
-        device.cmdSetDepthTestEnable(vk_cb, .fromBool(depth_test_enable));
-        device.cmdSetDepthWriteEnable(vk_cb, .fromBool(desc.depth_mode.write));
-        device.cmdSetDepthCompareOp(
-            vk_cb,
-            if (desc.depth_mode.read) to_vk.compareOp(desc.depth_test) else .always,
-        );
+        cb.d.handle.cmdSetDepthTestEnable(cb.handle, .fromBool(depth_test_enable));
+        cb.d.handle.cmdSetDepthWriteEnable(cb.handle, .fromBool(desc.depth_mode.write));
+        const depth_compare_op = if (desc.depth_mode.read) to_vk.compareOp(desc.depth_test) else .always;
+        cb.d.handle.cmdSetDepthCompareOp(cb.handle, depth_compare_op);
 
-        const depth_bias_enable = desc.depth_bias != 0 or
-            desc.depth_bias_slope_factor != 0 or
-            desc.depth_bias_clamp != 0;
-        device.cmdSetDepthBiasEnable(vk_cb, .fromBool(depth_bias_enable));
+        const depth_bias_enable = desc.depth_bias != 0 or desc.depth_bias_slope_factor != 0 or desc.depth_bias_clamp != 0;
+        cb.d.handle.cmdSetDepthBiasEnable(cb.handle, .fromBool(depth_bias_enable));
         if (depth_bias_enable) {
-            device.cmdSetDepthBias(
-                vk_cb,
+            cb.d.handle.cmdSetDepthBias(
+                cb.handle,
                 desc.depth_bias,
                 desc.depth_bias_clamp,
                 desc.depth_bias_slope_factor,
@@ -1694,78 +1650,57 @@ pub const CommandBuffer = struct {
         }
 
         const stencil_enable = !stencilIsNoop(desc.stencil_front) or !stencilIsNoop(desc.stencil_back);
-        device.cmdSetStencilTestEnable(vk_cb, .fromBool(stencil_enable));
+        cb.d.handle.cmdSetStencilTestEnable(cb.handle, .fromBool(stencil_enable));
         if (stencil_enable) {
             const both: vk.StencilFaceFlags = .{ .front = true, .back = true };
-            device.cmdSetStencilCompareMask(vk_cb, both, desc.stencil_read_mask);
-            device.cmdSetStencilWriteMask(vk_cb, both, desc.stencil_write_mask);
+            cb.d.handle.cmdSetStencilCompareMask(cb.handle, both, desc.stencil_read_mask);
+            cb.d.handle.cmdSetStencilWriteMask(cb.handle, both, desc.stencil_write_mask);
 
             setStencilFace(cb, .{ .front = true }, desc.stencil_front);
             setStencilFace(cb, .{ .back = true }, desc.stencil_back);
         }
     }
-    fn stencilIsNoop(s: gpu.StencilDesc) bool {
-        return s.@"test" == .always and s.pass_op == .keep and s.depth_fail_op == .keep;
+    fn stencilIsNoop(stencil: sf.StencilDesc) bool {
+        return stencil.@"test" == .always and stencil.pass_op == .keep and stencil.depth_fail_op == .keep;
     }
-    fn setStencilFace(cb: *CommandBuffer, face: vk.StencilFaceFlags, s: gpu.StencilDesc) void {
-        cb.d.device.cmdSetStencilOp(
-            cb.command_buffer,
+    fn setStencilFace(cb: *CommandBuffer, face: vk.StencilFaceFlags, s: sf.StencilDesc) void {
+        cb.d.handle.cmdSetStencilOp(
+            cb.handle,
             face,
             to_vk.stencilOp(s.fail_op),
             to_vk.stencilOp(s.pass_op),
             to_vk.stencilOp(s.depth_fail_op),
             to_vk.compareOp(s.@"test"),
         );
-        cb.d.device.cmdSetStencilReference(cb.command_buffer, face, s.reference);
+        cb.d.handle.cmdSetStencilReference(cb.handle, face, s.reference);
     }
 
-    pub fn sfDispatch(
-        command_buffer: *Header(CommandBuffer),
-        data: gpu.DeviceAddress,
+    pub fn dispatch(
+        cb_obj: *Object(CommandBuffer),
+        data: sf.DeviceAddress,
         x: u32,
         y: u32,
         z: u32,
     ) void {
-        dispatch(command_buffer.body(), data, x, y, z);
-    }
-    fn dispatch(
-        command_buffer: *CommandBuffer,
-        data: gpu.DeviceAddress,
-        x: u32,
-        y: u32,
-        z: u32,
-    ) void {
-        const address: vk.DeviceAddress = data;
-        command_buffer.d.device.cmdPushConstants(
-            command_buffer.command_buffer,
-            command_buffer.pipeline_layout,
+        const cb = cb_obj.body();
+        cb.d.handle.cmdPushConstants(
+            cb.handle,
+            cb.pipeline_layout,
             .{ .compute = true },
             0,
             @sizeOf(vk.DeviceAddress),
-            std.mem.asBytes(&address),
+            &data,
         );
-        command_buffer.d.device.cmdDispatch(
-            command_buffer.command_buffer,
-            x,
-            y,
-            z,
-        );
+        cb.d.handle.cmdDispatch(cb.handle, x, y, z);
     }
 
-    pub fn sfBarrier(
-        command_buffer: *Header(CommandBuffer),
-        before: gpu.Stage,
-        after: gpu.Stage,
-        hazard: gpu.Hazard,
+    pub fn barrier(
+        cb_obj: *Object(CommandBuffer),
+        before: sf.Stage,
+        after: sf.Stage,
+        hazard: sf.Hazard,
     ) void {
-        barrier(command_buffer.body(), before, after, hazard);
-    }
-    fn barrier(
-        command_buffer: *CommandBuffer,
-        before: gpu.Stage,
-        after: gpu.Stage,
-        hazard: gpu.Hazard,
-    ) void {
+        const cb = cb_obj.body();
         const src_stage = to_vk.pipelineStage(before);
         var dst_stage = to_vk.pipelineStage(after);
         var dst_access: vk.AccessFlags2 = .{
@@ -1792,23 +1727,18 @@ pub const CommandBuffer = struct {
             .memory_barrier_count = 1,
             .p_memory_barriers = (&memory_barrier)[0..1],
         };
-        command_buffer.d.device.cmdPipelineBarrier2(command_buffer.command_buffer, &dependency_info);
+        cb.d.handle.cmdPipelineBarrier2(cb.handle, &dependency_info);
     }
 
     /// 256 bytes is a typical optimal alignment for dest
-    pub fn sfCopyTextureToBuffer(
-        command_buffer: *Header(CommandBuffer),
-        source_texture: *Header(Texture),
-        destination: gpu.DeviceAddress,
+    pub fn copyTextureToBuffer(
+        cb_obj: *Object(CommandBuffer),
+        source_texture_obj: *Object(Texture),
+        destination: sf.DeviceAddress,
     ) void {
-        copyTextureToBuffer(command_buffer.body(), destination, source_texture.body());
-    }
-    fn copyTextureToBuffer(
-        command_buffer: *CommandBuffer,
-        destination: gpu.DeviceAddress,
-        texture: *Texture,
-    ) void {
-        const entry, const offset = command_buffer.d.heap.addrToEntryAndOffset(destination);
+        const cb = cb_obj.body();
+        const source_texture = source_texture_obj.body();
+        const entry, const offset = cb.d.heap.addrToEntryAndOffset(destination);
         const region: vk.BufferImageCopy2 = .{
             .buffer_offset = offset,
             .buffer_row_length = 0,
@@ -1817,38 +1747,33 @@ pub const CommandBuffer = struct {
                 .aspect_mask = .{ .color = true },
                 .mip_level = 0,
                 .base_array_layer = 0,
-                .layer_count = texture.desc.layer_count,
+                .layer_count = source_texture.desc.layer_count,
             },
             .image_offset = .{ .x = 0, .y = 0, .z = 0 },
             .image_extent = .{
-                .width = texture.desc.dimensions[0],
-                .height = texture.desc.dimensions[1],
-                .depth = texture.desc.dimensions[2],
+                .width = source_texture.desc.dimensions[0],
+                .height = source_texture.desc.dimensions[1],
+                .depth = source_texture.desc.dimensions[2],
             },
         };
         const info: vk.CopyImageToBufferInfo2 = .{
-            .src_image = texture.image,
+            .src_image = source_texture.image,
             .src_image_layout = .general,
             .dst_buffer = entry.buffer,
             .region_count = 1,
             .p_regions = (&region)[0..1],
         };
-        command_buffer.d.device.cmdCopyImageToBuffer2(command_buffer.command_buffer, &info);
+        cb.d.handle.cmdCopyImageToBuffer2(cb.handle, &info);
     }
 
-    pub fn sfCopyBufferToTexture(
-        command_buffer: *Header(CommandBuffer),
-        source: gpu.DeviceAddress,
-        destination_texture: *Header(Texture),
+    pub fn copyBufferToTexture(
+        cb_obj: *Object(CommandBuffer),
+        source: sf.DeviceAddress,
+        destination_texture_obj: *Object(Texture),
     ) void {
-        copyBufferToTexture(command_buffer.body(), source, destination_texture.body());
-    }
-    fn copyBufferToTexture(
-        command_buffer: *CommandBuffer,
-        source: gpu.DeviceAddress,
-        texture: *Texture,
-    ) void {
-        const entry, const offset = command_buffer.d.heap.addrToEntryAndOffset(source);
+        const cb = cb_obj.body();
+        const destination_texture = destination_texture_obj.body();
+        const entry, const offset = cb.d.heap.addrToEntryAndOffset(source);
         const region: vk.BufferImageCopy2 = .{
             .buffer_offset = offset,
             .buffer_row_length = 0,
@@ -1857,35 +1782,33 @@ pub const CommandBuffer = struct {
                 .aspect_mask = .{ .color = true },
                 .mip_level = 0,
                 .base_array_layer = 0,
-                .layer_count = texture.desc.layer_count,
+                .layer_count = destination_texture.desc.layer_count,
             },
             .image_offset = .{ .x = 0, .y = 0, .z = 0 },
             .image_extent = .{
-                .width = texture.desc.dimensions[0],
-                .height = texture.desc.dimensions[1],
-                .depth = texture.desc.dimensions[2],
+                .width = destination_texture.desc.dimensions[0],
+                .height = destination_texture.desc.dimensions[1],
+                .depth = destination_texture.desc.dimensions[2],
             },
         };
         const info: vk.CopyBufferToImageInfo2 = .{
-            .dst_image = texture.image,
+            .dst_image = destination_texture.image,
             .dst_image_layout = .general,
             .src_buffer = entry.buffer,
             .region_count = 1,
             .p_regions = (&region)[0..1],
         };
-        command_buffer.d.device.cmdCopyBufferToImage2(command_buffer.command_buffer, &info);
+        cb.d.handle.cmdCopyBufferToImage2(cb.handle, &info);
     }
 
-    pub fn sfBeginRenderPass(cb: *Header(CommandBuffer), desc: gpu.RenderPassDesc) void {
-        beginRenderPass(cb.body(), desc);
-    }
-    fn beginRenderPass(cb: *CommandBuffer, desc: gpu.RenderPassDesc) void {
+    pub fn beginRenderPass(cb_obj: *Object(CommandBuffer), desc: sf.RenderPassDesc) void {
+        const cb = cb_obj.body();
         const color_targets = if (desc.color_attachments) |color_attachments| color_attachments[0..desc.color_attachment_count] else &.{};
         std.debug.assert(color_targets.len <= 8);
 
         var color_attachments: [8]vk.RenderingAttachmentInfo = undefined;
         for (color_targets, 0..) |t, i| {
-            const texture: *Header(Texture) = @ptrCast(@alignCast(t.texture));
+            const texture: *Object(Texture) = @ptrCast(@alignCast(t.texture));
             color_attachments[i] = .{
                 .image_view = texture.body().default_view,
                 .image_layout = .general,
@@ -1900,7 +1823,7 @@ pub const CommandBuffer = struct {
 
         var depth_attachment: vk.RenderingAttachmentInfo = undefined;
         if (desc.depth_attachment.texture) |t| {
-            const texture: *Header(Texture) = @ptrCast(@alignCast(t));
+            const texture: *Object(Texture) = @ptrCast(@alignCast(t));
             depth_attachment = .{
                 .image_view = texture.body().default_view,
                 .image_layout = .general,
@@ -1915,7 +1838,7 @@ pub const CommandBuffer = struct {
 
         var stencil_attachment: vk.RenderingAttachmentInfo = undefined;
         if (desc.stencil_attachment.texture) |t| {
-            const texture: *Header(Texture) = @ptrCast(@alignCast(t));
+            const texture: *Object(Texture) = @ptrCast(@alignCast(t));
             stencil_attachment = .{
                 .image_view = texture.body().default_view,
                 .image_layout = .general,
@@ -1930,18 +1853,18 @@ pub const CommandBuffer = struct {
 
         const extent: [2]u32 = blk: {
             if (color_targets.len > 0) {
-                const texture: *Header(Texture) = @ptrCast(@alignCast(color_targets[0].texture));
+                const texture: *Object(Texture) = @ptrCast(@alignCast(color_targets[0].texture));
                 break :blk .{
                     texture.body().desc.dimensions[0],
                     texture.body().desc.dimensions[1],
                 };
             }
             if (desc.depth_attachment.texture) |t| {
-                const texture: *Header(Texture) = @ptrCast(@alignCast(t));
+                const texture: *Object(Texture) = @ptrCast(@alignCast(t));
                 break :blk .{ texture.body().desc.dimensions[0], texture.body().desc.dimensions[1] };
             }
             if (desc.stencil_attachment.texture) |t| {
-                const texture: *Header(Texture) = @ptrCast(@alignCast(t));
+                const texture: *Object(Texture) = @ptrCast(@alignCast(t));
                 break :blk .{ texture.body().desc.dimensions[0], texture.body().desc.dimensions[1] };
             }
             unreachable;
@@ -1959,9 +1882,9 @@ pub const CommandBuffer = struct {
             .p_depth_attachment = if (desc.depth_attachment.texture != null) &depth_attachment else null,
             .p_stencil_attachment = if (desc.stencil_attachment.texture != null) &stencil_attachment else null,
         };
-        cb.d.device.cmdBeginRendering(cb.command_buffer, &rendering_info);
+        cb.d.handle.cmdBeginRendering(cb.handle, &rendering_info);
 
-        cb.d.device.cmdSetViewport(cb.command_buffer, 0, &.{.{
+        cb.d.handle.cmdSetViewport(cb.handle, 0, &.{.{
             .x = 0,
             .y = 0,
             .width = @floatFromInt(extent[0]),
@@ -1969,84 +1892,81 @@ pub const CommandBuffer = struct {
             .min_depth = 0,
             .max_depth = 1,
         }});
-        cb.d.device.cmdSetScissor(cb.command_buffer, 0, &.{.{
+        cb.d.handle.cmdSetScissor(cb.handle, 0, &.{.{
             .offset = .{ .x = 0, .y = 0 },
             .extent = .{ .width = extent[0], .height = extent[1] },
         }});
-        cb.d.device.cmdSetDepthTestEnable(cb.command_buffer, .false);
-        cb.d.device.cmdSetDepthWriteEnable(cb.command_buffer, .false);
-        cb.d.device.cmdSetDepthCompareOp(cb.command_buffer, .always);
-        cb.d.device.cmdSetDepthBiasEnable(cb.command_buffer, .false);
-        cb.d.device.cmdSetStencilTestEnable(cb.command_buffer, .false);
+        cb.d.handle.cmdSetDepthTestEnable(cb.handle, .false);
+        cb.d.handle.cmdSetDepthWriteEnable(cb.handle, .false);
+        cb.d.handle.cmdSetDepthCompareOp(cb.handle, .always);
+        cb.d.handle.cmdSetDepthBiasEnable(cb.handle, .false);
+        cb.d.handle.cmdSetStencilTestEnable(cb.handle, .false);
     }
 
-    pub fn sfEndRenderPass(cb: *Header(CommandBuffer)) void {
-        endRenderPass(cb.body());
-    }
-    fn endRenderPass(cb: *CommandBuffer) void {
-        cb.d.device.cmdEndRendering(cb.command_buffer);
+    pub fn endRenderPass(cb: *Object(CommandBuffer)) void {
+        cb.body().d.handle.cmdEndRendering(cb.body().handle);
     }
 
-    pub fn sfDraw(
-        cb: *Header(CommandBuffer),
-        vertex_data: gpu.DeviceAddress,
-        pixel_data: gpu.DeviceAddress,
+    pub fn draw(
+        cb: *Object(CommandBuffer),
+        vertex_data: sf.DeviceAddress,
+        pixel_data: sf.DeviceAddress,
         vertex_count: u32,
         instance_count: u32,
     ) void {
         pushRootPointers(cb.body(), vertex_data, pixel_data);
-        cb.body().d.device.cmdDraw(cb.body().command_buffer, vertex_count, instance_count, 0, 0);
+        cb.body().d.handle.cmdDraw(cb.body().handle, vertex_count, instance_count, 0, 0);
     }
 
-    pub fn sfDrawIndexed(
-        cb: *Header(CommandBuffer),
-        vertex_data: gpu.DeviceAddress,
-        pixel_data: gpu.DeviceAddress,
-        index_type: gpu.IndexType,
-        indices: gpu.DeviceAddress,
+    pub fn drawIndexed(
+        cb: *Object(CommandBuffer),
+        vertex_data: sf.DeviceAddress,
+        pixel_data: sf.DeviceAddress,
+        index_type: sf.IndexType,
+        indices: sf.DeviceAddress,
         index_count: u32,
     ) void {
-        sfDrawIndexedInstanced(cb, vertex_data, pixel_data, index_type, indices, index_count, 1);
+        drawIndexedInstanced(cb, vertex_data, pixel_data, index_type, indices, index_count, 1);
     }
 
-    pub fn sfDrawIndexedInstanced(
-        cb: *Header(CommandBuffer),
-        vertex_data: gpu.DeviceAddress,
-        pixel_data: gpu.DeviceAddress,
-        index_type: gpu.IndexType,
-        indices: gpu.DeviceAddress,
+    pub fn drawIndexedInstanced(
+        cb: *Object(CommandBuffer),
+        vertex_data: sf.DeviceAddress,
+        pixel_data: sf.DeviceAddress,
+        index_type: sf.IndexType,
+        indices: sf.DeviceAddress,
         index_count: u32,
         instance_count: u32,
     ) void {
         pushRootPointers(cb.body(), vertex_data, pixel_data);
         bindIndexPointer(cb.body(), index_type, indices);
-        cb.body().d.device.cmdDrawIndexed(cb.body().command_buffer, index_count, instance_count, 0, 0, 0);
+        cb.body().d.handle.cmdDrawIndexed(cb.body().handle, index_count, instance_count, 0, 0, 0);
     }
 
-    pub fn sfDrawIndexedInstancedIndirect(
-        cb: *Header(CommandBuffer),
-        vertex_data: gpu.DeviceAddress,
-        pixel_data: gpu.DeviceAddress,
-        index_type: gpu.IndexType,
-        indices: gpu.DeviceAddress,
-        args: gpu.DeviceAddress,
+    pub fn drawIndexedInstancedIndirect(
+        cb: *Object(CommandBuffer),
+        vertex_data: sf.DeviceAddress,
+        pixel_data: sf.DeviceAddress,
+        index_type: sf.IndexType,
+        indices: sf.DeviceAddress,
+        args: sf.DeviceAddress,
     ) void {
         pushRootPointers(cb.body(), vertex_data, pixel_data);
         bindIndexPointer(cb.body(), index_type, indices);
         const entry, const offset = cb.body().d.heap.addrToEntryAndOffset(args);
-        cb.body().d.device.cmdDrawIndexedIndirect(
-            cb.body().command_buffer,
+        cb.body().d.handle.cmdDrawIndexedIndirect(
+            cb.body().handle,
             entry.buffer,
             offset,
             1,
-            @sizeOf(gpu.DrawIndexedArguments),
+            @sizeOf(sf.DrawIndexedArguments),
         );
     }
 
     fn pushRootPointers(cb: *CommandBuffer, vertex_data: u64, pixel_data: u64) void {
         const addresses = [2]u64{ vertex_data, pixel_data };
-        cb.d.device.cmdPushConstants(
-            cb.command_buffer,
+        cb.d.handle.cmdPushConstants(
+            cb.handle,
             cb.pipeline_layout,
             .{ .vertex = true, .fragment = true },
             0,
@@ -2057,20 +1977,20 @@ pub const CommandBuffer = struct {
 
     fn bindIndexPointer(
         cb: *CommandBuffer,
-        index_type: gpu.IndexType,
-        indices: gpu.DeviceAddress,
+        index_type: sf.IndexType,
+        indices: sf.DeviceAddress,
     ) void {
         const vk_index_type: vk.IndexType = switch (index_type) {
             .uint16 => .uint16,
             .uint32 => .uint32,
         };
         const entry, const offset = cb.d.heap.addrToEntryAndOffset(indices);
-        cb.d.device.cmdBindIndexBuffer(cb.command_buffer, entry.buffer, offset, vk_index_type);
+        cb.d.handle.cmdBindIndexBuffer(cb.handle, entry.buffer, offset, vk_index_type);
     }
 
     fn setDescriptorBufferOffsets(command_buffer: *CommandBuffer) void {
-        command_buffer.d.device.cmdSetDescriptorBufferOffsetsEXT(
-            command_buffer.command_buffer,
+        command_buffer.d.handle.cmdSetDescriptorBufferOffsetsEXT(
+            command_buffer.handle,
             command_buffer.pipeline_bind_point,
             command_buffer.pipeline_layout,
             0,
@@ -2081,21 +2001,15 @@ pub const CommandBuffer = struct {
 };
 
 pub const DepthStencilState = struct {
-    desc: gpu.DepthStencilDesc,
+    desc: sf.DepthStencilDesc,
     d: *Device,
 
-    pub fn sfCreateDepthStencilState(d: *Header(Device), desc: gpu.DepthStencilDesc, depth_stencil_state: **Header(DepthStencilState)) !void {
-        depth_stencil_state.* = create(d.body(), desc) catch |err| return switch (err) {
-            error.OutOfMemory => error.OutOfMemory,
-        };
-    }
-    fn create(d: *Device, desc: gpu.DepthStencilDesc) !*Header(DepthStencilState) {
-        const depth_stencil_state = try d.depth_stencil_states.create(d.gpa);
-        depth_stencil_state.set(d.table, .{ .desc = desc, .d = d });
-        return depth_stencil_state;
+    pub fn create(d: *Object(Device), desc: sf.DepthStencilDesc, depth_stencil_state: **Object(DepthStencilState)) !void {
+        depth_stencil_state.* = try d.body().depth_stencil_states.create(d.body().gpa);
+        depth_stencil_state.*.set(d.header, .{ .desc = desc, .d = d.body() });
     }
 
-    pub fn sfDestroyDepthStencilState(depth_stencil_state: *Header(DepthStencilState)) void {
+    pub fn destroy(depth_stencil_state: *Object(DepthStencilState)) void {
         depth_stencil_state.body().d.depth_stencil_states.destroy(depth_stencil_state);
     }
 };
@@ -2104,18 +2018,16 @@ pub const Texture = struct {
     image: vk.Image,
     desc: Desc,
     default_view: vk.ImageView,
-    views: std.hash_map.AutoHashMapUnmanaged(gpu.TextureViewDesc, vk.ImageView),
+    views: std.hash_map.AutoHashMapUnmanaged(sf.TextureViewDesc, vk.ImageView),
     d: *Device,
 
-    const Type = gpu.TextureType;
-    const Usage = gpu.TextureUsage;
-    const Desc = gpu.TextureDesc;
+    const Type = sf.TextureType;
+    const Usage = sf.TextureUsage;
+    const Desc = sf.TextureDesc;
 
     pub const Descriptor = opaque {
-        pub fn sfDescriptorSizeAndHeapAlign(d: *Header(Device)) gpu.SizeAndAlign {
-            return sizeAndHeapAlignment(d.body());
-        }
-        fn sizeAndHeapAlignment(d: *Device) gpu.SizeAndAlign {
+        pub fn sizeAndHeapAlign(d_obj: *Object(Device)) sf.SizeAndAlign {
+            const d = d_obj.body();
             const buffer_properties = d.descriptorBufferProperties();
             return .{
                 .size = @max(
@@ -2126,8 +2038,8 @@ pub const Texture = struct {
             };
         }
 
-        pub fn sfStoreDescriptor(d: *Header(Device), descriptor: *const gpu.Descriptor, heap_ptr: [*]u8, index: usize) void {
-            const size_align = Descriptor.sfDescriptorSizeAndHeapAlign(d);
+        pub fn storeDescriptor(d: *Object(Device), descriptor: *const sf.Descriptor, heap_ptr: [*]u8, index: usize) void {
+            const size_align = Descriptor.sizeAndHeapAlign(d);
             @memcpy(
                 @as([*]u8, @ptrCast(heap_ptr)) + size_align.size * index,
                 descriptor.data[0..size_align.size],
@@ -2135,24 +2047,22 @@ pub const Texture = struct {
         }
     };
 
-    pub fn sfTextureSizeAndAlign(d: *Header(Device), info: Desc) gpu.SizeAndAlign {
-        return sizeAndAlignment(d.body(), info);
-    }
-    fn sizeAndAlignment(d: *Device, info: Desc) gpu.SizeAndAlign {
+    pub fn sizeAndAlign(d_obj: *Object(Device), info: Desc) sf.SizeAndAlign {
+        const d = d_obj.body();
         const device_image_memory_requirements: vk.DeviceImageMemoryRequirements = .{
             .p_create_info = &vkImageInfo(info),
             .plane_aspect = to_vk.aspectsForFormat(info.format),
         };
         var req: vk.MemoryRequirements2 = .{ .memory_requirements = undefined };
-        d.device.getDeviceImageMemoryRequirements(&device_image_memory_requirements, &req);
+        d.handle.getDeviceImageMemoryRequirements(&device_image_memory_requirements, &req);
         return .{
             .size = req.memory_requirements.size,
             .alignment = req.memory_requirements.alignment,
         };
     }
 
-    pub fn sfCreateTexture(d: *Header(Device), info: Desc, texture_data: gpu.DeviceAddress, texture: **Header(Texture)) !void {
-        texture.* = create(d.body(), info, texture_data) catch |err| return switch (err) {
+    pub fn create(d: *Object(Device), info: Desc, texture_data: sf.DeviceAddress, texture: **Object(Texture)) !void {
+        texture.* = createInner(d.body(), info, texture_data) catch |err| return switch (err) {
             error.OutOfMemory, error.OutOfHostMemory => error.OutOfMemory,
             error.OutOfDeviceMemory, error.Unknown => |e| e,
 
@@ -2161,15 +2071,15 @@ pub const Texture = struct {
             => @panic("TODO"),
         };
     }
-    fn create(d: *Device, info: Desc, texture_data: gpu.DeviceAddress) !*Header(Texture) {
-        const image = try d.device.createImage(&vkImageInfo(info), null);
-        errdefer d.device.destroyImage(image, null);
+    fn createInner(d: *Device, info: Desc, texture_data: sf.DeviceAddress) !*Object(Texture) {
+        const image = try d.handle.createImage(&vkImageInfo(info), null);
+        errdefer d.handle.destroyImage(image, null);
 
         const entry, const offset = d.heap.addrToEntryAndOffset(texture_data);
-        try d.device.bindImageMemory(image, entry.memory, offset);
+        try d.handle.bindImageMemory(image, entry.memory, offset);
 
         const default_view = try createView(d, image, info, .{});
-        errdefer d.device.destroyImageView(default_view, null);
+        errdefer d.handle.destroyImageView(default_view, null);
 
         try d.pending_texture_inits.put(d.gpa, image, info);
         const texture = try d.textures.create(d.gpa);
@@ -2183,33 +2093,30 @@ pub const Texture = struct {
         return texture;
     }
 
-    pub fn sfDestroyTexture(texture: *Header(Texture)) void {
-        destroy(texture.body());
-    }
-    fn destroy(texture: *Texture) void {
-        texture.destroyOptions(true);
-        texture.d.gpa.destroy(texture);
+    pub fn destroy(texture: *Object(Texture)) void {
+        texture.body().destroyOptions(true);
+        texture.body().d.textures.destroy(texture);
     }
 
     fn destroyOptions(texture: *Texture, owns_vk_image: bool) void {
         _ = texture.d.pending_texture_inits.swapRemove(texture.image);
-        if (owns_vk_image) texture.d.device.destroyImage(texture.image, null);
-        texture.d.device.destroyImageView(texture.default_view, null);
+        if (owns_vk_image) texture.d.handle.destroyImage(texture.image, null);
+        texture.d.handle.destroyImageView(texture.default_view, null);
         var it = texture.views.valueIterator();
-        while (it.next()) |view| texture.d.device.destroyImageView(view.*, null);
+        while (it.next()) |view| texture.d.handle.destroyImageView(view.*, null);
         texture.views.clearRetainingCapacity();
         texture.views.deinit(texture.d.gpa);
     }
 
-    pub fn sfTextureStorageDescriptor(texture: *Header(Texture), view_info: gpu.TextureViewDesc, descriptor: *gpu.Descriptor) !void {
-        descriptor.* = storageDescriptor(texture.body(), view_info) catch |err| return switch (err) {
+    pub fn storageDescriptor(texture: *Object(Texture), view_info: sf.TextureViewDesc, descriptor: *sf.Descriptor) !void {
+        descriptor.* = storageDescriptorInner(texture.body(), view_info) catch |err| return switch (err) {
             error.OutOfMemory, error.OutOfHostMemory => error.OutOfMemory,
             error.OutOfDeviceMemory, error.Unknown => |e| e,
 
             error.InvalidOpaqueCaptureAddressKHR => @panic("TODO"),
         };
     }
-    fn storageDescriptor(texture: *Texture, view_info: gpu.TextureViewDesc) !gpu.Descriptor {
+    fn storageDescriptorInner(texture: *Texture, view_info: sf.TextureViewDesc) !sf.Descriptor {
         const view = texture.views.get(view_info) orelse blk: {
             const view = try createView(texture.d, texture.image, texture.desc, view_info);
             try texture.views.put(texture.d.gpa, view_info, view);
@@ -2225,23 +2132,23 @@ pub const Texture = struct {
             .data = .{ .p_storage_image = &image_info },
         };
         const buffer_properties = texture.d.descriptorBufferProperties();
-        var descriptor: gpu.Descriptor = .{ .data = @splat(0) };
-        texture.d.device.getDescriptorEXT(&get_info, buffer_properties.storage_image_descriptor_size, @ptrCast(&descriptor.data));
+        var descriptor: sf.Descriptor = .{ .data = @splat(0) };
+        texture.d.handle.getDescriptorEXT(&get_info, buffer_properties.storage_image_descriptor_size, @ptrCast(&descriptor.data));
         return descriptor;
     }
 
-    pub fn sfTextureViewDescriptor(texture: *Header(Texture), view_info: gpu.TextureViewDesc, descriptor: *gpu.Descriptor) !void {
-        descriptor.* = viewDescriptor(texture.body(), view_info) catch |err| return switch (err) {
+    pub fn viewDescriptor(texture: *Object(Texture), view_info: sf.TextureViewDesc, descriptor: *sf.Descriptor) !void {
+        descriptor.* = viewDescriptorInner(texture.body(), view_info) catch |err| return switch (err) {
             error.OutOfMemory, error.OutOfHostMemory => error.OutOfMemory,
             error.OutOfDeviceMemory, error.Unknown => |e| e,
 
             error.InvalidOpaqueCaptureAddressKHR => @panic("TODO"),
         };
     }
-    fn viewDescriptor(
+    fn viewDescriptorInner(
         texture: *Texture,
-        view_info: gpu.TextureViewDesc,
-    ) !gpu.Descriptor {
+        view_info: sf.TextureViewDesc,
+    ) !sf.Descriptor {
         const view = texture.views.get(view_info) orelse blk: {
             const view = try createView(texture.d, texture.image, texture.desc, view_info);
             try texture.views.put(texture.d.gpa, view_info, view);
@@ -2257,8 +2164,8 @@ pub const Texture = struct {
             .data = .{ .p_sampled_image = &image_info },
         };
         const properties = texture.d.descriptorBufferProperties();
-        var descriptor: gpu.Descriptor = .{ .data = @splat(0) };
-        texture.d.device.getDescriptorEXT(&get_info, properties.sampled_image_descriptor_size, @ptrCast(&descriptor.data));
+        var descriptor: sf.Descriptor = .{ .data = @splat(0) };
+        texture.d.handle.getDescriptorEXT(&get_info, properties.sampled_image_descriptor_size, @ptrCast(&descriptor.data));
         return descriptor;
     }
 
@@ -2277,9 +2184,9 @@ pub const Texture = struct {
         };
     }
 
-    fn createView(d: *Device, image: vk.Image, texture_info: Desc, view_info: gpu.TextureViewDesc) !vk.ImageView {
-        const mip_count = if (view_info.mip_count == gpu.all_mips) vk.REMAINING_MIP_LEVELS else view_info.mip_count;
-        const layer_count = if (view_info.layer_count == gpu.all_layers) vk.REMAINING_ARRAY_LAYERS else view_info.layer_count;
+    fn createView(d: *Device, image: vk.Image, texture_info: Desc, view_info: sf.TextureViewDesc) !vk.ImageView {
+        const mip_count = if (view_info.mip_count == sf.all_mips) vk.REMAINING_MIP_LEVELS else view_info.mip_count;
+        const layer_count = if (view_info.layer_count == sf.all_layers) vk.REMAINING_ARRAY_LAYERS else view_info.layer_count;
         const format = if (view_info.format == .none) texture_info.format else view_info.format;
         const info: vk.ImageViewCreateInfo = .{
             .image = image,
@@ -2294,12 +2201,12 @@ pub const Texture = struct {
             },
             .components = .{ .r = .identity, .g = .identity, .b = .identity, .a = .identity },
         };
-        return d.device.createImageView(&info, null);
+        return d.handle.createImageView(&info, null);
     }
 };
 
 pub const Pipeline = struct {
-    pipeline: vk.Pipeline,
+    handle: vk.Pipeline,
     pipeline_layout: vk.PipelineLayout,
     bind_point: vk.PipelineBindPoint,
 
@@ -2308,13 +2215,13 @@ pub const Pipeline = struct {
 
     d: *Device,
 
-    pub fn sfCreateComputePipeline(
-        d: *Header(Device),
+    pub fn createCompute(
+        d: *Object(Device),
         ir_size: usize,
         ir: [*]const u8,
-        pipeline: **Header(Pipeline),
+        pipeline: **Object(Pipeline),
     ) !void {
-        pipeline.* = createCompute(d.body(), ir[0..ir_size]) catch |err| return switch (err) {
+        pipeline.* = createComputeInner(d.body(), ir[0..ir_size]) catch |err| return switch (err) {
             error.OutOfHostMemory, error.OutOfMemory => error.OutOfMemory,
             error.OutOfDeviceMemory, error.Unknown => |e| e,
 
@@ -2326,15 +2233,15 @@ pub const Pipeline = struct {
             => @panic("TODO"),
         };
     }
-    fn createCompute(d: *Device, ir: []const u8) !*Header(Pipeline) {
+    fn createComputeInner(d: *Device, ir: []const u8) !*Object(Pipeline) {
         const parser = try sfir.parse(ir);
         const spirv = try parser.spirvAlloc(d.gpa);
         defer d.gpa.free(spirv);
-        const module = try d.device.createShaderModule(&.{
+        const module = try d.handle.createShaderModule(&.{
             .code_size = spirv.len * @sizeOf(u32),
             .p_code = spirv.ptr,
         }, null);
-        defer d.device.destroyShaderModule(module, null);
+        defer d.handle.destroyShaderModule(module, null);
 
         const stage: vk.PipelineShaderStageCreateInfo = .{
             .stage = .{ .compute = true },
@@ -2347,7 +2254,7 @@ pub const Pipeline = struct {
         for (samplers) |*sampler| {
             const sampler_info = vertex_sampler_it.next().?;
             const sampler_create_info = to_vk.samplerCreateInfo(sampler_info);
-            sampler.* = try d.device.createSampler(&sampler_create_info, null);
+            sampler.* = try d.handle.createSampler(&sampler_create_info, null);
         }
 
         const push_constant_ranges = [_]vk.PushConstantRange{.{
@@ -2365,11 +2272,11 @@ pub const Pipeline = struct {
             .base_pipeline_index = -1,
         };
         var handle: vk.Pipeline = undefined;
-        _ = try d.device.createComputePipelines(.null, &.{info}, null, (&handle)[0..1]);
+        _ = try d.handle.createComputePipelines(.null, &.{info}, null, (&handle)[0..1]);
 
         const pipeline = try d.pipelines.create(d.gpa);
         pipeline.set(d.table, .{
-            .pipeline = handle,
+            .handle = handle,
             .pipeline_layout = pipeline_layout,
             .bind_point = .compute,
 
@@ -2381,16 +2288,16 @@ pub const Pipeline = struct {
         return pipeline;
     }
 
-    pub fn sfCreateGraphicsPipeline(
-        d: *Header(Device),
+    pub fn createGraphics(
+        d: *Object(Device),
         vertex_ir_size: usize,
         vertex_ir: [*]const u8,
         pixel_ir_size: usize,
         pixel_ir: [*]const u8,
-        desc: gpu.GraphicsPipelineDesc,
-        pipeline: **Header(Pipeline),
+        desc: sf.GraphicsPipelineDesc,
+        pipeline: **Object(Pipeline),
     ) !void {
-        pipeline.* = createGraphics(
+        pipeline.* = createGraphicsInner(
             d.body(),
             vertex_ir[0..vertex_ir_size],
             pixel_ir[0..pixel_ir_size],
@@ -2407,32 +2314,32 @@ pub const Pipeline = struct {
             => @panic("TODO"),
         };
     }
-    fn createGraphics(
+    fn createGraphicsInner(
         d: *Device,
         vertex_ir: []const u8,
         pixel_ir: []const u8,
-        desc: gpu.GraphicsPipelineDesc,
-    ) !*Header(Pipeline) {
+        desc: sf.GraphicsPipelineDesc,
+    ) !*Object(Pipeline) {
         const color_targets = if (desc.color_targets) |color_targets| color_targets[0..desc.color_target_count] else &.{};
         std.debug.assert(color_targets.len <= 8);
 
         const vertex_parser = try sfir.parse(vertex_ir);
         const vertex_spirv = try vertex_parser.spirvAlloc(d.gpa);
         defer d.gpa.free(vertex_spirv);
-        const vert_module = try d.device.createShaderModule(&.{
+        const vert_module = try d.handle.createShaderModule(&.{
             .code_size = vertex_spirv.len * @sizeOf(u32),
             .p_code = vertex_spirv.ptr,
         }, null);
-        defer d.device.destroyShaderModule(vert_module, null);
+        defer d.handle.destroyShaderModule(vert_module, null);
 
         const pixel_parser = try sfir.parse(pixel_ir);
         const pixel_spirv = try pixel_parser.spirvAlloc(d.gpa);
         defer d.gpa.free(pixel_spirv);
-        const frag_module = try d.device.createShaderModule(&.{
+        const frag_module = try d.handle.createShaderModule(&.{
             .code_size = pixel_spirv.len * @sizeOf(u32),
             .p_code = pixel_spirv.ptr,
         }, null);
-        defer d.device.destroyShaderModule(frag_module, null);
+        defer d.handle.destroyShaderModule(frag_module, null);
 
         const stages = [_]vk.PipelineShaderStageCreateInfo{
             .{ .stage = .{ .vertex = true }, .module = vert_module, .p_name = "main" },
@@ -2544,14 +2451,14 @@ pub const Pipeline = struct {
         var vertex_sampler_it = vertex_parser.samplerIterator();
         while (vertex_sampler_it.next()) |sampler_info| : (sampler_i += 1) {
             const sampler_create_info = to_vk.samplerCreateInfo(sampler_info);
-            samplers[sampler_i] = try d.device.createSampler(&sampler_create_info, null);
+            samplers[sampler_i] = try d.handle.createSampler(&sampler_create_info, null);
         }
         const vertex_samplers = samplers[0..sampler_i];
 
         var pixel_sampler_it = pixel_parser.samplerIterator();
         while (pixel_sampler_it.next()) |sampler_info| : (sampler_i += 1) {
             const sampler_create_info = to_vk.samplerCreateInfo(sampler_info);
-            samplers[sampler_i] = try d.device.createSampler(&sampler_create_info, null);
+            samplers[sampler_i] = try d.handle.createSampler(&sampler_create_info, null);
         }
         const pixel_samplers = samplers[vertex_samplers.len..sampler_i];
 
@@ -2589,11 +2496,11 @@ pub const Pipeline = struct {
             .base_pipeline_index = -1,
         };
         var handle: vk.Pipeline = undefined;
-        _ = try d.device.createGraphicsPipelines(.null, &.{info}, null, (&handle)[0..1]);
+        _ = try d.handle.createGraphicsPipelines(.null, &.{info}, null, (&handle)[0..1]);
 
         const pipeline = try d.pipelines.create(d.gpa);
         pipeline.set(d.table, .{
-            .pipeline = handle,
+            .handle = handle,
             .pipeline_layout = pipeline_layout,
             .bind_point = .graphics,
 
@@ -2605,16 +2512,14 @@ pub const Pipeline = struct {
         return pipeline;
     }
 
-    pub fn sfDestroyPipeline(pipeline: *Header(Pipeline)) void {
-        destroy(pipeline.body());
-    }
-    fn destroy(pipeline: *Pipeline) void {
-        pipeline.d.device.destroyPipeline(pipeline.pipeline, null);
-        pipeline.d.device.destroyPipelineLayout(pipeline.pipeline_layout, null);
-        pipeline.d.device.destroyDescriptorSetLayout(pipeline.sampler_set_layout, null);
-        for (pipeline.samplers) |sampler| pipeline.d.device.destroySampler(sampler, null);
+    pub fn destroy(pipeline_obj: *Object(Pipeline)) void {
+        const pipeline = pipeline_obj.body();
+        pipeline.d.handle.destroyPipeline(pipeline.handle, null);
+        pipeline.d.handle.destroyPipelineLayout(pipeline.pipeline_layout, null);
+        pipeline.d.handle.destroyDescriptorSetLayout(pipeline.sampler_set_layout, null);
+        for (pipeline.samplers) |sampler| pipeline.d.handle.destroySampler(sampler, null);
         pipeline.d.gpa.free(pipeline.samplers);
-        pipeline.d.gpa.destroy(pipeline);
+        pipeline.d.pipelines.destroy(pipeline_obj);
     }
 
     fn createSamplerSetLayout(
@@ -2654,7 +2559,7 @@ pub const Pipeline = struct {
             .binding_count = sampler_bindings_count,
             .p_bindings = &sampler_bindings,
         };
-        return try d.device.createDescriptorSetLayout(&sampler_layout_info, null);
+        return try d.handle.createDescriptorSetLayout(&sampler_layout_info, null);
     }
 
     fn createPipelineLayout(
@@ -2672,24 +2577,24 @@ pub const Pipeline = struct {
             .set_layout_count = set_layouts.len,
             .p_set_layouts = &set_layouts,
         };
-        return try d.device.createPipelineLayout(&pipeline_layout_info, null);
+        return try d.handle.createPipelineLayout(&pipeline_layout_info, null);
     }
 };
 
 const wrap_sf_allocator = struct {
     fn alloc(user_data: *anyopaque, len: usize, alignment: std.mem.Alignment, ret_addr: usize) ?[*]u8 {
         _ = ret_addr;
-        const sf_gpa: *gpu.HostAllocator = @ptrCast(@alignCast(user_data));
+        const sf_gpa: *sf.HostAllocator = @ptrCast(@alignCast(user_data));
         return sf_gpa.alloc(sf_gpa.user_data, len, alignment.toByteUnits());
     }
     fn remap(user_data: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) ?[*]u8 {
         _ = ret_addr;
-        const sf_gpa: *gpu.HostAllocator = @ptrCast(@alignCast(user_data));
+        const sf_gpa: *sf.HostAllocator = @ptrCast(@alignCast(user_data));
         return sf_gpa.remap(sf_gpa.user_data, memory.ptr, memory.len, alignment.toByteUnits(), new_len);
     }
     fn free(user_data: *anyopaque, memory: []u8, alignment: std.mem.Alignment, ret_addr: usize) void {
         _ = ret_addr;
-        const sf_gpa: *gpu.HostAllocator = @ptrCast(@alignCast(user_data));
+        const sf_gpa: *sf.HostAllocator = @ptrCast(@alignCast(user_data));
         return sf_gpa.free(sf_gpa.user_data, memory.ptr, memory.len, alignment.toByteUnits());
     }
 };
@@ -2722,71 +2627,66 @@ fn debugCallback(
     return .false;
 }
 
-pub fn sfSymbol(name: [*:0]const u8) callconv(gpu.@"callconv") *const anyopaque {
+pub export fn symbol(name: [*:0]const u8) callconv(sf.@"callconv") *const anyopaque {
     const map = symbol_map.map(.{
-        .Instance = Header(Instance),
+        .Instance = Object(Instance),
         .Adapter = Adapter,
-        .Surface = Header(Surface),
-        .Device = Header(Device),
-        .Queue = Header(Queue),
-        .Semaphore = Header(Semaphore),
-        .Swapchain = Header(Swapchain),
-        .CommandBuffer = Header(CommandBuffer),
-        .DepthStencilState = Header(DepthStencilState),
-        .Texture = Header(Texture),
-        .Pipeline = Header(Pipeline),
+        .Surface = Object(Surface),
+        .Device = Object(Device),
+        .Queue = Object(Queue),
+        .Semaphore = Object(Semaphore),
+        .Swapchain = Object(Swapchain),
+        .CommandBuffer = Object(CommandBuffer),
+        .DepthStencilState = Object(DepthStencilState),
+        .Texture = Object(Texture),
+        .Pipeline = Object(Pipeline),
     }, .{
-        // .createInstance = Instance.sfCreateInstance,
-        // .destroyInstance = Instance.sfDestroyInstance,
-        // .enumerateAdapters = Instance.sfEnumerateAdapters,
-        // .createDevice = Device.sfCreateDevice,
-        // .destroyDevice = Device.sfDestroyDevice,
-        .adapterInfo = Instance.sfAdapterInfo,
-        .createSurfaceWin32 = Surface.sfCreateSurfaceWin32,
-        .createSurfaceXlib = Surface.sfCreateSurfaceXlib,
-        .destroySurface = Surface.sfDestroySurface,
-        .surfaceSupportedUsage = Device.sfSurfaceSupportedUsage,
-        .surfaceFormats = Device.sfSurfaceFormats,
-        .surfacePresentModes = Device.sfSurfacePresentModes,
-        .deviceToHostPointer = Device.sfDeviceToHostPointer,
-        .alloc = Device.sfAlloc,
-        .free = Device.sfFree,
-        .descriptorSizeAndHeapAlign = Texture.Descriptor.sfDescriptorSizeAndHeapAlign,
-        .storeDescriptor = Texture.Descriptor.sfStoreDescriptor,
-        .getQueue = Queue.sfGetQueue,
-        .startCommandRecording = Queue.sfStartCommandRecording,
-        .submit = Queue.sfSubmit,
-        .submitAndSignal = Queue.sfSubmitAndSignal,
-        .createSemaphore = Semaphore.sfCreateSemaphore,
-        .destroySemaphore = Semaphore.sfDestroySemaphore,
-        .waitSemaphore = Semaphore.sfWaitSemaphore,
-        .createSwapchain = Swapchain.sfCreateSwapchain,
-        .destroySwapchain = Swapchain.sfDestroySwapchain,
-        .acquireBackBuffer = Swapchain.sfAcquireBackBuffer,
-        .present = Swapchain.sfPresent,
-        .setActiveTextureHeap = CommandBuffer.sfSetActiveTextureHeap,
-        .setPipeline = CommandBuffer.sfSetPipeline,
-        .setDepthStencilState = CommandBuffer.sfSetDepthStencilState,
-        .dispatch = CommandBuffer.sfDispatch,
-        .barrier = CommandBuffer.sfBarrier,
-        .copyTextureToBuffer = CommandBuffer.sfCopyTextureToBuffer,
-        .copyBufferToTexture = CommandBuffer.sfCopyBufferToTexture,
-        .beginRenderPass = CommandBuffer.sfBeginRenderPass,
-        .endRenderPass = CommandBuffer.sfEndRenderPass,
-        .draw = CommandBuffer.sfDraw,
-        .drawIndexed = CommandBuffer.sfDrawIndexed,
-        .drawIndexedInstanced = CommandBuffer.sfDrawIndexedInstanced,
-        .drawIndexedInstancedIndirect = CommandBuffer.sfDrawIndexedInstancedIndirect,
-        .textureSizeAndAlign = Texture.sfTextureSizeAndAlign,
-        .createTexture = Texture.sfCreateTexture,
-        .destroyTexture = Texture.sfDestroyTexture,
-        .textureStorageDescriptor = Texture.sfTextureStorageDescriptor,
-        .textureViewDescriptor = Texture.sfTextureViewDescriptor,
-        .createComputePipeline = Pipeline.sfCreateComputePipeline,
-        .createGraphicsPipeline = Pipeline.sfCreateGraphicsPipeline,
-        .destroyPipeline = Pipeline.sfDestroyPipeline,
-        .createDepthStencilState = DepthStencilState.sfCreateDepthStencilState,
-        .destroyDepthStencilState = DepthStencilState.sfDestroyDepthStencilState,
+        .adapterInfo = Instance.adapterInfo,
+        .createSurfaceWin32 = Surface.createSurfaceWin32,
+        .createSurfaceXlib = Surface.createSurfaceXlib,
+        .destroySurface = Surface.destroy,
+        .surfaceSupportedUsage = Device.surfaceSupportedUsage,
+        .surfaceFormats = Device.surfaceFormats,
+        .surfacePresentModes = Device.surfacePresentModes,
+        .deviceToHostPointer = Device.deviceToHostPointer,
+        .alloc = Device.alloc,
+        .free = Device.free,
+        .descriptorSizeAndHeapAlign = Texture.Descriptor.sizeAndHeapAlign,
+        .storeDescriptor = Texture.Descriptor.storeDescriptor,
+        .getQueue = Queue.getQueue,
+        .startCommandRecording = Queue.startCommandRecording,
+        .submit = Queue.submit,
+        .submitAndSignal = Queue.submitAndSignal,
+        .createSemaphore = Semaphore.create,
+        .destroySemaphore = Semaphore.destroy,
+        .waitSemaphore = Semaphore.wait,
+        .createSwapchain = Swapchain.create,
+        .destroySwapchain = Swapchain.destroy,
+        .acquireBackBuffer = Swapchain.acquireBackBuffer,
+        .present = Swapchain.present,
+        .setActiveTextureHeap = CommandBuffer.setActiveTextureHeap,
+        .setPipeline = CommandBuffer.setPipeline,
+        .setDepthStencilState = CommandBuffer.setDepthStencilState,
+        .dispatch = CommandBuffer.dispatch,
+        .barrier = CommandBuffer.barrier,
+        .copyTextureToBuffer = CommandBuffer.copyTextureToBuffer,
+        .copyBufferToTexture = CommandBuffer.copyBufferToTexture,
+        .beginRenderPass = CommandBuffer.beginRenderPass,
+        .endRenderPass = CommandBuffer.endRenderPass,
+        .draw = CommandBuffer.draw,
+        .drawIndexed = CommandBuffer.drawIndexed,
+        .drawIndexedInstanced = CommandBuffer.drawIndexedInstanced,
+        .drawIndexedInstancedIndirect = CommandBuffer.drawIndexedInstancedIndirect,
+        .textureSizeAndAlign = Texture.sizeAndAlign,
+        .createTexture = Texture.create,
+        .destroyTexture = Texture.destroy,
+        .textureStorageDescriptor = Texture.storageDescriptor,
+        .textureViewDescriptor = Texture.viewDescriptor,
+        .createComputePipeline = Pipeline.createCompute,
+        .createGraphicsPipeline = Pipeline.createGraphics,
+        .destroyPipeline = Pipeline.destroy,
+        .createDepthStencilState = DepthStencilState.create,
+        .destroyDepthStencilState = DepthStencilState.destroy,
     });
     return map.get(std.mem.span(name)).?;
 }

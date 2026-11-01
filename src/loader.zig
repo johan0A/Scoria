@@ -5,9 +5,9 @@ const symbol_map = @import("loader_symbol_map.zig");
 
 pub export fn sfSymbol(name: [*:0]u8) callconv(gpu.@"callconv") *const anyopaque {
     const map = symbol_map.map(.{
-        .Instance = impl.Header(impl.Instance),
+        .Instance = impl.Object(impl.Instance),
         .Adapter = impl.Adapter,
-        .Device = impl.Header(impl.Device),
+        .Device = impl.Object(impl.Device),
     }, .{
         .createInstance = createInstance,
         .destroyInstance = destroyInstance,
@@ -22,36 +22,36 @@ pub export fn sfSymbol(name: [*:0]u8) callconv(gpu.@"callconv") *const anyopaque
 var slot_index: usize = 0;
 var table: [1024]*const anyopaque = undefined;
 
-fn createInstance(allocator: ?*gpu.HostAllocator) *impl.Header(impl.Instance) {
-    const instance = impl.Instance.sfCreateInstance(allocator);
-    instance.table = @ptrCast(&table);
+fn createInstance(allocator: ?*gpu.HostAllocator) *impl.Object(impl.Instance) {
+    const instance = impl.Instance.create(allocator);
+    instance.header = @ptrCast(&table);
     return instance;
 }
 
-fn destroyInstance(instance: *impl.Header(impl.Instance)) void {
-    impl.Instance.sfDestroyInstance(instance);
+fn destroyInstance(instance: *impl.Object(impl.Instance)) void {
+    impl.Instance.destroyInstance(instance);
 }
 
-fn getSlot(instance: *impl.Header(impl.Instance), name: [*:0]const u8) usize {
+fn getSlot(instance: *impl.Object(impl.Instance), name: [*:0]const u8) usize {
     _ = instance;
     slot_index += 1;
-    table[slot_index] = impl.sfSymbol(name);
+    table[slot_index] = impl.symbol(name);
     return slot_index;
 }
 
 fn enumerateAdapters(
-    instance: *impl.Header(impl.Instance),
+    instance: *impl.Object(impl.Instance),
     adapters_capacity: usize,
     adapters: ?[*]*impl.Adapter,
     adapter_count: *usize,
 ) void {
-    impl.Instance.sfEnumerateAdapters(instance, adapters_capacity, adapters, adapter_count);
+    impl.Instance.enumerateAdapters(instance, adapters_capacity, adapters, adapter_count);
 }
 
-fn createDevice(instance: *impl.Header(impl.Instance), adapter: *impl.Adapter) *impl.Header(impl.Device) {
-    return impl.Device.sfCreateDevice(instance, adapter);
+fn createDevice(instance: *impl.Object(impl.Instance), adapter: *impl.Adapter) *impl.Object(impl.Device) {
+    return impl.Device.create(instance, adapter);
 }
 
-fn destroyDevice(device: *impl.Header(impl.Device)) void {
-    impl.Device.sfDestroyDevice(device);
+fn destroyDevice(device: *impl.Object(impl.Device)) void {
+    impl.Device.destroy(device);
 }

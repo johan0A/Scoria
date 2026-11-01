@@ -1,10 +1,10 @@
 const std = @import("std");
-const gpu = @import("sf_minimal.zig");
-const sampler_desc = @import("sampler_desc.zig");
+const sf = @import("sf_minimal.zig");
+const SamplerDesc = @import("sampler_desc.zig").SamplerDesc;
 const vk = @import("vulkan");
 
-pub const to_gpu = struct {
-    pub fn format(fmt: vk.Format) ?gpu.Format {
+pub const to_sf = struct {
+    pub fn format(fmt: vk.Format) ?sf.Format {
         return switch (fmt) {
             .undefined => .none,
             .r8_unorm => .r8_unorm,
@@ -106,7 +106,7 @@ pub const to_gpu = struct {
         };
     }
 
-    pub fn usageFlags(flags: vk.ImageUsageFlags) gpu.TextureUsage {
+    pub fn usageFlags(flags: vk.ImageUsageFlags) sf.TextureUsage {
         return .{
             .sampled = flags.sampled,
             .storage = flags.storage,
@@ -115,7 +115,7 @@ pub const to_gpu = struct {
         };
     }
 
-    pub fn presentMode(mode: vk.PresentModeKHR) ?gpu.PresentMode {
+    pub fn presentMode(mode: vk.PresentModeKHR) ?sf.PresentMode {
         return switch (mode) {
             .immediate_khr => .immediate,
             .mailbox_khr => .mailbox,
@@ -127,7 +127,7 @@ pub const to_gpu = struct {
 };
 
 pub const to_vk = struct {
-    pub fn format(fmt: gpu.Format) vk.Format {
+    pub fn format(fmt: sf.Format) vk.Format {
         return switch (fmt) {
             .none => .undefined,
             .r8_unorm => .r8_unorm,
@@ -229,7 +229,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn aspectsForFormat(fmt: gpu.Format) vk.ImageAspectFlags {
+    pub fn aspectsForFormat(fmt: sf.Format) vk.ImageAspectFlags {
         return switch (fmt) {
             .stencil8 => .{ .stencil = true },
             .depth16_unorm, .depth24_plus => .{ .depth = true },
@@ -240,7 +240,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn topology(topo: gpu.Topology) vk.PrimitiveTopology {
+    pub fn topology(topo: sf.Topology) vk.PrimitiveTopology {
         return switch (topo) {
             .triangle_list => .triangle_list,
             .triangle_strip => .triangle_strip,
@@ -248,7 +248,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn presentMode(mode: gpu.PresentMode) vk.PresentModeKHR {
+    pub fn presentMode(mode: sf.PresentMode) vk.PresentModeKHR {
         return switch (mode) {
             .immediate => .immediate_khr,
             .mailbox => .mailbox_khr,
@@ -257,7 +257,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn pipelineStage(stage: gpu.Stage) vk.PipelineStageFlags2 {
+    pub fn pipelineStage(stage: sf.Stage) vk.PipelineStageFlags2 {
         var out: vk.PipelineStageFlags2 = .{};
         if (stage.transfer) out.all_transfer = true;
         if (stage.compute) out.compute_shader = true;
@@ -279,7 +279,7 @@ pub const to_vk = struct {
         return out;
     }
 
-    pub fn textureType(tex: gpu.TextureType) vk.ImageType {
+    pub fn textureType(tex: sf.TextureType) vk.ImageType {
         return switch (tex) {
             .@"1d" => .@"1d",
             .@"2d" => .@"2d",
@@ -287,7 +287,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn usageFlags(flags: gpu.TextureUsage) vk.ImageUsageFlags {
+    pub fn usageFlags(flags: sf.TextureUsage) vk.ImageUsageFlags {
         return .{
             .transfer_src = true,
             .transfer_dst = true,
@@ -298,7 +298,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn viewType(tex: gpu.TextureType) vk.ImageViewType {
+    pub fn viewType(tex: sf.TextureType) vk.ImageViewType {
         return switch (tex) {
             .@"1d" => .@"1d",
             .@"2d" => .@"2d",
@@ -306,7 +306,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn blendFactor(factor: gpu.BlendFactor) vk.BlendFactor {
+    pub fn blendFactor(factor: sf.BlendFactor) vk.BlendFactor {
         return switch (factor) {
             .zero => .zero,
             .one => .one,
@@ -316,7 +316,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn blendOp(op: gpu.BlendOp) vk.BlendOp {
+    pub fn blendOp(op: sf.BlendOp) vk.BlendOp {
         return switch (op) {
             .add => .add,
             .subtract => .subtract,
@@ -326,7 +326,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn attachmentLoadOp(op: gpu.LoadOp) vk.AttachmentLoadOp {
+    pub fn attachmentLoadOp(op: sf.LoadOp) vk.AttachmentLoadOp {
         return switch (op) {
             .dont_care => .dont_care,
             .load => .load,
@@ -334,7 +334,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn attachmentStoreOp(op: gpu.StoreOp) vk.AttachmentStoreOp {
+    pub fn attachmentStoreOp(op: sf.StoreOp) vk.AttachmentStoreOp {
         return switch (op) {
             .dont_care => .dont_care,
             .store => .store,
@@ -351,7 +351,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn writeMask(mask: gpu.ColorWriteMask) vk.ColorComponentFlags {
+    pub fn writeMask(mask: sf.ColorWriteMask) vk.ColorComponentFlags {
         return .{
             .r = mask.r,
             .g = mask.g,
@@ -360,7 +360,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn cullMode(c: gpu.Cull) vk.CullModeFlags {
+    pub fn cullMode(c: sf.Cull) vk.CullModeFlags {
         return switch (c) {
             .ccw => .{ .front = true },
             .cw => .{ .back = true },
@@ -369,7 +369,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn samplerCreateInfo(s: sampler_desc.SamplerDesc) vk.SamplerCreateInfo {
+    pub fn samplerCreateInfo(s: SamplerDesc) vk.SamplerCreateInfo {
         return .{
             .flags = .{},
             .mag_filter = filter(s.mag_filter),
@@ -406,14 +406,14 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn filter(f: sampler_desc.Filter) vk.Filter {
+    pub fn filter(f: SamplerDesc.Filter) vk.Filter {
         return switch (f) {
             .linear => .linear,
             .nearest => .nearest,
         };
     }
 
-    pub fn address(f: sampler_desc.Address) vk.SamplerAddressMode {
+    pub fn address(f: SamplerDesc.Address) vk.SamplerAddressMode {
         return switch (f) {
             .repeat => .repeat,
             .mirrored_repeat => .mirrored_repeat,
@@ -422,13 +422,13 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn anisotropy(a: sampler_desc.Anisotropy) f32 {
+    pub fn anisotropy(a: SamplerDesc.Anisotropy) f32 {
         return @floatFromInt(
             @as(u32, 1) << @backingInt(a),
         );
     }
 
-    pub fn samplerMipmapMode(f: sampler_desc.MipFilter) vk.SamplerMipmapMode {
+    pub fn samplerMipmapMode(f: SamplerDesc.MipFilter) vk.SamplerMipmapMode {
         return switch (f) {
             .none => .nearest, // TODO
             .linear => .linear,
@@ -436,7 +436,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn stencilOp(op: gpu.StencilOp) vk.StencilOp {
+    pub fn stencilOp(op: sf.StencilOp) vk.StencilOp {
         return switch (op) {
             .keep => .keep,
             .zero => .zero,
@@ -449,7 +449,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn compareOp(op: gpu.CompareOp) vk.CompareOp {
+    pub fn compareOp(op: sf.CompareOp) vk.CompareOp {
         return switch (op) {
             .never => .never,
             .less => .less,

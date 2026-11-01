@@ -13,7 +13,7 @@
 
   "constants": [
     { "name": "SF_DESCRIPTOR_MAX_SIZE", "type": "size_t", "value": "64", "doc": "" },
-    { "name": "SF_ADAPTER_NAME_MAX_LENGHT", "type": "size_t", "value": "256", "doc": "" },
+    { "name": "SF_ADAPTER_NAME_MAX_LENGTH", "type": "size_t", "value": "256", "doc": "" },
     { "name": "SF_ALL_MIPS", "type": "uint32_t", "value": "0xFFFFFFFF", "doc": "" },
     { "name": "SF_ALL_LAYERS", "type": "uint32_t", "value": "0xFFFFFFFF", "doc": "" }
   ],
@@ -102,8 +102,8 @@
     {
       "name": "SfAdpaterInfo",
       "fields": [
-        { "name": "name_lenght", "type": { "base": "uint8_t" }, "doc": "" },
-        { "name": "name", "type": { "base": "uint8_t", "array": "SF_ADAPTER_NAME_MAX_LENGHT" }, "doc": "" },
+        { "name": "name_length", "type": { "base": "uint8_t" }, "doc": "" },
+        { "name": "name", "type": { "base": "uint8_t", "array": "SF_ADAPTER_NAME_MAX_LENGTH" }, "doc": "" },
         { "name": "type", "type": { "base": "SfAdapterType" }, "doc": "" }
       ],
       "doc": ""

@@ -18,7 +18,7 @@ pub const Slice = heap.Slice;
 pub const DeviceAllocator = heap.DeviceAllocator;
 
 pub const descriptor_max_size: usize = 64;
-pub const adapter_name_max_lenght: usize = 256;
+pub const adapter_name_max_length: usize = 256;
 pub const all_mips: u32 = 0xFFFFFFFF;
 pub const all_layers: u32 = 0xFFFFFFFF;
 
@@ -1668,8 +1668,8 @@ pub const SizeAndAlign = extern struct {
 };
 
 pub const AdpaterInfo = extern struct {
-    name_lenght: u8,
-    name: [adapter_name_max_lenght]u8,
+    name_length: u8,
+    name: [adapter_name_max_length]u8,
     type: AdapterType,
 };
 

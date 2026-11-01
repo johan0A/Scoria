@@ -35,7 +35,7 @@ pub fn main(init: std.process.Init) !void {
         if (instance.adapterInfo(adapter).type == .discrete_gpu) break adapter;
     } else adapters[0];
     const adapter_info = instance.adapterInfo(adapter);
-    std.log.info("selected device: {s}", .{adapter_info.name[0..adapter_info.name_lenght]});
+    std.log.info("selected device: {s}", .{adapter_info.name[0..adapter_info.name_length]});
 
     const device = instance.createDevice(adapter);
     defer device.destroy();
