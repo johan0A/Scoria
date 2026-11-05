@@ -37,7 +37,6 @@ pub const Instance = struct {
             error.VulkanLoaderNotFound,
             error.LayerNotPresent,
             error.IncompatibleDriver,
-            error.GetInstanceProcAddrNotFound,
             => @panic("TODO"),
         };
     }
@@ -1741,6 +1740,7 @@ pub const CommandBuffer = struct {
             .dst_stage_mask = dst_stage,
             .dst_access_mask = dst_access,
         };
+        // TODO: VK_KHR_dynamic_rendering_local_read
         const dependency_info: vk.DependencyInfo = .{
             .memory_barrier_count = 1,
             .p_memory_barriers = (&memory_barrier)[0..1],

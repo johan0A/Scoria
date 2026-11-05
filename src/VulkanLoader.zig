@@ -22,7 +22,7 @@ const Handle = switch (builtin.os.tag) {
     else => @compileError("unsupported"),
 };
 
-pub fn open() !VulkanLoader {
+pub fn open() error{VulkanLoaderNotFound}!VulkanLoader {
     return switch (builtin.os.tag) {
         .windows => openWindows(),
         .linux => openPosix(&.{
@@ -42,7 +42,7 @@ pub fn open() !VulkanLoader {
 fn openWindows() !VulkanLoader {
     const module = LoadLibraryA("vulkan-1.dll") orelse return error.VulkanLoaderNotFound;
     errdefer _ = FreeLibrary(module);
-    const symbol = GetProcAddress(module, "vkGetInstanceProcAddr") orelse return error.GetInstanceProcAddrNotFound;
+    const symbol = GetProcAddress(module, "vkGetInstanceProcAddr") orelse return error.VulkanLoaderNotFound;
     return .{
         .proc = @ptrCast(symbol),
         .handle = module,
