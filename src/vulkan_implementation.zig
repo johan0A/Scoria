@@ -8,22 +8,6 @@ const vk = @import("vulkan");
 const VulkanLoader = @import("VulkanLoader.zig");
 const symbol_map = @import("driver_symbol_map.zig");
 
-pub fn Object(T: type) type {
-    return extern struct {
-        header: *anyopaque,
-        body_bytes: [@sizeOf(T)]u8 align(@alignOf(T)),
-
-        pub fn body(handle: *@This()) *T {
-            return @ptrCast(&handle.body_bytes);
-        }
-
-        pub fn set(handle: *@This(), table: *anyopaque, body_value: T) void {
-            handle.header = table;
-            handle.body().* = body_value;
-        }
-    };
-}
-
 pub const Instance = struct {
     handle: vk.InstanceProxy,
     loader: VulkanLoader,
@@ -43,14 +27,26 @@ pub const Instance = struct {
     pub fn create(
         host_allocator: ?*sf.HostAllocator,
     ) *Object(Instance) {
-        return createInner(host_allocator) catch @panic("TODO");
+        return createInner(host_allocator) catch |err| switch (err) {
+            error.OutOfMemory,
+            error.OutOfHostMemory,
+            error.OutOfDeviceMemory,
+            error.Unknown,
+            error.InitializationFailed,
+            error.ExtensionNotPresent,
+            error.VulkanLoaderNotFound,
+            error.LayerNotPresent,
+            error.IncompatibleDriver,
+            error.GetInstanceProcAddrNotFound,
+            => @panic("TODO"),
+        };
     }
     fn createInner(
         host_allocator: ?*sf.HostAllocator,
     ) !*Object(Instance) {
         const gpa: std.mem.Allocator = if (host_allocator) |ha| .{
             .ptr = @ptrCast(@alignCast(ha)),
-            .vtable = wrap_sf_allocator_vtable,
+            .vtable = wrap_sf_allocator.vtable,
         } else std.heap.smp_allocator;
 
         var arena_impl: std.heap.ArenaAllocator = .init(gpa);
@@ -135,7 +131,7 @@ pub const Instance = struct {
             .sf_gpa = if (host_allocator) |ha| ha.* else undefined,
             .gpa = if (host_allocator) |ha| .{
                 .ptr = @ptrCast(@alignCast(ha)),
-                .vtable = wrap_sf_allocator_vtable,
+                .vtable = wrap_sf_allocator.vtable,
             } else std.heap.smp_allocator,
             .devices = .empty,
         });
@@ -151,10 +147,26 @@ pub const Instance = struct {
         instance.gpa.destroy(instance_obj);
     }
 
-    pub fn enumerateAdapters(instance: *Object(Instance), adapters_buffer_size: usize, adapters_buffer: ?[*]*Adapter, adapters_count: *usize) void {
-        enumerateAdaptersInner(instance.body(), if (adapters_buffer) |buf| buf[0..adapters_buffer_size] else null, adapters_count) catch @panic("TODO");
+    pub fn enumerateAdapters(
+        instance: *Object(Instance),
+        adapters_buffer_size: usize,
+        adapters_buffer: ?[*]*Adapter,
+        adapters_count: *usize,
+    ) void {
+        enumerateAdaptersInner(instance.body(), if (adapters_buffer) |buf| buf[0..adapters_buffer_size] else null, adapters_count) catch |err| switch (err) {
+            error.OutOfMemory,
+            error.OutOfHostMemory,
+            error.OutOfDeviceMemory,
+            error.Unknown,
+            error.InitializationFailed,
+            => @panic("TODO"),
+        };
     }
-    fn enumerateAdaptersInner(instance: *Instance, adapters_buffer_opt: ?[]*Adapter, adapters_count: *usize) !void {
+    fn enumerateAdaptersInner(
+        instance: *Instance,
+        adapters_buffer_opt: ?[]*Adapter,
+        adapters_count: *usize,
+    ) !void {
         // TODO: filter incompatible devices
         const physical_devices = try instance.handle.enumeratePhysicalDevicesAlloc(instance.gpa);
         defer instance.gpa.free(physical_devices);
@@ -166,20 +178,15 @@ pub const Instance = struct {
         }
     }
 
-    pub fn adapterInfo(instance: *Object(Instance), adapter: *Adapter) sf.AdpaterInfo {
+    pub fn adapterInfo(instance: *Object(Instance), adapter: *Adapter) sf.AdapterInfo {
         return adapterInfoInner(instance.body(), adapter);
     }
-    pub fn adapterInfoInner(instance: *Instance, adapter: *Adapter) sf.AdpaterInfo {
+    pub fn adapterInfoInner(instance: *Instance, adapter: *Adapter) sf.AdapterInfo {
         const physical_device = adapter.asPhysicalDevice();
         const properties = instance.handle.getPhysicalDeviceProperties(physical_device);
         return .{
-            .name_length = @intCast(std.mem.findScalar(u8, &properties.device_name, 0) orelse
-                properties.device_name.len),
             .name = properties.device_name,
-            .type = switch (properties.device_type) {
-                inline else => |t| @field(sf.AdapterType, @tagName(t)),
-                _ => .other,
-            },
+            .kind = to_sf.adapterKind(properties.device_type),
         };
     }
 };
@@ -189,7 +196,13 @@ pub const Surface = struct {
     d: *Device,
 
     pub fn createSurfaceWin32(d: *Object(Device), desc: sf.SurfaceWin32Desc) *Object(Surface) {
-        return createWin32Inner(d.body(), desc) catch @panic("TODO");
+        return createWin32Inner(d.body(), desc) catch |err| switch (err) {
+            error.OutOfMemory,
+            error.OutOfHostMemory,
+            error.OutOfDeviceMemory,
+            error.Unknown,
+            => @panic("TODO"),
+        };
     }
     fn createWin32Inner(d: *Device, desc: sf.SurfaceWin32Desc) !*Object(Surface) {
         const info: vk.Win32SurfaceCreateInfoKHR = .{ .hinstance = @ptrCast(desc.hinstance), .hwnd = @ptrCast(desc.hwnd) };
@@ -199,7 +212,13 @@ pub const Surface = struct {
     }
 
     pub fn createSurfaceXlib(device: *Object(Device), desc: sf.SurfaceXlibDesc) *Object(Surface) {
-        return createXlibInner(device.body(), desc) catch @panic("TODO");
+        return createXlibInner(device.body(), desc) catch |err| switch (err) {
+            error.OutOfMemory,
+            error.OutOfHostMemory,
+            error.OutOfDeviceMemory,
+            error.Unknown,
+            => @panic("TODO"),
+        };
     }
     fn createXlibInner(d: *Device, desc: sf.SurfaceXlibDesc) !*Object(Surface) {
         const info: vk.XlibSurfaceCreateInfoKHR = .{ .dpy = @ptrCast(desc.display), .window = @intCast(desc.window) };
@@ -236,8 +255,8 @@ pub const Device = struct {
 
     queue_states: [max_queue_state_count]QueueState,
     queue_state_count: u8,
-    queue_id_from_type: std.EnumArray(sf.QueueType, QueueId),
-    queues: std.EnumArray(sf.QueueType, Object(Queue)),
+    queue_id_from_type: std.EnumArray(sf.QueueKind, QueueId),
+    queues: std.EnumArray(sf.QueueKind, Object(Queue)),
 
     gpa: std.mem.Allocator,
 
@@ -266,7 +285,7 @@ pub const Device = struct {
 
     table: *anyopaque,
 
-    const max_queue_state_count = @typeInfo(sf.QueueType).@"enum".field_names.len;
+    const max_queue_state_count = @typeInfo(sf.QueueKind).@"enum".field_names.len;
 
     const QueueId = enum(u8) { _ };
 
@@ -304,13 +323,13 @@ pub const Device = struct {
             }
         };
 
-        fn addrToEntryAndOffset(map: *const AddressMap, device_addr: sf.DeviceAddress) struct { Entry, vk.DeviceSize } {
-            const entry = map.addrToEntry(device_addr);
+        fn entryAndOffsetFromAddr(map: *const AddressMap, device_addr: sf.DeviceAddress) struct { Entry, vk.DeviceSize } {
+            const entry = map.entryFromAddr(device_addr);
             const offset = device_addr - entry.device_addr;
             return .{ entry, @intCast(offset) };
         }
 
-        fn addrToEntry(map: *const AddressMap, device_addr: sf.DeviceAddress) Entry {
+        fn entryFromAddr(map: *const AddressMap, device_addr: sf.DeviceAddress) Entry {
             return map.entries.items[map.indexFromAddr(device_addr)];
         }
 
@@ -347,7 +366,18 @@ pub const Device = struct {
             instance.body(),
             instance.header,
             adapter,
-        ) catch @panic("TODO");
+        ) catch |err| switch (err) {
+            error.OutOfMemory,
+            error.OutOfHostMemory,
+            error.OutOfDeviceMemory,
+            error.DeviceLost,
+            error.Unknown,
+            error.InitializationFailed,
+            error.ExtensionNotPresent,
+            error.FeatureNotPresent,
+            error.TooManyObjects,
+            => @panic("TODO"),
+        };
     }
     fn createInner(
         instance: *Instance,
@@ -409,14 +439,14 @@ pub const Device = struct {
 
         var queue_states: [max_queue_state_count]QueueState = undefined;
         var queue_state_count: u8 = 0;
-        var queue_of_type: std.EnumArray(sf.QueueType, QueueId) = .initUndefined();
+        var queue_of_type: std.EnumArray(sf.QueueKind, QueueId) = .initUndefined();
 
-        for (std.enums.values(sf.QueueType)) |queue_type| {
-            const family_index = queue_family_indices.get(queue_type);
+        for (std.enums.values(sf.QueueKind)) |queue_kind| {
+            const family_index = queue_family_indices.get(queue_kind);
             const existing: ?QueueId = for (queue_states[0..queue_state_count], 0..) |q, i| {
                 if (q.family == family_index) break @fromBackingInt(@intCast(i));
             } else null;
-            queue_of_type.set(queue_type, existing orelse blk: {
+            queue_of_type.set(queue_kind, existing orelse blk: {
                 const timeline: Semaphore = try .createVkDevice(handle, 0);
                 const command_pool_info: vk.CommandPoolCreateInfo = .{
                     .flags = .{ .transient = true, .reset_command_buffer = true },
@@ -484,6 +514,124 @@ pub const Device = struct {
             .table = table,
         });
         return device;
+    }
+    fn createLogicalDevice(
+        arena: std.mem.Allocator,
+        physical_device: vk.PhysicalDevice,
+        instance_dispatch: *const vk.InstanceWrapper,
+        surface_support: bool,
+    ) !vk.Device {
+        var queue_family_count: u32 = undefined;
+        instance_dispatch.getPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, null);
+
+        const queue_infos = try arena.alloc(vk.DeviceQueueCreateInfo, queue_family_count);
+        for (queue_infos, 0..) |*queue_info, i| {
+            queue_info.* = .{
+                .queue_family_index = @intCast(i),
+                .queue_count = 1,
+                .p_queue_priorities = &.{1},
+            };
+        }
+
+        var mutable_descriptor_features: vk.PhysicalDeviceMutableDescriptorTypeFeaturesEXT = .{
+            .mutable_descriptor_type = .true,
+        };
+        var descriptor_buffer_features: vk.PhysicalDeviceDescriptorBufferFeaturesEXT = .{
+            .p_next = &mutable_descriptor_features,
+            .descriptor_buffer = .true,
+        };
+        var device_features_vk13: vk.PhysicalDeviceVulkan13Features = .{
+            .p_next = &descriptor_buffer_features,
+            .dynamic_rendering = .true,
+            .synchronization_2 = .true,
+        };
+        var device_features_vk12: vk.PhysicalDeviceVulkan12Features = .{
+            .p_next = &device_features_vk13,
+            .buffer_device_address = .true,
+            .runtime_descriptor_array = .true,
+            .descriptor_binding_partially_bound = .true,
+            .descriptor_binding_variable_descriptor_count = .true,
+            .descriptor_binding_sampled_image_update_after_bind = .true,
+            .descriptor_binding_storage_buffer_update_after_bind = .true,
+            .scalar_block_layout = .true,
+            .timeline_semaphore = .true,
+            .shader_float_16 = .true,
+            .shader_int_8 = .true,
+            .storage_buffer_8_bit_access = .true,
+            .uniform_and_storage_buffer_8_bit_access = .true,
+        };
+        const device_features_vk11: vk.PhysicalDeviceVulkan11Features = .{
+            .p_next = &device_features_vk12,
+            .shader_draw_parameters = .true,
+            .storage_buffer_16_bit_access = .true,
+            .uniform_and_storage_buffer_16_bit_access = .true,
+        };
+
+        var required_device_extensions_buff: [64][*:0]const u8 = undefined;
+        var required_device_extensions: std.ArrayList([*:0]const u8) = .initBuffer(&required_device_extensions_buff);
+        required_device_extensions.appendSliceAssumeCapacity(&.{
+            vk.device_extensions.ext_descriptor_buffer.name,
+            vk.device_extensions.ext_mutable_descriptor_type.name,
+            // vk.device_extensions.khr_unified_image_layouts.name, TODO
+        });
+        if (surface_support) required_device_extensions.appendAssumeCapacity(
+            vk.device_extensions.khr_swapchain.name,
+        );
+
+        return try instance_dispatch.createDevice(physical_device, &.{
+            .p_next = &device_features_vk11,
+            .p_queue_create_infos = queue_infos.ptr,
+            .queue_create_info_count = @intCast(queue_infos.len),
+            .pp_enabled_extension_names = required_device_extensions.items.ptr,
+            .enabled_extension_count = @intCast(required_device_extensions.items.len),
+            .p_enabled_features = &.{
+                .shader_int_64 = .true,
+                .shader_int_16 = .true,
+                .sampler_anisotropy = .true,
+                .multi_draw_indirect = .true,
+                // .robust_buffer_access = .true, TODO: consider
+            },
+        }, null);
+    }
+    fn findQueueFamilies(
+        arena: std.mem.Allocator,
+        physical_device: vk.PhysicalDevice,
+        instance_dispatch: *const vk.InstanceWrapper,
+    ) !std.EnumArray(sf.QueueKind, u32) {
+        const queue_family_indices = try instance_dispatch.getPhysicalDeviceQueueFamilyPropertiesAlloc(physical_device, arena);
+
+        var graphics: u32 = std.math.maxInt(u32);
+        for (queue_family_indices, 0..) |family, i| {
+            if (family.queue_flags.graphics) {
+                graphics = @intCast(i);
+                break;
+            }
+        }
+
+        var compute = graphics;
+        for (queue_family_indices, 0..) |family, i| {
+            if (family.queue_flags.compute and !family.queue_flags.graphics) {
+                compute = @intCast(i);
+                break;
+            }
+        }
+
+        var transfer = compute;
+        for (queue_family_indices, 0..) |family, i| {
+            if (family.queue_flags.transfer and
+                !family.queue_flags.graphics and
+                !family.queue_flags.compute)
+            {
+                transfer = @intCast(i);
+                break;
+            }
+        }
+
+        return .init(.{
+            .graphics = graphics,
+            .compute = compute,
+            .transfer = transfer,
+        });
     }
 
     pub fn destroy(d_obj: *Object(Device)) void {
@@ -601,8 +749,8 @@ pub const Device = struct {
         );
     }
 
-    pub fn deviceToHostPointer(d: *Object(Device), ptr: sf.DeviceAddress) *anyopaque {
-        const entry = d.body().heap.addrToEntry(ptr);
+    pub fn hostFromDevicePointer(d: *Object(Device), ptr: sf.DeviceAddress) *anyopaque {
+        const entry = d.body().heap.entryFromAddr(ptr);
         const offset = ptr - entry.device_addr;
         return @ptrFromInt(entry.host_addr.? + offset);
     }
@@ -611,15 +759,14 @@ pub const Device = struct {
         d: *Object(Device),
         bytes: usize,
         alignment: usize,
-        memory: sf.MemoryType,
+        memory: sf.MemoryKind,
         mapped_memory: *sf.HostDeviceAddress,
     ) !void {
         mapped_memory.* = allocInner(d.body(), bytes, .fromByteUnits(alignment), memory) catch |err| return switch (err) {
-            // TODO: inverstigate:
-            error.Unknown,
-            error.InvalidOpaqueCaptureAddressKHR,
-            error.InvalidExternalHandle,
+            error.InvalidExternalHandle => @panic("unreachable"),
 
+            error.InvalidOpaqueCaptureAddressKHR,
+            error.Unknown,
             error.MemoryMapFailed,
             error.OutOfHostMemory,
             error.OutOfMemory,
@@ -631,7 +778,7 @@ pub const Device = struct {
         d: *Device,
         bytes: usize,
         alignment: std.mem.Alignment,
-        memory: sf.MemoryType,
+        memory: sf.MemoryKind,
     ) !sf.HostDeviceAddress {
         std.debug.assert(bytes > 0);
 
@@ -687,12 +834,12 @@ pub const Device = struct {
         const memory_types = switch (memory) {
             .upload, .readback => buffer_memory_requirements.memory_type_bits,
             .device_local => bits: {
-                const colors = probeImageMemoryTypeBits(d.*, .r8g8b8a8_unorm, .{
+                const colors = probeImageMemoryKindBits(d.*, .r8g8b8a8_unorm, .{
                     .sampled = true,
                     .transfer_dst = true,
                     .color_attachment = true,
                 });
-                const depths = probeImageMemoryTypeBits(d.*, .d32_sfloat, .{
+                const depths = probeImageMemoryKindBits(d.*, .d32_sfloat, .{
                     .depth_stencil_attachment = true,
                     .sampled = true,
                 });
@@ -722,7 +869,7 @@ pub const Device = struct {
         const buffer_memory = try d.handle.allocateMemory(&.{
             .p_next = &alloc_flags,
             .allocation_size = buffer_memory_requirements.size,
-            .memory_type_index = findMemoryType(d.*, memory_types, properties),
+            .memory_type_index = findMemoryKind(d.*, memory_types, properties),
         }, null);
         errdefer d.handle.freeMemory(buffer_memory, null);
 
@@ -754,15 +901,7 @@ pub const Device = struct {
             .host = if (host_addr) |addr| @ptrFromInt(addr) else undefined,
         };
     }
-
-    pub fn free(d: *Object(Device), ptr: sf.DeviceAddress) void {
-        const index = d.body().heap.indexFromAddr(ptr);
-        var entry = d.body().heap.entries.orderedRemove(index);
-        entry.destroy(d.body().*);
-    }
-
-    // TODO: cache this
-    fn findMemoryType(d: Device, type_filter: u32, properties: vk.MemoryPropertyFlags) u32 {
+    fn findMemoryKind(d: Device, type_filter: u32, properties: vk.MemoryPropertyFlags) u32 {
         for (0..d.memory_properties.memory_type_count) |i| {
             if ((type_filter & (@as(u32, 1) << @intCast(i))) != 0 and
                 (d.memory_properties.memory_types[i].property_flags.intersect(properties)) == properties)
@@ -772,9 +911,7 @@ pub const Device = struct {
         }
         @panic(""); // TODO
     }
-
-    // TODO: cache this
-    fn probeImageMemoryTypeBits(d: Device, format: vk.Format, usage: vk.ImageUsageFlags) u32 {
+    fn probeImageMemoryKindBits(d: Device, format: vk.Format, usage: vk.ImageUsageFlags) u32 {
         const ici: vk.ImageCreateInfo = .{
             .image_type = .@"2d",
             .format = format,
@@ -792,6 +929,12 @@ pub const Device = struct {
         return req.memory_requirements.memory_type_bits;
     }
 
+    pub fn free(d: *Object(Device), ptr: sf.DeviceAddress) void {
+        const index = d.body().heap.indexFromAddr(ptr);
+        var entry = d.body().heap.entries.orderedRemove(index);
+        entry.destroy(d.body().*);
+    }
+
     fn descriptorBufferProperties(d: *Device) *vk.PhysicalDeviceDescriptorBufferPropertiesEXT {
         if (d.descriptor_buffer_properties == null) {
             var buffer_properties = std.mem.zeroInit(vk.PhysicalDeviceDescriptorBufferPropertiesEXT, .{});
@@ -802,144 +945,15 @@ pub const Device = struct {
         return &d.descriptor_buffer_properties.?;
     }
 
-    fn createLogicalDevice(
-        arena: std.mem.Allocator,
-        physical_device: vk.PhysicalDevice,
-        instance_dispatch: *const vk.InstanceWrapper,
-        surface_support: bool,
-    ) !vk.Device {
-        var queue_family_count: u32 = undefined;
-        instance_dispatch.getPhysicalDeviceQueueFamilyProperties(physical_device, &queue_family_count, null);
-
-        const queue_infos = try arena.alloc(vk.DeviceQueueCreateInfo, queue_family_count);
-        for (queue_infos, 0..) |*queue_info, i| {
-            queue_info.* = .{
-                .queue_family_index = @intCast(i),
-                .queue_count = 1,
-                .p_queue_priorities = &.{1},
-            };
-        }
-
-        var mutable_descriptor_features: vk.PhysicalDeviceMutableDescriptorTypeFeaturesEXT = .{
-            .mutable_descriptor_type = .true,
-        };
-        var descriptor_buffer_features: vk.PhysicalDeviceDescriptorBufferFeaturesEXT = .{
-            .p_next = &mutable_descriptor_features,
-            .descriptor_buffer = .true,
-        };
-        var device_features_vk13: vk.PhysicalDeviceVulkan13Features = .{
-            .p_next = &descriptor_buffer_features,
-            .dynamic_rendering = .true,
-            .synchronization_2 = .true,
-        };
-        var device_features_vk12: vk.PhysicalDeviceVulkan12Features = .{
-            .p_next = &device_features_vk13,
-            .buffer_device_address = .true,
-            .runtime_descriptor_array = .true,
-            .descriptor_binding_partially_bound = .true,
-            .descriptor_binding_variable_descriptor_count = .true,
-            .descriptor_binding_sampled_image_update_after_bind = .true,
-            .descriptor_binding_storage_buffer_update_after_bind = .true,
-            .scalar_block_layout = .true,
-            .timeline_semaphore = .true,
-            .shader_float_16 = .true,
-            .shader_int_8 = .true,
-            .storage_buffer_8_bit_access = .true,
-            .uniform_and_storage_buffer_8_bit_access = .true,
-        };
-        const device_features_vk11: vk.PhysicalDeviceVulkan11Features = .{
-            .p_next = &device_features_vk12,
-            .shader_draw_parameters = .true,
-            .storage_buffer_16_bit_access = .true,
-            .uniform_and_storage_buffer_16_bit_access = .true,
-        };
-
-        var required_device_extensions_buff: [64][*:0]const u8 = undefined;
-        var required_device_extensions: std.ArrayList([*:0]const u8) = .initBuffer(&required_device_extensions_buff);
-        required_device_extensions.appendSliceAssumeCapacity(&.{
-            vk.device_extensions.ext_descriptor_buffer.name,
-            vk.device_extensions.ext_mutable_descriptor_type.name,
-            // vk.device_extensions.khr_unified_image_layouts.name, TODO
-        });
-        if (surface_support) required_device_extensions.appendAssumeCapacity(
-            vk.device_extensions.khr_swapchain.name,
-        );
-
-        return try instance_dispatch.createDevice(physical_device, &.{
-            .p_next = &device_features_vk11,
-            .p_queue_create_infos = queue_infos.ptr,
-            .queue_create_info_count = @intCast(queue_infos.len),
-            .pp_enabled_extension_names = required_device_extensions.items.ptr,
-            .enabled_extension_count = @intCast(required_device_extensions.items.len),
-            .p_enabled_features = &.{
-                .shader_int_64 = .true,
-                .shader_int_16 = .true,
-                .sampler_anisotropy = .true,
-                .multi_draw_indirect = .true,
-                // .robust_buffer_access = .true, TODO: consider
-            },
-        }, null);
-    }
-
-    fn findQueueFamilies(
-        arena: std.mem.Allocator,
-        physical_device: vk.PhysicalDevice,
-        instance_dispatch: *const vk.InstanceWrapper,
-    ) !std.EnumArray(sf.QueueType, u32) {
-        const queue_family_indices = try instance_dispatch.getPhysicalDeviceQueueFamilyPropertiesAlloc(physical_device, arena);
-
-        var graphics: u32 = std.math.maxInt(u32);
-        for (queue_family_indices, 0..) |family, i| {
-            if (family.queue_flags.graphics) {
-                graphics = @intCast(i);
-                break;
-            }
-        }
-
-        var compute = graphics;
-        for (queue_family_indices, 0..) |family, i| {
-            if (family.queue_flags.compute and !family.queue_flags.graphics) {
-                compute = @intCast(i);
-                break;
-            }
-        }
-
-        var transfer = compute;
-        for (queue_family_indices, 0..) |family, i| {
-            if (family.queue_flags.transfer and
-                !family.queue_flags.graphics and
-                !family.queue_flags.compute)
-            {
-                transfer = @intCast(i);
-                break;
-            }
-        }
-
-        return .init(.{
-            .graphics = graphics,
-            .compute = compute,
-            .transfer = transfer,
-        });
-    }
-
-    fn queueStateForQueueType(d: *Device, queue_type: sf.QueueType) *QueueState {
-        const queue_id = d.queue_id_from_type.get(queue_type);
-        return d.queueStateForQueueId(queue_id);
-    }
-
-    fn queueStateForQueueId(d: *Device, queue_id: QueueId) *QueueState {
-        return &d.queue_states[@backingInt(queue_id)];
-    }
-
-    fn acquireCommandBuffer(d: *Device, queue_type: sf.QueueType) !CommandBuffer {
-        const queue_id = d.queue_id_from_type.get(queue_type);
-        if (d.queueStateForQueueId(queue_id).free_command_buffers.pop()) |command_buffer| {
+    fn acquireCommandBuffer(d: *Device, queue_kind: sf.QueueKind) !CommandBuffer {
+        const queue_id = d.queue_id_from_type.get(queue_kind);
+        const queue_state = d.queueStateForQueueId(queue_id);
+        if (queue_state.free_command_buffers.pop()) |command_buffer| {
             try d.handle.resetCommandBuffer(command_buffer, .{});
             return .{ .handle = command_buffer, .queue_id = queue_id, .d = d };
         }
-
         const alloc_info: vk.CommandBufferAllocateInfo = .{
-            .command_pool = d.queueStateForQueueType(queue_type).command_pool,
+            .command_pool = queue_state.command_pool,
             .level = .primary,
             .command_buffer_count = 1,
         };
@@ -948,11 +962,8 @@ pub const Device = struct {
         return .{ .handle = command_buffer, .queue_id = queue_id, .d = d };
     }
 
-    fn releaseCommandBuffer(d: *Device, command_buffer: CommandBuffer) void {
-        const queue_state = d.queueStateForQueueId(command_buffer.queue_id);
-        queue_state.free_command_buffers.append(d.gpa, command_buffer.handle) catch {
-            d.handle.freeCommandBuffers(queue_state.command_pool, &.{command_buffer.handle});
-        };
+    fn queueStateForQueueId(d: *Device, queue_id: QueueId) *QueueState {
+        return &d.queue_states[@backingInt(queue_id)];
     }
 
     fn reclaimCompletedCommandBuffers(d: *Device) void {
@@ -975,18 +986,25 @@ pub const Device = struct {
             list.items.len = rest.len;
         }
     }
+
+    fn releaseCommandBuffer(d: *Device, command_buffer: CommandBuffer) void {
+        const queue_state = d.queueStateForQueueId(command_buffer.queue_id);
+        queue_state.free_command_buffers.append(d.gpa, command_buffer.handle) catch {
+            d.handle.freeCommandBuffers(queue_state.command_pool, &.{command_buffer.handle});
+        };
+    }
 };
 
 pub const Queue = struct {
     id: Device.QueueId,
-    queue_type: sf.QueueType,
+    queue_kind: sf.QueueKind,
     d: *Device,
 
-    pub fn getQueue(d_obj: *Object(Device), queue_type: sf.QueueType) *Object(Queue) {
+    pub fn getQueue(d_obj: *Object(Device), queue_kind: sf.QueueKind) *Object(Queue) {
         const d = d_obj.body();
-        const id = d.queue_id_from_type.get(queue_type);
-        const queue = d.queues.getPtr(queue_type);
-        queue.set(d.table, .{ .id = id, .queue_type = queue_type, .d = d });
+        const id = d.queue_id_from_type.get(queue_kind);
+        const queue = d.queues.getPtr(queue_kind);
+        queue.set(d.table, .{ .id = id, .queue_kind = queue_kind, .d = d });
         return queue;
     }
 
@@ -1001,7 +1019,7 @@ pub const Queue = struct {
     }
     fn startCommandRecordingInner(queue: *const Queue) !CommandBuffer {
         queue.d.reclaimCompletedCommandBuffers();
-        const command_buffer = try queue.d.acquireCommandBuffer(queue.queue_type);
+        const command_buffer = try queue.d.acquireCommandBuffer(queue.queue_kind);
         errdefer queue.d.releaseCommandBuffer(command_buffer);
 
         const begin_info: vk.CommandBufferBeginInfo = .{ .flags = .{ .one_time_submit = true } };
@@ -1353,17 +1371,19 @@ pub const Swapchain = struct {
             width,
             height,
         ) catch |err| return switch (err) {
-            error.OutOfMemory, error.OutOfHostMemory => error.OutOfMemory,
-            error.OutOfDeviceMemory, error.DeviceLost, error.Unknown => |e| e,
-            error.SurfaceLostKHR, error.SurfaceLost => error.SurfaceLost,
-
-            error.InvalidVideoStdParametersKHR,
-            error.InitializationFailed,
-            error.NativeWindowInUseKHR,
-            error.InvalidOpaqueCaptureAddressKHR,
-            error.CompressionExhaustedEXT,
+            error.OutOfHostMemory, error.OutOfMemory => error.OutOfMemory,
+            error.CompressionExhaustedEXT, error.OutOfDeviceMemory => error.OutOfDeviceMemory,
             error.FullScreenExclusiveModeLostEXT,
-            => @panic("TODO"),
+            error.NativeWindowInUseKHR,
+            error.SurfaceLostKHR,
+            error.SurfaceLost,
+            => error.SurfaceLost,
+            error.InvalidVideoStdParametersKHR,
+            error.InvalidOpaqueCaptureAddressKHR,
+            error.InitializationFailed,
+            error.Unknown,
+            => error.Unknown,
+            error.DeviceLost => |e| e,
         };
     }
     fn acquireBackBufferInner(
@@ -1404,58 +1424,7 @@ pub const Swapchain = struct {
             return texture;
         }
     }
-
-    pub fn present(swapchain: *Object(Swapchain)) !void {
-        presentInner(swapchain.body()) catch |err| return switch (err) {
-            error.OutOfHostMemory => error.OutOfMemory,
-            error.OutOfDeviceMemory, error.DeviceLost, error.Unknown => |e| e,
-            error.SurfaceLostKHR => error.SurfaceLost,
-
-            error.FullScreenExclusiveModeLostEXT,
-            error.PresentTimingQueueFullEXT,
-            => @panic("TODO"),
-        };
-    }
-    fn presentInner(swapchain: *Swapchain) !void {
-        const queue = swapchain.queue;
-        const texture = &swapchain.textures[swapchain.current];
-        const queue_state = swapchain.d.queueStateForQueueId(queue.id);
-
-        try swapchain.d.handle.queueSubmit2(
-            queue_state.queue,
-            &.{.{
-                .command_buffer_info_count = 1,
-                .p_command_buffer_infos = &.{.{
-                    .command_buffer = texture.present_command_buffer.handle,
-                    .device_mask = 0,
-                }},
-                .signal_semaphore_info_count = 1,
-                .p_signal_semaphore_infos = &.{.{
-                    .semaphore = texture.present_semaphore,
-                    .value = 0,
-                    .stage_mask = .{ .all_commands = true },
-                    .device_index = 0,
-                }},
-            }},
-            .null,
-        );
-
-        _ = swapchain.d.handle.queuePresentKHR(queue_state.queue, &.{
-            .wait_semaphore_count = 1,
-            .p_wait_semaphores = &.{texture.present_semaphore},
-            .swapchain_count = 1,
-            .p_swapchains = &.{swapchain.handle},
-            .p_image_indices = &.{swapchain.current},
-        }) catch |err| switch (err) {
-            error.OutOfDateKHR => { // TODO: can we avoid the frame drop?
-                swapchain.needs_recreate = true;
-                return;
-            },
-            else => |e| return e,
-        };
-    }
-
-    fn recreate(swapchain: *Swapchain, queue: *Queue, width: u32, height: u32) !void {
+    fn recreate(swapchain: *Swapchain, queue: *Queue, width: u32, height: u32) !void { // TODO: inline into callsite?
         const d = swapchain.d;
         try d.handle.queueWaitIdle(d.queueStateForQueueId(queue.id).queue);
 
@@ -1519,7 +1488,7 @@ pub const Swapchain = struct {
                 .usage = swapchain.desc.usage,
             };
 
-            const present_command_buffer = try d.acquireCommandBuffer(queue.queue_type);
+            const present_command_buffer = try d.acquireCommandBuffer(queue.queue_kind);
 
             const begin_info: vk.CommandBufferBeginInfo = .{ .flags = .{ .simultaneous_use = true } };
             try d.handle.beginCommandBuffer(present_command_buffer.handle, &begin_info);
@@ -1566,6 +1535,55 @@ pub const Swapchain = struct {
 
         swapchain.textures = textures;
         swapchain.needs_recreate = false;
+    }
+
+    pub fn present(swapchain: *Object(Swapchain)) !void {
+        presentInner(swapchain.body()) catch |err| return switch (err) {
+            error.OutOfHostMemory => error.OutOfMemory,
+            error.PresentTimingQueueFullEXT, error.Unknown => error.Unknown,
+            error.SurfaceLostKHR,
+            error.FullScreenExclusiveModeLostEXT,
+            => error.SurfaceLost,
+            error.OutOfDeviceMemory, error.DeviceLost => |e| e,
+        };
+    }
+    fn presentInner(swapchain: *Swapchain) !void {
+        const queue = swapchain.queue;
+        const texture = &swapchain.textures[swapchain.current];
+        const queue_state = swapchain.d.queueStateForQueueId(queue.id);
+
+        try swapchain.d.handle.queueSubmit2(
+            queue_state.queue,
+            &.{.{
+                .command_buffer_info_count = 1,
+                .p_command_buffer_infos = &.{.{
+                    .command_buffer = texture.present_command_buffer.handle,
+                    .device_mask = 0,
+                }},
+                .signal_semaphore_info_count = 1,
+                .p_signal_semaphore_infos = &.{.{
+                    .semaphore = texture.present_semaphore,
+                    .value = 0,
+                    .stage_mask = .{ .all_commands = true },
+                    .device_index = 0,
+                }},
+            }},
+            .null,
+        );
+
+        _ = swapchain.d.handle.queuePresentKHR(queue_state.queue, &.{
+            .wait_semaphore_count = 1,
+            .p_wait_semaphores = &.{texture.present_semaphore},
+            .swapchain_count = 1,
+            .p_swapchains = &.{swapchain.handle},
+            .p_image_indices = &.{swapchain.current},
+        }) catch |err| switch (err) {
+            error.OutOfDateKHR => { // TODO: can we avoid the frame drop?
+                swapchain.needs_recreate = true;
+                return;
+            },
+            else => |e| return e,
+        };
     }
 
     fn destroyImageResources(swapchain: *Swapchain) void {
@@ -1738,7 +1756,7 @@ pub const CommandBuffer = struct {
     ) void {
         const cb = cb_obj.body();
         const source_texture = source_texture_obj.body();
-        const entry, const offset = cb.d.heap.addrToEntryAndOffset(destination);
+        const entry, const offset = cb.d.heap.entryAndOffsetFromAddr(destination);
         const region: vk.BufferImageCopy2 = .{
             .buffer_offset = offset,
             .buffer_row_length = 0,
@@ -1773,7 +1791,7 @@ pub const CommandBuffer = struct {
     ) void {
         const cb = cb_obj.body();
         const destination_texture = destination_texture_obj.body();
-        const entry, const offset = cb.d.heap.addrToEntryAndOffset(source);
+        const entry, const offset = cb.d.heap.entryAndOffsetFromAddr(source);
         const region: vk.BufferImageCopy2 = .{
             .buffer_offset = offset,
             .buffer_row_length = 0,
@@ -1953,7 +1971,7 @@ pub const CommandBuffer = struct {
     ) void {
         pushRootPointers(cb.body(), vertex_data, pixel_data);
         bindIndexPointer(cb.body(), index_type, indices);
-        const entry, const offset = cb.body().d.heap.addrToEntryAndOffset(args);
+        const entry, const offset = cb.body().d.heap.entryAndOffsetFromAddr(args);
         cb.body().d.handle.cmdDrawIndexedIndirect(
             cb.body().handle,
             entry.buffer,
@@ -1984,7 +2002,7 @@ pub const CommandBuffer = struct {
             .uint16 => .uint16,
             .uint32 => .uint32,
         };
-        const entry, const offset = cb.d.heap.addrToEntryAndOffset(indices);
+        const entry, const offset = cb.d.heap.entryAndOffsetFromAddr(indices);
         cb.d.handle.cmdBindIndexBuffer(cb.handle, entry.buffer, offset, vk_index_type);
     }
 
@@ -2021,7 +2039,7 @@ pub const Texture = struct {
     views: std.hash_map.AutoHashMapUnmanaged(sf.TextureViewDesc, vk.ImageView),
     d: *Device,
 
-    const Type = sf.TextureType;
+    const Type = sf.TextureDimension;
     const Usage = sf.TextureUsage;
     const Desc = sf.TextureDesc;
 
@@ -2063,19 +2081,16 @@ pub const Texture = struct {
 
     pub fn create(d: *Object(Device), info: Desc, texture_data: sf.DeviceAddress, texture: **Object(Texture)) !void {
         texture.* = createInner(d.body(), info, texture_data) catch |err| return switch (err) {
-            error.OutOfMemory, error.OutOfHostMemory => error.OutOfMemory,
-            error.OutOfDeviceMemory, error.Unknown => |e| e,
-
-            error.CompressionExhaustedEXT,
-            error.InvalidOpaqueCaptureAddressKHR,
-            => @panic("TODO"),
+            error.OutOfHostMemory, error.OutOfMemory => error.OutOfMemory,
+            error.InvalidOpaqueCaptureAddressKHR, error.Unknown => error.Unknown,
+            error.OutOfDeviceMemory, error.CompressionExhaustedEXT => error.OutOfDeviceMemory,
         };
     }
     fn createInner(d: *Device, info: Desc, texture_data: sf.DeviceAddress) !*Object(Texture) {
         const image = try d.handle.createImage(&vkImageInfo(info), null);
         errdefer d.handle.destroyImage(image, null);
 
-        const entry, const offset = d.heap.addrToEntryAndOffset(texture_data);
+        const entry, const offset = d.heap.entryAndOffsetFromAddr(texture_data);
         try d.handle.bindImageMemory(image, entry.memory, offset);
 
         const default_view = try createView(d, image, info, .{});
@@ -2110,10 +2125,9 @@ pub const Texture = struct {
 
     pub fn storageDescriptor(texture: *Object(Texture), view_info: sf.TextureViewDesc, descriptor: *sf.Descriptor) !void {
         descriptor.* = storageDescriptorInner(texture.body(), view_info) catch |err| return switch (err) {
-            error.OutOfMemory, error.OutOfHostMemory => error.OutOfMemory,
-            error.OutOfDeviceMemory, error.Unknown => |e| e,
-
-            error.InvalidOpaqueCaptureAddressKHR => @panic("TODO"),
+            error.OutOfHostMemory, error.OutOfMemory => error.OutOfMemory,
+            error.InvalidOpaqueCaptureAddressKHR, error.Unknown => error.Unknown,
+            error.OutOfDeviceMemory => |e| e,
         };
     }
     fn storageDescriptorInner(texture: *Texture, view_info: sf.TextureViewDesc) !sf.Descriptor {
@@ -2139,10 +2153,9 @@ pub const Texture = struct {
 
     pub fn viewDescriptor(texture: *Object(Texture), view_info: sf.TextureViewDesc, descriptor: *sf.Descriptor) !void {
         descriptor.* = viewDescriptorInner(texture.body(), view_info) catch |err| return switch (err) {
-            error.OutOfMemory, error.OutOfHostMemory => error.OutOfMemory,
-            error.OutOfDeviceMemory, error.Unknown => |e| e,
-
-            error.InvalidOpaqueCaptureAddressKHR => @panic("TODO"),
+            error.OutOfHostMemory, error.OutOfMemory => error.OutOfMemory,
+            error.InvalidOpaqueCaptureAddressKHR, error.Unknown => error.Unknown,
+            error.OutOfDeviceMemory => |e| e,
         };
     }
     fn viewDescriptorInner(
@@ -2171,7 +2184,7 @@ pub const Texture = struct {
 
     fn vkImageInfo(info: Desc) vk.ImageCreateInfo {
         return .{
-            .image_type = to_vk.textureType(info.type),
+            .image_type = to_vk.textureDimension(info.type),
             .format = to_vk.format(info.format),
             .extent = .{ .width = info.dimensions[0], .height = info.dimensions[1], .depth = info.dimensions[2] },
             .mip_levels = info.mip_count,
@@ -2223,14 +2236,9 @@ pub const Pipeline = struct {
     ) !void {
         pipeline.* = createComputeInner(d.body(), ir[0..ir_size]) catch |err| return switch (err) {
             error.OutOfHostMemory, error.OutOfMemory => error.OutOfMemory,
-            error.OutOfDeviceMemory, error.Unknown => |e| e,
-
-            error.InvalidOpaqueCaptureAddressKHR,
-            error.BadMagic,
-            error.UnsupportedVersion,
-            error.Malformed,
-            error.InvalidShaderNV,
-            => @panic("TODO"),
+            error.InvalidOpaqueCaptureAddressKHR, error.Unknown => error.Unknown,
+            error.InvalidShaderNV, error.MalformedSfir => error.MalformedSfir,
+            error.UnsupportedSfirVersion, error.OutOfDeviceMemory => |e| e,
         };
     }
     fn createComputeInner(d: *Device, ir: []const u8) !*Object(Pipeline) {
@@ -2304,14 +2312,9 @@ pub const Pipeline = struct {
             desc,
         ) catch |err| return switch (err) {
             error.OutOfHostMemory, error.OutOfMemory => error.OutOfMemory,
-            error.OutOfDeviceMemory, error.Unknown => |e| e,
-
-            error.InvalidOpaqueCaptureAddressKHR,
-            error.BadMagic,
-            error.UnsupportedVersion,
-            error.Malformed,
-            error.InvalidShaderNV,
-            => @panic("TODO"),
+            error.InvalidOpaqueCaptureAddressKHR, error.Unknown => error.Unknown,
+            error.InvalidShaderNV, error.MalformedSfir => error.MalformedSfir,
+            error.UnsupportedSfirVersion, error.OutOfDeviceMemory => |e| e,
         };
     }
     fn createGraphicsInner(
@@ -2581,6 +2584,22 @@ pub const Pipeline = struct {
     }
 };
 
+pub fn Object(T: type) type {
+    return extern struct {
+        header: *anyopaque,
+        body_bytes: [@sizeOf(T)]u8 align(@alignOf(T)),
+
+        pub fn body(handle: *@This()) *T {
+            return @ptrCast(&handle.body_bytes);
+        }
+
+        pub fn set(handle: *@This(), table: *anyopaque, body_value: T) void {
+            handle.header = table;
+            handle.body().* = body_value;
+        }
+    };
+}
+
 const wrap_sf_allocator = struct {
     fn alloc(user_data: *anyopaque, len: usize, alignment: std.mem.Alignment, ret_addr: usize) ?[*]u8 {
         _ = ret_addr;
@@ -2597,12 +2616,13 @@ const wrap_sf_allocator = struct {
         const sf_gpa: *sf.HostAllocator = @ptrCast(@alignCast(user_data));
         return sf_gpa.free(sf_gpa.user_data, memory.ptr, memory.len, alignment.toByteUnits());
     }
-};
-const wrap_sf_allocator_vtable: *const std.mem.Allocator.VTable = &.{
-    .alloc = wrap_sf_allocator.alloc,
-    .remap = wrap_sf_allocator.remap,
-    .free = wrap_sf_allocator.free,
-    .resize = std.mem.Allocator.noResize,
+
+    const vtable: *const std.mem.Allocator.VTable = &.{
+        .alloc = wrap_sf_allocator.alloc,
+        .remap = wrap_sf_allocator.remap,
+        .free = wrap_sf_allocator.free,
+        .resize = std.mem.Allocator.noResize,
+    };
 };
 
 fn debugCallback(
@@ -2648,7 +2668,7 @@ pub export fn symbol(name: [*:0]const u8) callconv(sf.@"callconv") *const anyopa
         .surfaceSupportedUsage = Device.surfaceSupportedUsage,
         .surfaceFormats = Device.surfaceFormats,
         .surfacePresentModes = Device.surfacePresentModes,
-        .deviceToHostPointer = Device.deviceToHostPointer,
+        .hostFromDevicePointer = Device.hostFromDevicePointer,
         .alloc = Device.alloc,
         .free = Device.free,
         .descriptorSizeAndHeapAlign = Texture.Descriptor.sizeAndHeapAlign,

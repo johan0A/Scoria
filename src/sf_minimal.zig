@@ -9,8 +9,8 @@ pub const @"callconv": std.lang.CallingConvention = switch (target.os.tag) {
     else => .c,
 };
 
-pub const descriptor_max_size: usize = 64;
-pub const adapter_name_max_length: usize = 256;
+pub const descriptor_size_max: usize = 64;
+pub const adapter_name_capacity_bytes: usize = 256;
 pub const all_mips: u32 = 0xFFFFFFFF;
 pub const all_layers: u32 = 0xFFFFFFFF;
 
@@ -34,16 +34,18 @@ pub const Result = enum(u32) {
     out_of_device_memory = 2,
     device_lost = 3,
     surface_lost = 4,
-    unknown = 5,
+    malformed_sfir = 5,
+    unsupported_sfir_version = 6,
+    unknown = 7,
 };
 
-pub const MemoryType = enum(u32) {
+pub const MemoryKind = enum(u32) {
     upload = 0,
     device_local = 1,
     readback = 2,
 };
 
-pub const AdapterType = enum(u32) {
+pub const AdapterKind = enum(u32) {
     other = 0,
     integrated_gpu = 1,
     discrete_gpu = 2,
@@ -69,7 +71,7 @@ pub const CompareOp = enum(u32) {
     always = 7,
 };
 
-pub const QueueType = enum(u32) {
+pub const QueueKind = enum(u32) {
     graphics = 0,
     compute = 1,
     transfer = 2,
@@ -91,7 +93,7 @@ pub const IndexType = enum(u32) {
     uint32 = 1,
 };
 
-pub const TextureType = enum(u32) {
+pub const TextureDimension = enum(u32) {
     @"1d" = 0,
     @"2d" = 1,
     @"3d" = 2,
@@ -304,22 +306,22 @@ pub const DepthFlags = packed struct(u32) {
 
 pub const AllocFn = *const fn (
     user_data: *anyopaque,
-    length: usize,
+    size_bytes: usize,
     alignment: usize,
 ) callconv(@"callconv") ?[*]u8;
 
 pub const RemapFn = *const fn (
     user_data: *anyopaque,
     pointer: [*]u8,
-    length: usize,
+    size_bytes: usize,
     alignment: usize,
-    new_length: usize,
+    new_size_bytes: usize,
 ) callconv(@"callconv") ?[*]u8;
 
 pub const FreeFn = *const fn (
     user_data: *anyopaque,
     pointer: [*]u8,
-    length: usize,
+    size_bytes: usize,
     alignment: usize,
 ) callconv(@"callconv") void;
 
@@ -339,10 +341,10 @@ pub const SizeAndAlign = extern struct {
     alignment: usize,
 };
 
-pub const AdpaterInfo = extern struct {
-    name_length: u8,
-    name: [adapter_name_max_length]u8,
-    type: AdapterType,
+pub const AdapterInfo = extern struct {
+    /// UTF-8, null-terminated.
+    name: [adapter_name_capacity_bytes]u8,
+    kind: AdapterKind,
 };
 
 pub const SurfaceWin32Desc = extern struct {
@@ -403,7 +405,7 @@ pub const DrawIndexedArguments = extern struct {
 };
 
 pub const TextureDesc = extern struct {
-    type: TextureType = .@"2d",
+    type: TextureDimension = .@"2d",
     dimensions: [3]u32,
     mip_count: u32 = 1,
     layer_count: u32 = 1,
@@ -420,7 +422,7 @@ pub const TextureViewDesc = extern struct {
 };
 
 pub const Descriptor = extern struct {
-    data: [descriptor_max_size]u8,
+    data: [descriptor_size_max]u8,
 };
 
 pub const BlendDesc = extern struct {
@@ -531,11 +533,11 @@ pub fn destroyDevice(
 pub fn adapterInfo(
     instance: *Instance,
     adapter: *Adapter,
-) AdpaterInfo {
+) AdapterInfo {
     const f: *const fn (
         instance: *Instance,
         adapter: *Adapter,
-    ) callconv(@"callconv") AdpaterInfo = @ptrCast(internal.table(instance)[internal.slots.adapter_info]);
+    ) callconv(@"callconv") AdapterInfo = @ptrCast(internal.table(instance)[internal.slots.adapter_info]);
     return f(
         instance,
         adapter,
@@ -641,14 +643,14 @@ pub fn surfacePresentModes(
     );
 }
 
-pub fn deviceToHostPointer(
+pub fn hostFromDevicePointer(
     device: *Device,
     address: DeviceAddress,
 ) *anyopaque {
     const f: *const fn (
         device: *Device,
         address: DeviceAddress,
-    ) callconv(@"callconv") *anyopaque = @ptrCast(internal.table(device)[internal.slots.device_to_host_pointer]);
+    ) callconv(@"callconv") *anyopaque = @ptrCast(internal.table(device)[internal.slots.host_from_device_pointer]);
     return f(
         device,
         address,
@@ -659,14 +661,14 @@ pub fn alloc(
     device: *Device,
     size: usize,
     alignment: usize,
-    memory: MemoryType,
+    memory: MemoryKind,
     device_mapping: *HostDeviceAddress,
 ) Result {
     const f: *const fn (
         device: *Device,
         size: usize,
         alignment: usize,
-        memory: MemoryType,
+        memory: MemoryKind,
         device_mapping: *HostDeviceAddress,
     ) callconv(@"callconv") Result = @ptrCast(internal.table(device)[internal.slots.alloc]);
     return f(
@@ -725,15 +727,15 @@ pub fn storeDescriptor(
 
 pub fn getQueue(
     device: *Device,
-    queue_type: QueueType,
+    queue_kind: QueueKind,
 ) *Queue {
     const f: *const fn (
         device: *Device,
-        queue_type: QueueType,
+        queue_kind: QueueKind,
     ) callconv(@"callconv") *Queue = @ptrCast(internal.table(device)[internal.slots.get_queue]);
     return f(
         device,
-        queue_type,
+        queue_kind,
     );
 }
 
@@ -1348,7 +1350,7 @@ const internal = struct {
         surface_supported_usage: usize = 0,
         surface_formats: usize = 0,
         surface_present_modes: usize = 0,
-        device_to_host_pointer: usize = 0,
+        host_from_device_pointer: usize = 0,
         alloc: usize = 0,
         free: usize = 0,
         descriptor_size_and_heap_align: usize = 0,
@@ -1406,7 +1408,7 @@ const internal = struct {
         slots.surface_supported_usage = get_slot.?(instance, "sfSurfaceSupportedUsage");
         slots.surface_formats = get_slot.?(instance, "sfSurfaceFormats");
         slots.surface_present_modes = get_slot.?(instance, "sfSurfacePresentModes");
-        slots.device_to_host_pointer = get_slot.?(instance, "sfDeviceToHostPointer");
+        slots.host_from_device_pointer = get_slot.?(instance, "sfHostFromDevicePointer");
         slots.alloc = get_slot.?(instance, "sfAlloc");
         slots.free = get_slot.?(instance, "sfFree");
         slots.descriptor_size_and_heap_align = get_slot.?(instance, "sfDescriptorSizeAndHeapAlign");

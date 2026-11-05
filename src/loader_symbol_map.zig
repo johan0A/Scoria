@@ -43,6 +43,8 @@ const Error = error{
     OutOfDeviceMemory,
     DeviceLost,
     SurfaceLost,
+    MalformedSfir,
+    UnsupportedSfirVersion,
     Unknown,
 };
 
@@ -52,6 +54,8 @@ fn cResult(result: anytype) sf.Result {
         error.OutOfDeviceMemory => .out_of_device_memory,
         error.DeviceLost => .device_lost,
         error.SurfaceLost => .surface_lost,
+        error.MalformedSfir => .malformed_sfir,
+        error.UnsupportedSfirVersion => .unsupported_sfir_version,
         error.Unknown => .unknown,
     };
 }

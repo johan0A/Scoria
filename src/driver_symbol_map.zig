@@ -23,7 +23,7 @@ fn Functions(handle_types: HandleTypes) type {
         adapterInfo: fn (
             instance: *handle_types.Instance,
             adapter: *handle_types.Adapter,
-        ) sf.AdpaterInfo,
+        ) sf.AdapterInfo,
         createSurfaceWin32: fn (
             device: *handle_types.Device,
             desc: sf.SurfaceWin32Desc,
@@ -53,7 +53,7 @@ fn Functions(handle_types: HandleTypes) type {
             present_modes: ?[*]sf.PresentMode,
             present_mode_count: *usize,
         ) void,
-        deviceToHostPointer: fn (
+        hostFromDevicePointer: fn (
             device: *handle_types.Device,
             address: sf.DeviceAddress,
         ) *anyopaque,
@@ -61,7 +61,7 @@ fn Functions(handle_types: HandleTypes) type {
             device: *handle_types.Device,
             size: usize,
             alignment: usize,
-            memory: sf.MemoryType,
+            memory: sf.MemoryKind,
             device_mapping: *sf.HostDeviceAddress,
         ) error{
             OutOfMemory,
@@ -82,7 +82,7 @@ fn Functions(handle_types: HandleTypes) type {
         ) void,
         getQueue: fn (
             device: *handle_types.Device,
-            queue_type: sf.QueueType,
+            queue_kind: sf.QueueKind,
         ) *handle_types.Queue,
         startCommandRecording: fn (
             queue: *handle_types.Queue,
@@ -287,6 +287,8 @@ fn Functions(handle_types: HandleTypes) type {
         ) error{
             OutOfMemory,
             OutOfDeviceMemory,
+            MalformedSfir,
+            UnsupportedSfirVersion,
             Unknown,
         }!void,
         createGraphicsPipeline: fn (
@@ -300,6 +302,8 @@ fn Functions(handle_types: HandleTypes) type {
         ) error{
             OutOfMemory,
             OutOfDeviceMemory,
+            MalformedSfir,
+            UnsupportedSfirVersion,
             Unknown,
         }!void,
         destroyPipeline: fn (
@@ -323,6 +327,8 @@ const Error = error{
     OutOfDeviceMemory,
     DeviceLost,
     SurfaceLost,
+    MalformedSfir,
+    UnsupportedSfirVersion,
     Unknown,
 };
 
@@ -332,6 +338,8 @@ fn cResult(result: anytype) sf.Result {
         error.OutOfDeviceMemory => .out_of_device_memory,
         error.DeviceLost => .device_lost,
         error.SurfaceLost => .surface_lost,
+        error.MalformedSfir => .malformed_sfir,
+        error.UnsupportedSfirVersion => .unsupported_sfir_version,
         error.Unknown => .unknown,
     };
 }
@@ -341,7 +349,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
         pub fn adapterInfo(
             instance: *handle_types.Instance,
             adapter: *handle_types.Adapter,
-        ) callconv(sf.@"callconv") sf.AdpaterInfo {
+        ) callconv(sf.@"callconv") sf.AdapterInfo {
             return functions.adapterInfo(
                 instance,
                 adapter,
@@ -418,11 +426,11 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
             );
         }
 
-        pub fn deviceToHostPointer(
+        pub fn hostFromDevicePointer(
             device: *handle_types.Device,
             address: sf.DeviceAddress,
         ) callconv(sf.@"callconv") *anyopaque {
-            return functions.deviceToHostPointer(
+            return functions.hostFromDevicePointer(
                 device,
                 address,
             );
@@ -432,7 +440,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
             device: *handle_types.Device,
             size: usize,
             alignment: usize,
-            memory: sf.MemoryType,
+            memory: sf.MemoryKind,
             device_mapping: *sf.HostDeviceAddress,
         ) callconv(sf.@"callconv") sf.Result {
             return cResult(functions.alloc(
@@ -478,11 +486,11 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn getQueue(
             device: *handle_types.Device,
-            queue_type: sf.QueueType,
+            queue_kind: sf.QueueKind,
         ) callconv(sf.@"callconv") *handle_types.Queue {
             return functions.getQueue(
                 device,
-                queue_type,
+                queue_kind,
             );
         }
 
@@ -905,7 +913,7 @@ pub fn map(
         .{ "sfSurfaceSupportedUsage", @ptrCast(&c_functions.surfaceSupportedUsage) },
         .{ "sfSurfaceFormats", @ptrCast(&c_functions.surfaceFormats) },
         .{ "sfSurfacePresentModes", @ptrCast(&c_functions.surfacePresentModes) },
-        .{ "sfDeviceToHostPointer", @ptrCast(&c_functions.deviceToHostPointer) },
+        .{ "sfHostFromDevicePointer", @ptrCast(&c_functions.hostFromDevicePointer) },
         .{ "sfAlloc", @ptrCast(&c_functions.alloc) },
         .{ "sfFree", @ptrCast(&c_functions.free) },
         .{ "sfDescriptorSizeAndHeapAlign", @ptrCast(&c_functions.descriptorSizeAndHeapAlign) },

@@ -900,7 +900,7 @@ fn renderQualifiedType(
                 16 => ".@\"16\"",
                 32 => ".@\"32\"",
                 64 => ".@\"64\"",
-                else => @panic("TODO"),
+                else => @panic(""),
             });
         }
         try w.writeAll("})");

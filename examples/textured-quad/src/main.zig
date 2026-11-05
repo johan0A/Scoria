@@ -31,10 +31,10 @@ pub fn main(init: std.process.Init) !void {
     const adapters = try instance.enumerateAdaptersAlloc(arena);
     if (adapters.len == 0) return error.NoAdapter;
     const adapter = for (adapters) |adapter| {
-        if (instance.adapterInfo(adapter).type == .discrete_gpu) break adapter;
+        if (instance.adapterInfo(adapter).kind == .discrete_gpu) break adapter;
     } else adapters[0];
     const adapter_info = instance.adapterInfo(adapter);
-    std.log.info("selected device: {s}", .{adapter_info.name[0..adapter_info.name_length]});
+    std.log.info("selected device: {s}", .{std.mem.sliceTo(&adapter_info.name, 0)});
 
     const device = instance.createDevice(adapter);
     defer device.destroy();
@@ -146,7 +146,7 @@ pub fn main(init: std.process.Init) !void {
     device.storeDescriptor(&texture_descriptor, descriptor_heap.host_ptr, 0);
 
     const upload_cb = try queue.startCommandRecording();
-    upload_cb.copyBufferToTexture(.from(texture_upload.device_ptr), texture);
+    upload_cb.copyBufferToTexture(.as(texture_upload.device_ptr), texture);
     upload_cb.barrier(.{ .transfer = true }, .all, .{ .descriptors = true });
     try queue.submit(&.{upload_cb});
 
@@ -193,10 +193,10 @@ pub fn main(init: std.process.Init) !void {
             }},
         });
         cb.setPipeline(pipeline);
-        cb.draw(.from(data_map.device), .from(data_map.device), vertex_count, 1);
+        cb.draw(.as(data_map.device), .as(data_map.device), vertex_count, 1);
         cb.endRenderPass();
-
         try queue.submitAndSignal(&.{cb}, frame_semaphore, frame_index);
+
         try swapchain.present();
 
         frame_index += 1;

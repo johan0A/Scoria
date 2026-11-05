@@ -22,9 +22,8 @@ pub const max_spirv_len = 1 << 30;
 pub const max_sampler_count = (1 << 30) / sampler_len;
 
 pub const ParseError = error{
-    BadMagic,
-    UnsupportedVersion,
-    Malformed,
+    MalformedSfir,
+    UnsupportedSfirVersion,
 };
 
 pub const Shader = struct {
@@ -75,25 +74,25 @@ pub const SamplerIterator = struct {
 };
 
 pub fn parse(bytes: []const u8) ParseError!Shader {
-    if (bytes.len < header_len) return error.Malformed;
-    if (!std.mem.eql(u8, bytes[0..4], &magic)) return error.BadMagic;
+    if (bytes.len < header_len) return error.MalformedSfir;
+    if (!std.mem.eql(u8, bytes[0..4], &magic)) return error.MalformedSfir;
 
     const file_version: Version = .{
         .major = std.mem.readInt(u16, bytes[4..6], .little),
         .minor = std.mem.readInt(u16, bytes[6..8], .little),
     };
-    if (file_version.major != version.major) return error.UnsupportedVersion;
+    if (file_version.major != version.major) return error.UnsupportedSfirVersion;
 
     const spirv_len = std.mem.readInt(u32, bytes[8..12], .little);
     const sampler_count = std.mem.readInt(u32, bytes[12..16], .little);
-    if (spirv_len == 0 or spirv_len % 4 != 0) return error.Malformed;
-    if (spirv_len > max_spirv_len) return error.Malformed;
-    if (sampler_count > max_sampler_count) return error.Malformed;
+    if (spirv_len == 0 or spirv_len % 4 != 0) return error.MalformedSfir;
+    if (spirv_len > max_spirv_len) return error.MalformedSfir;
+    if (sampler_count > max_sampler_count) return error.MalformedSfir;
 
     const samplers_off = header_len + @as(usize, spirv_len);
     const samplers_len = @as(usize, sampler_count) * sampler_len;
     const end = samplers_off + samplers_len;
-    if (bytes.len < end) return error.Malformed;
+    if (bytes.len < end) return error.MalformedSfir;
 
     return .{
         .file_version = file_version,

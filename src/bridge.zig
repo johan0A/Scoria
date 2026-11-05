@@ -124,10 +124,17 @@ pub const to_sf = struct {
             else => null,
         };
     }
+
+    pub fn adapterKind(device_type: vk.PhysicalDeviceType) sf.AdapterKind {
+        return switch (device_type) {
+            inline else => |t| @field(sf.AdapterKind, @tagName(t)),
+            _ => .other,
+        };
+    }
 };
 
 pub const to_vk = struct {
-    pub fn format(fmt: sf.Format) vk.Format {
+    pub fn format(fmt: sf.Format) vk.Format { // TODO: what usefull formats are we missing?
         return switch (fmt) {
             .none => .undefined,
             .r8_unorm => .r8_unorm,
@@ -167,6 +174,12 @@ pub const to_vk = struct {
             .rgba32_float => .r32g32b32a32_sfloat,
             .rgba32_uint => .r32g32b32a32_uint,
             .rgba32_sint => .r32g32b32a32_sint,
+            .r16_unorm => .r16_unorm,
+            .r16_snorm => .r16_snorm,
+            .rg16_unorm => .r16g16_unorm,
+            .rg16_snorm => .r16g16_snorm,
+            .rgba16_unorm => .r16g16b16a16_unorm,
+            .rgba16_snorm => .r16g16b16a16_snorm,
             .stencil8 => .s8_uint,
             .depth16_unorm => .d16_unorm,
             .depth24_plus => .x8_d24_unorm_pack32,
@@ -225,7 +238,6 @@ pub const to_vk = struct {
             .astc12x10_unorm_srgb => .astc_12x10_srgb_block,
             .astc12x12_unorm => .astc_12x12_unorm_block,
             .astc12x12_unorm_srgb => .astc_12x12_srgb_block,
-            else => @panic("TODO"), // TODO: why some missing?
         };
     }
 
@@ -279,7 +291,7 @@ pub const to_vk = struct {
         return out;
     }
 
-    pub fn textureType(tex: sf.TextureType) vk.ImageType {
+    pub fn textureDimension(tex: sf.TextureDimension) vk.ImageType {
         return switch (tex) {
             .@"1d" => .@"1d",
             .@"2d" => .@"2d",
@@ -298,7 +310,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn viewType(tex: sf.TextureType) vk.ImageViewType {
+    pub fn viewType(tex: sf.TextureDimension) vk.ImageViewType {
         return switch (tex) {
             .@"1d" => .@"1d",
             .@"2d" => .@"2d",
@@ -370,6 +382,7 @@ pub const to_vk = struct {
     }
 
     pub fn samplerCreateInfo(s: SamplerDesc) vk.SamplerCreateInfo {
+        const mips_disabled = s.mip_filter == .none or s.coord == .pixel;
         return .{
             .flags = .{},
             .mag_filter = filter(s.mag_filter),
@@ -378,7 +391,7 @@ pub const to_vk = struct {
             .address_mode_u = address(s.address.u),
             .address_mode_v = address(s.address.v),
             .address_mode_w = address(s.address.w),
-            .mip_lod_bias = s.lod_bias.toF32(),
+            .mip_lod_bias = if (mips_disabled) 0 else s.lod_bias.toF32(),
             .anisotropy_enable = if (s.max_anisotropy != .x1) .true else .false,
             .max_anisotropy = anisotropy(s.max_anisotropy),
             .compare_enable = if (s.compare.enable) .true else .false,
@@ -392,8 +405,8 @@ pub const to_vk = struct {
                 .greater_equal => .greater_or_equal,
                 .always => .always,
             },
-            .min_lod = s.lod_min.toF32(),
-            .max_lod = s.lod_max.toF32(),
+            .min_lod = if (mips_disabled) 0 else s.lod_min.toF32(),
+            .max_lod = if (mips_disabled) 0 else s.lod_max.toF32(),
             .border_color = switch (s.border_color) {
                 .transparent_black => .float_transparent_black,
                 .opaque_black => .float_opaque_black,
@@ -430,7 +443,7 @@ pub const to_vk = struct {
 
     pub fn samplerMipmapMode(f: SamplerDesc.MipFilter) vk.SamplerMipmapMode {
         return switch (f) {
-            .none => .nearest, // TODO
+            .none => .nearest,
             .linear => .linear,
             .nearest => .nearest,
         };

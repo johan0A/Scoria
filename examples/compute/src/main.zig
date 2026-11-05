@@ -32,10 +32,10 @@ pub fn main(init: std.process.Init) !void {
     const adapters = try instance.enumerateAdaptersAlloc(arena);
     if (adapters.len == 0) return error.NoAdapter;
     const adapter = for (adapters) |adapter| {
-        if (instance.adapterInfo(adapter).type == .discrete_gpu) break adapter;
+        if (instance.adapterInfo(adapter).kind == .discrete_gpu) break adapter;
     } else adapters[0];
     const adapter_info = instance.adapterInfo(adapter);
-    std.log.info("selected device: {s}", .{adapter_info.name[0..adapter_info.name_length]});
+    std.log.info("selected device: {s}", .{std.mem.sliceTo(&adapter_info.name, 0)});
 
     const device = instance.createDevice(adapter);
     defer device.destroy();
@@ -138,7 +138,7 @@ pub fn main(init: std.process.Init) !void {
         command_buffer.setActiveTextureHeap(descriptor_heap.device_ptr);
         command_buffer.setPipeline(pipeline);
         command_buffer.dispatch(
-            .from(data_map.device),
+            .as(data_map.device),
             (w + workgroup_size - 1) / workgroup_size,
             (h + workgroup_size - 1) / workgroup_size,
             1,

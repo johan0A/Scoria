@@ -12,8 +12,8 @@
   "create_instance": "sfCreateInstance",
 
   "constants": [
-    { "name": "SF_DESCRIPTOR_MAX_SIZE", "type": "size_t", "value": "64", "doc": "" },
-    { "name": "SF_ADAPTER_NAME_MAX_LENGTH", "type": "size_t", "value": "256", "doc": "" },
+    { "name": "SF_DESCRIPTOR_SIZE_MAX", "type": "size_t", "value": "64", "doc": "" },
+    { "name": "ADAPTER_NAME_CAPACITY_BYTES", "type": "size_t", "value": "256", "doc": "" },
     { "name": "SF_ALL_MIPS", "type": "uint32_t", "value": "0xFFFFFFFF", "doc": "" },
     { "name": "SF_ALL_LAYERS", "type": "uint32_t", "value": "0xFFFFFFFF", "doc": "" }
   ],
@@ -39,23 +39,23 @@
   "function_pointers": [
     {
       "name": "SfAllocFn",
-      "return": { "base": "uint8_t", "ptr": [{ "optional": true, "len": "length" }] },
+      "return": { "base": "uint8_t", "ptr": [{ "optional": true, "len": "size_bytes" }] },
       "params": [
         { "name": "user_data", "type": { "base": "void", "ptr": [{}] }, "doc": "" },
-        { "name": "length", "type": { "base": "size_t" }, "doc": "" },
+        { "name": "size_bytes", "type": { "base": "size_t" }, "doc": "" },
         { "name": "alignment", "type": { "base": "size_t" }, "doc": "" }
       ],
       "doc": ""
     },
     {
       "name": "SfRemapFn",
-      "return": { "base": "uint8_t", "ptr": [{ "optional": true, "len": "new_length" }] },
+      "return": { "base": "uint8_t", "ptr": [{ "optional": true, "len": "new_size_bytes" }] },
       "params": [
         { "name": "user_data", "type": { "base": "void", "ptr": [{}] }, "doc": "" },
-        { "name": "pointer", "type": { "base": "uint8_t", "ptr": [{ "len": "length" }] }, "doc": "" },
-        { "name": "length", "type": { "base": "size_t" }, "doc": "" },
+        { "name": "pointer", "type": { "base": "uint8_t", "ptr": [{ "len": "size_bytes" }] }, "doc": "" },
+        { "name": "size_bytes", "type": { "base": "size_t" }, "doc": "" },
         { "name": "alignment", "type": { "base": "size_t" }, "doc": "" },
-        { "name": "new_length", "type": { "base": "size_t" }, "doc": "" }
+        { "name": "new_size_bytes", "type": { "base": "size_t" }, "doc": "" }
       ],
       "doc": ""
     },
@@ -64,8 +64,8 @@
       "return": { "base": "void" },
       "params": [
         { "name": "user_data", "type": { "base": "void", "ptr": [{}] }, "doc": "" },
-        { "name": "pointer", "type": { "base": "uint8_t", "ptr": [{ "len": "length" }] }, "doc": "" },
-        { "name": "length", "type": { "base": "size_t" }, "doc": "" },
+        { "name": "pointer", "type": { "base": "uint8_t", "ptr": [{ "len": "size_bytes" }] }, "doc": "" },
+        { "name": "size_bytes", "type": { "base": "size_t" }, "doc": "" },
         { "name": "alignment", "type": { "base": "size_t" }, "doc": "" }
       ],
       "doc": ""
@@ -100,11 +100,10 @@
       "doc": ""
     },
     {
-      "name": "SfAdpaterInfo",
+      "name": "SfAdapterInfo",
       "fields": [
-        { "name": "name_length", "type": { "base": "uint8_t" }, "doc": "" },
-        { "name": "name", "type": { "base": "uint8_t", "array": "SF_ADAPTER_NAME_MAX_LENGTH" }, "doc": "" },
-        { "name": "type", "type": { "base": "SfAdapterType" }, "doc": "" }
+        { "name": "name", "type": { "base": "uint8_t", "array": "ADAPTER_NAME_CAPACITY_BYTES" }, "doc": "UTF-8, null-terminated." },
+        { "name": "kind", "type": { "base": "SfAdapterKind" }, "doc": "" }
       ],
       "doc": ""
     },
@@ -197,7 +196,7 @@
     {
       "name": "SfTextureDesc",
       "fields": [
-        { "name": "type", "type": { "base": "SfTextureType" }, "default": "SF_TEXTURE_TYPE_2D", "doc": "" },
+        { "name": "type", "type": { "base": "SfTextureDimension" }, "default": "SF_TEXTURE_DIMENSION_2D", "doc": "" },
         { "name": "dimensions", "type": { "base": "uint32_t", "array": 3 }, "doc": "" },
         { "name": "mip_count", "type": { "base": "uint32_t" }, "default": "1", "doc": "" },
         { "name": "layer_count", "type": { "base": "uint32_t" }, "default": "1", "doc": "" },
@@ -220,7 +219,7 @@
     {
       "name": "SfDescriptor",
       "fields": [
-        { "name": "data", "type": { "base": "uint8_t", "array": "SF_DESCRIPTOR_MAX_SIZE" }, "doc": "" }
+        { "name": "data", "type": { "base": "uint8_t", "array": "SF_DESCRIPTOR_SIZE_MAX" }, "doc": "" }
       ],
       "doc": ""
     },
@@ -299,29 +298,31 @@
         { "name": "SF_RESULT_OUT_OF_DEVICE_MEMORY", "value": 2, "doc": "" },
         { "name": "SF_RESULT_DEVICE_LOST", "value": 3, "doc": "" },
         { "name": "SF_RESULT_SURFACE_LOST", "value": 4, "doc": "" },
-        { "name": "SF_RESULT_UNKNOWN", "value": 5, "doc": "" }
+        { "name": "SF_RESULT_MALFORMED_SFIR", "value": 5, "doc": "" },
+        { "name": "SF_RESULT_UNSUPPORTED_SFIR_VERSION", "value": 6, "doc": "" },
+        { "name": "SF_RESULT_UNKNOWN", "value": 7, "doc": "" }
       ],
       "doc": ""
     },
     {
-      "name": "SfMemoryType",
+      "name": "SfMemoryKind",
       "backing_type": "uint32_t",
       "values": [
-        { "name": "SF_MEMORY_TYPE_UPLOAD", "value": 0, "doc": "" },
-        { "name": "SF_MEMORY_TYPE_DEVICE_LOCAL", "value": 1, "doc": "" },
-        { "name": "SF_MEMORY_TYPE_READBACK", "value": 2, "doc": "" }
+        { "name": "SF_MEMORY_KIND_UPLOAD", "value": 0, "doc": "" },
+        { "name": "SF_MEMORY_KIND_DEVICE_LOCAL", "value": 1, "doc": "" },
+        { "name": "SF_MEMORY_KIND_READBACK", "value": 2, "doc": "" }
       ],
       "doc": ""
     },
     {
-      "name": "SfAdapterType",
+      "name": "SfAdapterKind",
       "backing_type": "uint32_t",
       "values": [
-        { "name": "SF_ADAPTER_TYPE_OTHER", "value": 0, "doc": "" },
-        { "name": "SF_ADAPTER_TYPE_INTEGRATED_GPU", "value": 1, "doc": "" },
-        { "name": "SF_ADAPTER_TYPE_DISCRETE_GPU", "value": 2, "doc": "" },
-        { "name": "SF_ADAPTER_TYPE_VIRTUAL_GPU", "value": 3, "doc": "" },
-        { "name": "SF_ADAPTER_TYPE_CPU", "value": 4, "doc": "" }
+        { "name": "SF_ADAPTER_KIND_OTHER", "value": 0, "doc": "" },
+        { "name": "SF_ADAPTER_KIND_INTEGRATED_GPU", "value": 1, "doc": "" },
+        { "name": "SF_ADAPTER_KIND_DISCRETE_GPU", "value": 2, "doc": "" },
+        { "name": "SF_ADAPTER_KIND_VIRTUAL_GPU", "value": 3, "doc": "" },
+        { "name": "SF_ADAPTER_KIND_CPU", "value": 4, "doc": "" }
       ],
       "doc": ""
     },
@@ -352,12 +353,12 @@
       "doc": ""
     },
     {
-      "name": "SfQueueType",
+      "name": "SfQueueKind",
       "backing_type": "uint32_t",
       "values": [
-        { "name": "SF_QUEUE_TYPE_GRAPHICS", "value": 0, "doc": "" },
-        { "name": "SF_QUEUE_TYPE_COMPUTE", "value": 1, "doc": "" },
-        { "name": "SF_QUEUE_TYPE_TRANSFER", "value": 2, "doc": "" }
+        { "name": "SF_QUEUE_KIND_GRAPHICS", "value": 0, "doc": "" },
+        { "name": "SF_QUEUE_KIND_COMPUTE", "value": 1, "doc": "" },
+        { "name": "SF_QUEUE_KIND_TRANSFER", "value": 2, "doc": "" }
       ],
       "doc": ""
     },
@@ -390,12 +391,12 @@
       "doc": ""
     },
     {
-      "name": "SfTextureType",
+      "name": "SfTextureDimension",
       "backing_type": "uint32_t",
       "values": [
-        { "name": "SF_TEXTURE_TYPE_1D", "value": 0, "doc": "" },
-        { "name": "SF_TEXTURE_TYPE_2D", "value": 1, "doc": "" },
-        { "name": "SF_TEXTURE_TYPE_3D", "value": 2, "doc": "" }
+        { "name": "SF_TEXTURE_DIMENSION_1D", "value": 0, "doc": "" },
+        { "name": "SF_TEXTURE_DIMENSION_2D", "value": 1, "doc": "" },
+        { "name": "SF_TEXTURE_DIMENSION_3D", "value": 2, "doc": "" }
       ],
       "doc": ""
     },
@@ -735,7 +736,7 @@
       "name": "sfAdapterInfo",
       "group": "SfInstance",
       "dispatch": "table",
-      "return": { "base": "SfAdpaterInfo" },
+      "return": { "base": "SfAdapterInfo" },
       "params": [
         { "name": "instance", "type": { "base": "SfInstance", "ptr": [{}] }, "doc": "" },
         { "name": "adapter", "type": { "base": "SfAdapter", "ptr": [{}] }, "doc": "" }
@@ -818,7 +819,7 @@
       "doc": ""
     },
     {
-      "name": "sfDeviceToHostPointer",
+      "name": "sfHostFromDevicePointer",
       "group": "SfDevice",
       "dispatch": "table",
       "return": { "base": "void", "ptr": [{}] },
@@ -841,7 +842,7 @@
         { "name": "device", "type": { "base": "SfDevice", "ptr": [{}] }, "doc": "" },
         { "name": "size", "type": { "base": "size_t" }, "doc": "" },
         { "name": "alignment", "type": { "base": "size_t" }, "doc": "" },
-        { "name": "memory", "type": { "base": "SfMemoryType" }, "doc": "" },
+        { "name": "memory", "type": { "base": "SfMemoryKind" }, "doc": "" },
         { "name": "device_mapping", "type": { "base": "SfHostDeviceAddress", "ptr": [{}] }, "out": true, "doc": "" }
       ],
       "doc": ""
@@ -887,7 +888,7 @@
       "return": { "base": "SfQueue", "ptr": [{}] },
       "params": [
         { "name": "device", "type": { "base": "SfDevice", "ptr": [{}] }, "doc": "" },
-        { "name": "queue_type", "type": { "base": "SfQueueType" }, "doc": "" }
+        { "name": "queue_kind", "type": { "base": "SfQueueKind" }, "doc": "" }
       ],
       "doc": ""
     },
@@ -1301,6 +1302,8 @@
       "errors": [
         "SF_RESULT_OUT_OF_MEMORY",
         "SF_RESULT_OUT_OF_DEVICE_MEMORY",
+        "SF_RESULT_MALFORMED_SFIR",
+        "SF_RESULT_UNSUPPORTED_SFIR_VERSION",
         "SF_RESULT_UNKNOWN"
       ],
       "params": [
@@ -1319,6 +1322,8 @@
       "errors": [
         "SF_RESULT_OUT_OF_MEMORY",
         "SF_RESULT_OUT_OF_DEVICE_MEMORY",
+        "SF_RESULT_MALFORMED_SFIR",
+        "SF_RESULT_UNSUPPORTED_SFIR_VERSION",
         "SF_RESULT_UNKNOWN"
       ],
       "params": [
