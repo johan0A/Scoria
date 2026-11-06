@@ -125,7 +125,7 @@ pub fn main(init: std.process.Init) !void {
         .format = .rgba8_unorm,
         .usage = .{ .sampled = true },
     };
-    const texture_size_and_align = device.textureSizeAndAlign(texture_desc);
+    const texture_size_and_align = device.textureSizeAlign(texture_desc);
     const texture_map = try gpu_arena.runtimeAlignedAlloc(u8, texture_size_and_align.alignment(), texture_size_and_align.size, .device_local);
     const texture = try device.createTexture(texture_desc, texture_map.device_ptr);
     defer texture.destroy();
@@ -186,7 +186,7 @@ pub fn main(init: std.process.Init) !void {
             .depth_attachment = .{},
             .color_attachment_count = 1,
             .color_attachments = &.{.{
-                .texture = back_buffer,
+                .texture = back_buffer.texture,
                 .load_op = .clear,
                 .store_op = .store,
                 .clear_color = .{ 0, 0, 0, 1 },

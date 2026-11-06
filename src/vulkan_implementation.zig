@@ -2047,7 +2047,7 @@ pub const Texture = struct {
     const Desc = sf.TextureDesc;
 
     pub const Descriptor = opaque {
-        pub fn sizeAndHeapAlign(d_obj: *Object(Device)) sf.SizeAndAlign {
+        pub fn sizeAndHeapAlign(d_obj: *Object(Device)) sf.SizeAlign {
             const d = d_obj.body();
             const buffer_properties = d.descriptorBufferProperties();
             return .{
@@ -2068,7 +2068,7 @@ pub const Texture = struct {
         }
     };
 
-    pub fn sizeAndAlign(d_obj: *Object(Device), info: Desc) sf.SizeAndAlign {
+    pub fn SizeAlign(d_obj: *Object(Device), info: Desc) sf.SizeAlign {
         const d = d_obj.body();
         const device_image_memory_requirements: vk.DeviceImageMemoryRequirements = .{
             .p_create_info = &vkImageInfo(info),
@@ -2700,7 +2700,7 @@ pub export fn symbol(name: [*:0]const u8) callconv(sf.@"callconv") *const anyopa
         .drawIndexed = CommandBuffer.drawIndexed,
         .drawIndexedInstanced = CommandBuffer.drawIndexedInstanced,
         .drawIndexedInstancedIndirect = CommandBuffer.drawIndexedInstancedIndirect,
-        .textureSizeAndAlign = Texture.sizeAndAlign,
+        .textureSizeAlign = Texture.SizeAlign,
         .createTexture = Texture.create,
         .destroyTexture = Texture.destroy,
         .textureStorageDescriptor = Texture.storageDescriptor,

@@ -92,7 +92,7 @@
       "doc": ""
     },
     {
-      "name": "SfSizeAndAlign",
+      "name": "SfSizeAlign",
       "fields": [
         { "name": "size", "type": { "base": "size_t" }, "doc": "" },
         { "name": "alignment", "type": { "base": "size_t" }, "doc": "" }
@@ -871,7 +871,7 @@
       "name": "sfDescriptorSizeAndHeapAlign",
       "group": "SfDescriptor",
       "dispatch": "table",
-      "return": { "base": "SfSizeAndAlign" },
+      "return": { "base": "SfSizeAlign" },
       "params": [
         { "name": "device", "type": { "base": "SfDevice", "ptr": [{}] }, "doc": "" }
       ],
@@ -1232,10 +1232,10 @@
       "doc": ""
     },
     {
-      "name": "sfTextureSizeAndAlign",
+      "name": "sfTextureSizeAlign",
       "group": "SfTexture",
       "dispatch": "table",
-      "return": { "base": "SfSizeAndAlign" },
+      "return": { "base": "SfSizeAlign" },
       "params": [
         { "name": "device", "type": { "base": "SfDevice", "ptr": [{}] }, "doc": "" },
         { "name": "desc", "type": { "base": "SfTextureDesc" }, "doc": "" }

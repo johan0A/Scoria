@@ -41,7 +41,7 @@ pub fn main(init: std.process.Init) !void {
         .format = .rgba8_unorm,
         .usage = .{ .storage = true },
     };
-    const texture_size_and_align = device.textureSizeAndAlign(texture_info);
+    const texture_size_and_align = device.textureSizeAlign(texture_info);
     const texture_map = try gpu_arena.runtimeAlignedAlloc(u8, texture_size_and_align.alignment(), texture_size_and_align.size, .device_local);
     const texture = try device.createTexture(texture_info, texture_map.device_ptr);
     defer texture.destroy();

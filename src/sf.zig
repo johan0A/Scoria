@@ -361,10 +361,10 @@ pub const Device = opaque {
 
     pub fn descriptorSizeAndHeapAlign(
         device: *Device,
-    ) SizeAndAlign {
+    ) SizeAlign {
         const f: *const fn (
             device: *Device,
-        ) callconv(@"callconv") SizeAndAlign = @ptrCast(internal.table(device)[internal.slots.descriptor_size_and_heap_align]);
+        ) callconv(@"callconv") SizeAlign = @ptrCast(internal.table(device)[internal.slots.descriptor_size_and_heap_align]);
         return f(
             device,
         );
@@ -433,14 +433,14 @@ pub const Device = opaque {
         return semaphore;
     }
 
-    pub fn textureSizeAndAlign(
+    pub fn textureSizeAlign(
         device: *Device,
         desc: TextureDesc,
-    ) SizeAndAlign {
+    ) SizeAlign {
         const f: *const fn (
             device: *Device,
             desc: TextureDesc,
-        ) callconv(@"callconv") SizeAndAlign = @ptrCast(internal.table(device)[internal.slots.texture_size_and_align]);
+        ) callconv(@"callconv") SizeAlign = @ptrCast(internal.table(device)[internal.slots.texture_size_align]);
         return f(
             device,
             desc,
@@ -1681,11 +1681,11 @@ pub const HostAllocator = extern struct {
     free: FreeFn,
 };
 
-pub const SizeAndAlign = extern struct {
+pub const SizeAlign = extern struct {
     size: usize,
     alignment_byte_units: usize,
 
-    pub fn alignment(size_and_align: SizeAndAlign) std.mem.Alignment {
+    pub fn alignment(size_and_align: SizeAlign) std.mem.Alignment {
         return .fromByteUnits(size_and_align.alignment_byte_units);
     }
 };
@@ -1893,7 +1893,7 @@ const internal = struct {
         draw_indexed: usize = 0,
         draw_indexed_instanced: usize = 0,
         draw_indexed_instanced_indirect: usize = 0,
-        texture_size_and_align: usize = 0,
+        texture_size_align: usize = 0,
         create_texture: usize = 0,
         destroy_texture: usize = 0,
         texture_storage_descriptor: usize = 0,
@@ -1951,7 +1951,7 @@ const internal = struct {
         slots.draw_indexed = get_slot.?(instance, "sfDrawIndexed");
         slots.draw_indexed_instanced = get_slot.?(instance, "sfDrawIndexedInstanced");
         slots.draw_indexed_instanced_indirect = get_slot.?(instance, "sfDrawIndexedInstancedIndirect");
-        slots.texture_size_and_align = get_slot.?(instance, "sfTextureSizeAndAlign");
+        slots.texture_size_align = get_slot.?(instance, "sfTextureSizeAlign");
         slots.create_texture = get_slot.?(instance, "sfCreateTexture");
         slots.destroy_texture = get_slot.?(instance, "sfDestroyTexture");
         slots.texture_storage_descriptor = get_slot.?(instance, "sfTextureStorageDescriptor");

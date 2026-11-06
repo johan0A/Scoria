@@ -73,7 +73,7 @@ fn Functions(handle_types: HandleTypes) type {
         ) void,
         descriptorSizeAndHeapAlign: fn (
             device: *handle_types.Device,
-        ) sf.SizeAndAlign,
+        ) sf.SizeAlign,
         storeDescriptor: fn (
             device: *handle_types.Device,
             descriptor: *const sf.Descriptor,
@@ -245,10 +245,10 @@ fn Functions(handle_types: HandleTypes) type {
             indices: sf.DeviceAddress,
             arguments: sf.DeviceAddress,
         ) void,
-        textureSizeAndAlign: fn (
+        textureSizeAlign: fn (
             device: *handle_types.Device,
             desc: sf.TextureDesc,
-        ) sf.SizeAndAlign,
+        ) sf.SizeAlign,
         createTexture: fn (
             device: *handle_types.Device,
             desc: sf.TextureDesc,
@@ -467,7 +467,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn descriptorSizeAndHeapAlign(
             device: *handle_types.Device,
-        ) callconv(sf.@"callconv") sf.SizeAndAlign {
+        ) callconv(sf.@"callconv") sf.SizeAlign {
             return functions.descriptorSizeAndHeapAlign(
                 device,
             );
@@ -783,11 +783,11 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
             );
         }
 
-        pub fn textureSizeAndAlign(
+        pub fn textureSizeAlign(
             device: *handle_types.Device,
             desc: sf.TextureDesc,
-        ) callconv(sf.@"callconv") sf.SizeAndAlign {
-            return functions.textureSizeAndAlign(
+        ) callconv(sf.@"callconv") sf.SizeAlign {
+            return functions.textureSizeAlign(
                 device,
                 desc,
             );
@@ -945,7 +945,7 @@ pub fn map(
         .{ "sfDrawIndexed", @ptrCast(&c_functions.drawIndexed) },
         .{ "sfDrawIndexedInstanced", @ptrCast(&c_functions.drawIndexedInstanced) },
         .{ "sfDrawIndexedInstancedIndirect", @ptrCast(&c_functions.drawIndexedInstancedIndirect) },
-        .{ "sfTextureSizeAndAlign", @ptrCast(&c_functions.textureSizeAndAlign) },
+        .{ "sfTextureSizeAlign", @ptrCast(&c_functions.textureSizeAlign) },
         .{ "sfCreateTexture", @ptrCast(&c_functions.createTexture) },
         .{ "sfDestroyTexture", @ptrCast(&c_functions.destroyTexture) },
         .{ "sfTextureStorageDescriptor", @ptrCast(&c_functions.textureStorageDescriptor) },
