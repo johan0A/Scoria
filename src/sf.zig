@@ -833,15 +833,16 @@ pub const Swapchain = opaque {
         OutOfDeviceMemory,
         DeviceLost,
         SurfaceLost,
+        NoBackbuffer,
         Unknown,
-    }!*Texture {
+    }!BackBuffer {
         const f: *const fn (
             swapchain: *Swapchain,
             width: u32,
             height: u32,
-            back_buffer: **Texture,
+            back_buffer: *BackBuffer,
         ) callconv(@"callconv") Result = @ptrCast(internal.table(swapchain)[internal.slots.acquire_back_buffer]);
-        var back_buffer: *Texture = undefined;
+        var back_buffer: BackBuffer = undefined;
         const result = f(
             swapchain,
             width,
@@ -854,6 +855,7 @@ pub const Swapchain = opaque {
             .out_of_device_memory => return error.OutOfDeviceMemory,
             .device_lost => return error.DeviceLost,
             .surface_lost => return error.SurfaceLost,
+            .no_backbuffer => return error.NoBackbuffer,
             .unknown => return error.Unknown,
             else => unreachable,
         }
@@ -1372,13 +1374,14 @@ pub const DepthStencilState = opaque {
 
 pub const Result = enum(u32) {
     ok = 0,
-    out_of_memory = 1,
-    out_of_device_memory = 2,
-    device_lost = 3,
-    surface_lost = 4,
-    malformed_sfir = 5,
-    unsupported_sfir_version = 6,
-    unknown = 7,
+    unknown = 1,
+    out_of_memory = 2,
+    out_of_device_memory = 3,
+    device_lost = 4,
+    surface_lost = 5,
+    no_backbuffer = 6,
+    malformed_sfir = 7,
+    unsupported_sfir_version = 8,
 };
 
 pub const MemoryKind = enum(u32) {
@@ -1712,6 +1715,11 @@ pub const SwapchainDesc = extern struct {
     format: Format,
     present_mode: PresentMode,
     usage: TextureUsage,
+};
+
+pub const BackBuffer = extern struct {
+    texture: *Texture,
+    extent: [2]u32,
 };
 
 pub const DepthAttachment = extern struct {

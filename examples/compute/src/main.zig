@@ -20,10 +20,15 @@ pub fn main(init: std.process.Init) !void {
     if (!c.SDL_Init(c.SDL_INIT_VIDEO)) @panic("SDL_Init failed");
     defer c.SDL_Quit();
 
-    var width: c_int = 512;
-    var height: c_int = 512;
+    var width: u32 = 512;
+    var height: u32 = 512;
 
-    const window = c.SDL_CreateWindow("title", width, height, c.SDL_WINDOW_VULKAN | c.SDL_WINDOW_RESIZABLE) orelse @panic("SDL_CreateWindow failed");
+    const window = c.SDL_CreateWindow(
+        "title",
+        @intCast(width),
+        @intCast(height),
+        c.SDL_WINDOW_VULKAN | c.SDL_WINDOW_RESIZABLE,
+    ) orelse @panic("SDL_CreateWindow failed");
     defer c.SDL_DestroyWindow(window);
 
     const instance = sf.Instance.create(null, sfSymbol);
@@ -108,7 +113,10 @@ pub fn main(init: std.process.Init) !void {
             else => {},
         };
 
-        if (!c.SDL_GetWindowSizeInPixels(window, &width, &height)) @panic("SDL_GetWindowSizeInPixels failed");
+        var c_extent: [2]c_int = undefined;
+        if (!c.SDL_GetWindowSizeInPixels(window, &c_extent[0], &c_extent[1])) @panic("SDL_GetWindowSizeInPixels failed");
+        width = @intCast(c_extent[0]);
+        height = @intCast(c_extent[1]);
         if (width == 0 or height == 0) {
             c.SDL_Delay(16);
             continue;
@@ -119,31 +127,26 @@ pub fn main(init: std.process.Init) !void {
 
         const slot: u32 = @intCast(frame_index % frames_in_fligt);
 
-        const back_buffer: *sf.Texture = try swapchain.acquireBackBuffer(@intCast(width), @intCast(height));
-
-        const descriptor = try back_buffer.storageDescriptor(.{});
-        device.storeDescriptor(&descriptor, descriptor_heap.host_ptr, slot);
-
-        const elapsed_us: f64 = @floatFromInt(start.untilNow(io, .real).toMicroseconds());
+        const elapsed_us: f64 = @floatFromInt(start.untilNow(io, .real).nanoseconds);
         const data_map = data_maps[slot];
         data_map.host.* = .{
             .output_texture = slot,
-            .time = @floatCast(elapsed_us / 1e6),
+            .time = @floatCast(elapsed_us / 1e9),
         };
 
-        const w: u32 = @intCast(width);
-        const h: u32 = @intCast(height);
+        const back_buffer = try swapchain.acquireBackBuffer(width, height);
+        const descriptor = try back_buffer.texture.storageDescriptor(.{});
+        device.storeDescriptor(&descriptor, descriptor_heap.host_ptr, slot);
 
         const command_buffer = try queue.startCommandRecording();
         command_buffer.setActiveTextureHeap(descriptor_heap.device_ptr);
         command_buffer.setPipeline(pipeline);
         command_buffer.dispatch(
             .as(data_map.device),
-            (w + workgroup_size - 1) / workgroup_size,
-            (h + workgroup_size - 1) / workgroup_size,
+            (back_buffer.extent[0] + workgroup_size - 1) / workgroup_size,
+            (back_buffer.extent[1] + workgroup_size - 1) / workgroup_size,
             1,
         );
-
         try queue.submitAndSignal(&.{command_buffer}, frame_semaphore, frame_index);
         try swapchain.present();
 

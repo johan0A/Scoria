@@ -1318,10 +1318,10 @@ pub const Swapchain = struct {
     pub fn create(
         queue: *Object(Queue),
         surface: *Object(Surface),
-        options: sf.SwapchainDesc,
+        desc: sf.SwapchainDesc,
         swapchain: **Object(Swapchain),
     ) !void {
-        swapchain.* = createInner(queue.body(), surface.body(), options) catch |err| return switch (err) {
+        swapchain.* = createInner(queue.body(), surface.body(), desc) catch |err| return switch (err) {
             error.OutOfMemory, error.OutOfHostMemory => error.OutOfMemory,
             error.OutOfDeviceMemory, error.Unknown => |e| e,
             error.SurfaceLostKHR => error.SurfaceLost,
@@ -1330,7 +1330,7 @@ pub const Swapchain = struct {
     fn createInner(
         queue: *Queue,
         surface: *Surface,
-        options: sf.SwapchainDesc,
+        desc: sf.SwapchainDesc,
     ) !*Object(Swapchain) {
         const queue_family = queue.d.queueStateForQueueId(queue.id).family;
         // TODO: move to adapter picking
@@ -1339,7 +1339,7 @@ pub const Swapchain = struct {
         swapchain.set(queue.d.table, .{
             .handle = .null,
             .surface = surface.handle,
-            .desc = options,
+            .desc = desc,
             .queue = queue,
             .textures = &.{},
             .acquire_fence = try queue.d.handle.createFence(&.{}, null),
@@ -1359,13 +1359,13 @@ pub const Swapchain = struct {
         swapchain.d.gpa.destroy(swapchain);
     }
 
-    pub fn acquireBackBuffer(
+    pub fn acquire(
         swapchain: *Object(Swapchain),
         width: u32,
         height: u32,
-        back_buffer: **Object(Texture),
+        back_buffer: *sf.BackBuffer,
     ) !void {
-        back_buffer.* = acquireBackBufferInner(
+        back_buffer.* = acquireInner(
             swapchain.body(),
             width,
             height,
@@ -1385,11 +1385,11 @@ pub const Swapchain = struct {
             error.DeviceLost => |e| e,
         };
     }
-    fn acquireBackBufferInner(
+    fn acquireInner(
         swapchain: *Swapchain,
         width: u32,
         height: u32,
-    ) !*Object(Texture) {
+    ) !sf.BackBuffer {
         const queue = swapchain.queue;
         var attempts: u32 = 0;
         while (true) : (attempts += 1) {
@@ -1420,7 +1420,10 @@ pub const Swapchain = struct {
 
             try swapchain.d.pending_texture_inits.put(swapchain.d.gpa, texture.body().image, texture.body().desc);
 
-            return texture;
+            return .{
+                .extent = texture.body().desc.dimensions[0..2].*,
+                .texture = @ptrCast(texture),
+            };
         }
     }
     fn recreate(swapchain: *Swapchain, queue: *Queue, width: u32, height: u32) !void { // TODO: inline into callsite?
@@ -2682,7 +2685,7 @@ pub export fn symbol(name: [*:0]const u8) callconv(sf.@"callconv") *const anyopa
         .waitSemaphore = Semaphore.wait,
         .createSwapchain = Swapchain.create,
         .destroySwapchain = Swapchain.destroy,
-        .acquireBackBuffer = Swapchain.acquireBackBuffer,
+        .acquireBackBuffer = Swapchain.acquire,
         .present = Swapchain.present,
         .setActiveTextureHeap = CommandBuffer.setActiveTextureHeap,
         .setPipeline = CommandBuffer.setPipeline,

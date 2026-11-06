@@ -39,24 +39,26 @@ fn Functions(handle_types: HandleTypes) type {
 }
 
 const Error = error{
+    Unknown,
     OutOfMemory,
     OutOfDeviceMemory,
     DeviceLost,
     SurfaceLost,
+    NoBackbuffer,
     MalformedSfir,
     UnsupportedSfirVersion,
-    Unknown,
 };
 
 fn cResult(result: anytype) sf.Result {
     if (result) return .ok else |err| return switch (@as(Error, err)) {
+        error.Unknown => .unknown,
         error.OutOfMemory => .out_of_memory,
         error.OutOfDeviceMemory => .out_of_device_memory,
         error.DeviceLost => .device_lost,
         error.SurfaceLost => .surface_lost,
+        error.NoBackbuffer => .no_backbuffer,
         error.MalformedSfir => .malformed_sfir,
         error.UnsupportedSfirVersion => .unsupported_sfir_version,
-        error.Unknown => .unknown,
     };
 }
 

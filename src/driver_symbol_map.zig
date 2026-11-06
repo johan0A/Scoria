@@ -153,12 +153,13 @@ fn Functions(handle_types: HandleTypes) type {
             swapchain: *handle_types.Swapchain,
             width: u32,
             height: u32,
-            back_buffer: **handle_types.Texture,
+            back_buffer: *sf.BackBuffer,
         ) error{
             OutOfMemory,
             OutOfDeviceMemory,
             DeviceLost,
             SurfaceLost,
+            NoBackbuffer,
             Unknown,
         }!void,
         present: fn (
@@ -323,24 +324,26 @@ fn Functions(handle_types: HandleTypes) type {
 }
 
 const Error = error{
+    Unknown,
     OutOfMemory,
     OutOfDeviceMemory,
     DeviceLost,
     SurfaceLost,
+    NoBackbuffer,
     MalformedSfir,
     UnsupportedSfirVersion,
-    Unknown,
 };
 
 fn cResult(result: anytype) sf.Result {
     if (result) return .ok else |err| return switch (@as(Error, err)) {
+        error.Unknown => .unknown,
         error.OutOfMemory => .out_of_memory,
         error.OutOfDeviceMemory => .out_of_device_memory,
         error.DeviceLost => .device_lost,
         error.SurfaceLost => .surface_lost,
+        error.NoBackbuffer => .no_backbuffer,
         error.MalformedSfir => .malformed_sfir,
         error.UnsupportedSfirVersion => .unsupported_sfir_version,
-        error.Unknown => .unknown,
     };
 }
 
@@ -588,7 +591,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
             swapchain: *handle_types.Swapchain,
             width: u32,
             height: u32,
-            back_buffer: **handle_types.Texture,
+            back_buffer: *sf.BackBuffer,
         ) callconv(sf.@"callconv") sf.Result {
             return cResult(functions.acquireBackBuffer(
                 swapchain,

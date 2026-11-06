@@ -143,6 +143,14 @@
       "doc": ""
     },
     {
+      "name": "SfBackBuffer",
+      "fields": [
+        { "name": "texture", "type": { "base": "SfTexture", "ptr": [{}] }, "doc": "" },
+        { "name": "extent", "type": { "base": "uint32_t", "array": 2 }, "doc": "" }
+      ],
+      "doc": ""
+    },
+    {
       "name": "SfDepthAttachment",
       "fields": [
         { "name": "texture", "type": { "base": "SfTexture", "ptr": [{ "optional": true }] }, "default": "NULL", "doc": "" },
@@ -294,13 +302,14 @@
       "backing_type": "uint32_t",
       "values": [
         { "name": "SF_RESULT_OK", "value": 0, "doc": "" },
-        { "name": "SF_RESULT_OUT_OF_MEMORY", "value": 1, "doc": "" },
-        { "name": "SF_RESULT_OUT_OF_DEVICE_MEMORY", "value": 2, "doc": "" },
-        { "name": "SF_RESULT_DEVICE_LOST", "value": 3, "doc": "" },
-        { "name": "SF_RESULT_SURFACE_LOST", "value": 4, "doc": "" },
-        { "name": "SF_RESULT_MALFORMED_SFIR", "value": 5, "doc": "" },
-        { "name": "SF_RESULT_UNSUPPORTED_SFIR_VERSION", "value": 6, "doc": "" },
-        { "name": "SF_RESULT_UNKNOWN", "value": 7, "doc": "" }
+        { "name": "SF_RESULT_UNKNOWN", "value": 1, "doc": "" },
+        { "name": "SF_RESULT_OUT_OF_MEMORY", "value": 2, "doc": "" },
+        { "name": "SF_RESULT_OUT_OF_DEVICE_MEMORY", "value": 3, "doc": "" },
+        { "name": "SF_RESULT_DEVICE_LOST", "value": 4, "doc": "" },
+        { "name": "SF_RESULT_SURFACE_LOST", "value": 5, "doc": "" },
+        { "name": "SF_RESULT_NO_BACKBUFFER", "value": 6, "doc": "" },
+        { "name": "SF_RESULT_MALFORMED_SFIR", "value": 7, "doc": "" },
+        { "name": "SF_RESULT_UNSUPPORTED_SFIR_VERSION", "value": 8, "doc": "" }
       ],
       "doc": ""
     },
@@ -1029,13 +1038,14 @@
         "SF_RESULT_OUT_OF_DEVICE_MEMORY",
         "SF_RESULT_DEVICE_LOST",
         "SF_RESULT_SURFACE_LOST",
+        "SF_RESULT_NO_BACKBUFFER",
         "SF_RESULT_UNKNOWN"
       ],
       "params": [
         { "name": "swapchain", "type": { "base": "SfSwapchain", "ptr": [{}] }, "doc": "" },
         { "name": "width", "type": { "base": "uint32_t" }, "doc": "" },
         { "name": "height", "type": { "base": "uint32_t" }, "doc": "" },
-        { "name": "back_buffer", "type": { "base": "SfTexture", "ptr": [{}, {}] }, "out": true, "doc": "" }
+        { "name": "back_buffer", "type": { "base": "SfBackBuffer", "ptr": [{}] }, "out": true, "doc": "" }
       ],
       "doc": ""
     },
