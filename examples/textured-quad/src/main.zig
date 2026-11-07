@@ -121,7 +121,7 @@ pub fn main(init: std.process.Init) !void {
 
     const dimensions: [3]u32 = .{ 256, 256, 1 };
     const texture_desc: sf.TextureDesc = .{
-        .dimensions = dimensions,
+        .extent = .{ .width = dimensions[0], .height = dimensions[1], .depth = dimensions[2] },
         .format = .rgba8_unorm,
         .usage = .{ .sampled = true },
     };
@@ -177,7 +177,7 @@ pub fn main(init: std.process.Init) !void {
         if (frame_index > frames_in_flight)
             try frame_semaphore.wait(frame_index - frames_in_flight);
 
-        const back_buffer = try swapchain.acquireBackBuffer(@intCast(width), @intCast(height));
+        const back_buffer = try swapchain.acquireBackBuffer(.{ .width = @intCast(width), .height = @intCast(height) });
 
         const cb = try queue.startCommandRecording();
         cb.setActiveTextureHeap(descriptor_heap.device_ptr);

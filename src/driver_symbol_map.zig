@@ -151,8 +151,7 @@ fn Functions(handle_types: HandleTypes) type {
         ) void,
         acquireBackBuffer: fn (
             swapchain: *handle_types.Swapchain,
-            width: u32,
-            height: u32,
+            extent: sf.Extent2D,
             back_buffer: *sf.BackBuffer,
         ) error{
             OutOfMemory,
@@ -589,14 +588,12 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn acquireBackBuffer(
             swapchain: *handle_types.Swapchain,
-            width: u32,
-            height: u32,
+            extent: sf.Extent2D,
             back_buffer: *sf.BackBuffer,
         ) callconv(sf.@"callconv") sf.Result {
             return cResult(functions.acquireBackBuffer(
                 swapchain,
-                width,
-                height,
+                extent,
                 back_buffer,
             ));
         }

@@ -1361,15 +1361,10 @@ pub const Swapchain = struct {
 
     pub fn acquire(
         swapchain: *Object(Swapchain),
-        width: u32,
-        height: u32,
+        extent: sf.Extent2D,
         back_buffer: *sf.BackBuffer,
     ) !void {
-        back_buffer.* = acquireInner(
-            swapchain.body(),
-            width,
-            height,
-        ) catch |err| return switch (err) {
+        back_buffer.* = acquireInner(swapchain.body(), extent) catch |err| return switch (err) {
             error.OutOfHostMemory, error.OutOfMemory => error.OutOfMemory,
             error.CompressionExhaustedEXT, error.OutOfDeviceMemory => error.OutOfDeviceMemory,
             error.FullScreenExclusiveModeLostEXT,
@@ -1385,16 +1380,12 @@ pub const Swapchain = struct {
             error.DeviceLost => |e| e,
         };
     }
-    fn acquireInner(
-        swapchain: *Swapchain,
-        width: u32,
-        height: u32,
-    ) !sf.BackBuffer {
+    fn acquireInner(swapchain: *Swapchain, extent: sf.Extent2D) !sf.BackBuffer {
         const queue = swapchain.queue;
         var attempts: u32 = 0;
         while (true) : (attempts += 1) {
             if (attempts > 32) return error.SurfaceLost;
-            if (swapchain.needs_recreate) try swapchain.recreate(queue, width, height);
+            if (swapchain.needs_recreate) try swapchain.recreate(queue, extent);
 
             const result = swapchain.d.handle.acquireNextImageKHR(
                 swapchain.handle,
@@ -1421,12 +1412,15 @@ pub const Swapchain = struct {
             try swapchain.d.pending_texture_inits.put(swapchain.d.gpa, texture.body().image, texture.body().desc);
 
             return .{
-                .extent = texture.body().desc.dimensions[0..2].*,
+                .extent = .{
+                    .width = texture.body().desc.extent.width,
+                    .height = texture.body().desc.extent.height,
+                },
                 .texture = @ptrCast(texture),
             };
         }
     }
-    fn recreate(swapchain: *Swapchain, queue: *Queue, width: u32, height: u32) !void { // TODO: inline into callsite?
+    fn recreate(swapchain: *Swapchain, queue: *Queue, extent: sf.Extent2D) !void { // TODO: inline into callsite?
         const d = swapchain.d;
         try d.handle.queueWaitIdle(d.queueStateForQueueId(queue.id).queue);
 
@@ -1439,8 +1433,8 @@ pub const Swapchain = struct {
         const surface_extent: vk.Extent2D = switch (capabilities.current_extent.width != std.math.maxInt(u32)) {
             true => capabilities.current_extent,
             false => .{
-                .width = std.math.clamp(width, min_image_extent.width, max_image_extent.width),
-                .height = std.math.clamp(height, min_image_extent.height, max_image_extent.height),
+                .width = std.math.clamp(extent.width, min_image_extent.width, max_image_extent.width),
+                .height = std.math.clamp(extent.height, min_image_extent.height, max_image_extent.height),
             },
         };
 
@@ -1483,7 +1477,7 @@ pub const Swapchain = struct {
         for (textures, images) |*texture, image| {
             const texture_info: sf.TextureDesc = .{
                 .type = .@"2d",
-                .dimensions = .{ surface_extent.width, surface_extent.height, 1 },
+                .extent = .{ .width = surface_extent.width, .height = surface_extent.height, .depth = 1 },
                 .mip_count = 1,
                 .layer_count = 1,
                 .format = swapchain.desc.format,
@@ -1772,9 +1766,9 @@ pub const CommandBuffer = struct {
             },
             .image_offset = .{ .x = 0, .y = 0, .z = 0 },
             .image_extent = .{
-                .width = source_texture.desc.dimensions[0],
-                .height = source_texture.desc.dimensions[1],
-                .depth = source_texture.desc.dimensions[2],
+                .width = source_texture.desc.extent.width,
+                .height = source_texture.desc.extent.height,
+                .depth = source_texture.desc.extent.depth,
             },
         };
         const info: vk.CopyImageToBufferInfo2 = .{
@@ -1807,9 +1801,9 @@ pub const CommandBuffer = struct {
             },
             .image_offset = .{ .x = 0, .y = 0, .z = 0 },
             .image_extent = .{
-                .width = destination_texture.desc.dimensions[0],
-                .height = destination_texture.desc.dimensions[1],
-                .depth = destination_texture.desc.dimensions[2],
+                .width = destination_texture.desc.extent.width,
+                .height = destination_texture.desc.extent.height,
+                .depth = destination_texture.desc.extent.depth,
             },
         };
         const info: vk.CopyBufferToImageInfo2 = .{
@@ -1876,17 +1870,17 @@ pub const CommandBuffer = struct {
             if (color_targets.len > 0) {
                 const texture: *Object(Texture) = @ptrCast(@alignCast(color_targets[0].texture));
                 break :blk .{
-                    texture.body().desc.dimensions[0],
-                    texture.body().desc.dimensions[1],
+                    texture.body().desc.extent.width,
+                    texture.body().desc.extent.height,
                 };
             }
             if (desc.depth_attachment.texture) |t| {
                 const texture: *Object(Texture) = @ptrCast(@alignCast(t));
-                break :blk .{ texture.body().desc.dimensions[0], texture.body().desc.dimensions[1] };
+                break :blk .{ texture.body().desc.extent.width, texture.body().desc.extent.height };
             }
             if (desc.stencil_attachment.texture) |t| {
                 const texture: *Object(Texture) = @ptrCast(@alignCast(t));
-                break :blk .{ texture.body().desc.dimensions[0], texture.body().desc.dimensions[1] };
+                break :blk .{ texture.body().desc.extent.width, texture.body().desc.extent.height };
             }
             unreachable;
         };
@@ -2189,7 +2183,7 @@ pub const Texture = struct {
         return .{
             .image_type = to_vk.textureDimension(info.type),
             .format = to_vk.format(info.format),
-            .extent = .{ .width = info.dimensions[0], .height = info.dimensions[1], .depth = info.dimensions[2] },
+            .extent = .{ .width = info.extent.width, .height = info.extent.height, .depth = info.extent.depth },
             .mip_levels = info.mip_count,
             .array_layers = info.layer_count,
             .samples = .{ .@"1" = true },

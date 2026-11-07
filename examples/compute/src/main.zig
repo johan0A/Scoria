@@ -20,13 +20,12 @@ pub fn main(init: std.process.Init) !void {
     if (!c.SDL_Init(c.SDL_INIT_VIDEO)) @panic("SDL_Init failed");
     defer c.SDL_Quit();
 
-    var width: u32 = 512;
-    var height: u32 = 512;
+    var surface_extent: sf.Extent2D = .{ .width = 512, .height = 512 };
 
     const window = c.SDL_CreateWindow(
         "title",
-        @intCast(width),
-        @intCast(height),
+        @intCast(surface_extent.width),
+        @intCast(surface_extent.height),
         c.SDL_WINDOW_VULKAN | c.SDL_WINDOW_RESIZABLE,
     ) orelse @panic("SDL_CreateWindow failed");
     defer c.SDL_DestroyWindow(window);
@@ -115,9 +114,8 @@ pub fn main(init: std.process.Init) !void {
 
         var c_extent: [2]c_int = undefined;
         if (!c.SDL_GetWindowSizeInPixels(window, &c_extent[0], &c_extent[1])) @panic("SDL_GetWindowSizeInPixels failed");
-        width = @intCast(c_extent[0]);
-        height = @intCast(c_extent[1]);
-        if (width == 0 or height == 0) {
+        surface_extent = .{ .width = @intCast(c_extent[0]), .height = @intCast(c_extent[1]) };
+        if (surface_extent.width == 0 or surface_extent.height == 0) {
             c.SDL_Delay(16);
             continue;
         }
@@ -134,7 +132,7 @@ pub fn main(init: std.process.Init) !void {
             .time = @floatCast(elapsed_us / 1e9),
         };
 
-        const back_buffer = try swapchain.acquireBackBuffer(width, height);
+        const back_buffer = try swapchain.acquireBackBuffer(surface_extent);
         const descriptor = try back_buffer.texture.storageDescriptor(.{});
         device.storeDescriptor(&descriptor, descriptor_heap.host_ptr, slot);
 
@@ -143,8 +141,8 @@ pub fn main(init: std.process.Init) !void {
         command_buffer.setPipeline(pipeline);
         command_buffer.dispatch(
             .as(data_map.device),
-            (back_buffer.extent[0] + workgroup_size - 1) / workgroup_size,
-            (back_buffer.extent[1] + workgroup_size - 1) / workgroup_size,
+            (back_buffer.extent.width + workgroup_size - 1) / workgroup_size,
+            (back_buffer.extent.height + workgroup_size - 1) / workgroup_size,
             1,
         );
         try queue.submitAndSignal(&.{command_buffer}, frame_semaphore, frame_index);

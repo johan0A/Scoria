@@ -337,6 +337,17 @@ pub const HostAllocator = extern struct {
     free: FreeFn,
 };
 
+pub const Extent2D = extern struct {
+    width: u32,
+    height: u32,
+};
+
+pub const Extent3D = extern struct {
+    width: u32,
+    height: u32,
+    depth: u32,
+};
+
 pub const SizeAlign = extern struct {
     size: usize,
     alignment: usize,
@@ -371,7 +382,7 @@ pub const SwapchainDesc = extern struct {
 
 pub const BackBuffer = extern struct {
     texture: *Texture,
-    extent: [2]u32,
+    extent: Extent2D,
 };
 
 pub const DepthAttachment = extern struct {
@@ -412,7 +423,7 @@ pub const DrawIndexedArguments = extern struct {
 
 pub const TextureDesc = extern struct {
     type: TextureDimension = .@"2d",
-    dimensions: [3]u32,
+    extent: Extent3D,
     mip_count: u32 = 1,
     layer_count: u32 = 1,
     format: Format = .none,
@@ -874,20 +885,17 @@ pub fn destroySwapchain(
 
 pub fn acquireBackBuffer(
     swapchain: *Swapchain,
-    width: u32,
-    height: u32,
+    extent: Extent2D,
     back_buffer: *BackBuffer,
 ) Result {
     const f: *const fn (
         swapchain: *Swapchain,
-        width: u32,
-        height: u32,
+        extent: Extent2D,
         back_buffer: *BackBuffer,
     ) callconv(@"callconv") Result = @ptrCast(internal.table(swapchain)[internal.slots.acquire_back_buffer]);
     return f(
         swapchain,
-        width,
-        height,
+        extent,
         back_buffer,
     );
 }
