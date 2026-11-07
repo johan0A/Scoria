@@ -93,7 +93,7 @@ pub fn main(init: std.process.Init) !void {
         .colors = colors.gpu,
     };
 
-    const pipeline = try device.createGraphicsPipeline(@embedFile("vert.spv"), @embedFile("frag.spv"), .{
+    const pipeline = try device.createGraphicsPipeline(@embedFile("vert.sfir"), @embedFile("frag.sfir"), .{
         .color_target_count = 1,
         .color_targets = &.{.{ .format = swapchain_format }},
     });

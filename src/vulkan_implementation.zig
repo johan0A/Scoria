@@ -2235,7 +2235,7 @@ pub const Pipeline = struct {
             error.OutOfHostMemory, error.OutOfMemory => error.OutOfMemory,
             error.InvalidOpaqueCaptureAddressKHR, error.Unknown => error.Unknown,
             error.InvalidShaderNV, error.MalformedSfir => error.MalformedSfir,
-            error.UnsupportedSfirVersion, error.OutOfDeviceMemory => |e| e,
+            error.UnsupportedSfirVersion, error.UnsupportedSfirBytecode, error.OutOfDeviceMemory => |e| e,
         };
     }
     fn createComputeInner(d: *Device, ir: []const u8) !*Object(Pipeline) {
@@ -2311,7 +2311,7 @@ pub const Pipeline = struct {
             error.OutOfHostMemory, error.OutOfMemory => error.OutOfMemory,
             error.InvalidOpaqueCaptureAddressKHR, error.Unknown => error.Unknown,
             error.InvalidShaderNV, error.MalformedSfir => error.MalformedSfir,
-            error.UnsupportedSfirVersion, error.OutOfDeviceMemory => |e| e,
+            error.UnsupportedSfirVersion, error.UnsupportedSfirBytecode, error.OutOfDeviceMemory => |e| e,
         };
     }
     fn createGraphicsInner(

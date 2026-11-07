@@ -289,6 +289,7 @@ fn Functions(handle_types: HandleTypes) type {
             OutOfDeviceMemory,
             MalformedSfir,
             UnsupportedSfirVersion,
+            UnsupportedSfirBytecode,
             Unknown,
         }!void,
         createGraphicsPipeline: fn (
@@ -304,6 +305,7 @@ fn Functions(handle_types: HandleTypes) type {
             OutOfDeviceMemory,
             MalformedSfir,
             UnsupportedSfirVersion,
+            UnsupportedSfirBytecode,
             Unknown,
         }!void,
         destroyPipeline: fn (
@@ -331,6 +333,7 @@ const Error = error{
     NoBackbuffer,
     MalformedSfir,
     UnsupportedSfirVersion,
+    UnsupportedSfirBytecode,
 };
 
 fn cResult(result: anytype) sf.Result {
@@ -343,6 +346,7 @@ fn cResult(result: anytype) sf.Result {
         error.NoBackbuffer => .no_backbuffer,
         error.MalformedSfir => .malformed_sfir,
         error.UnsupportedSfirVersion => .unsupported_sfir_version,
+        error.UnsupportedSfirBytecode => .unsupported_sfir_bytecode,
     };
 }
 

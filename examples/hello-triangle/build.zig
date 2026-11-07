@@ -18,11 +18,11 @@ pub fn build(b: *std.Build) void {
     });
     root_module.addImport("sulfur", sulfur_dep.module("sulfur"));
 
-    const frag = sulfur.compileShader(sulfur_dep, b, b.path("src/shaders/frag.slang"), "main", &.{.{}});
-    root_module.addAnonymousImport("frag.spv", .{ .root_source_file = frag });
+    const frag = sulfur.compileSlangShader(sulfur_dep, b, b.path("src/shaders/frag.slang"), "main", &.{.{}});
+    root_module.addAnonymousImport("frag.sfir", .{ .root_source_file = frag });
 
-    const vert = sulfur.compileShader(sulfur_dep, b, b.path("src/shaders/vert.slang"), "main", &.{});
-    root_module.addAnonymousImport("vert.spv", .{ .root_source_file = vert });
+    const vert = sulfur.compileSlangShader(sulfur_dep, b, b.path("src/shaders/vert.slang"), "main", &.{});
+    root_module.addAnonymousImport("vert.sfir", .{ .root_source_file = vert });
 
     {
         const sdl_dep = b.dependency("sdl", .{

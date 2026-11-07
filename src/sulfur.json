@@ -326,7 +326,8 @@
         { "name": "SF_RESULT_SURFACE_LOST", "value": 5, "doc": "" },
         { "name": "SF_RESULT_NO_BACKBUFFER", "value": 6, "doc": "" },
         { "name": "SF_RESULT_MALFORMED_SFIR", "value": 7, "doc": "" },
-        { "name": "SF_RESULT_UNSUPPORTED_SFIR_VERSION", "value": 8, "doc": "" }
+        { "name": "SF_RESULT_UNSUPPORTED_SFIR_VERSION", "value": 8, "doc": "" },
+        { "name": "SF_RESULT_UNSUPPORTED_SFIR_BYTECODE", "value": 9, "doc": "" }
       ],
       "doc": ""
     },
@@ -1330,6 +1331,7 @@
         "SF_RESULT_OUT_OF_DEVICE_MEMORY",
         "SF_RESULT_MALFORMED_SFIR",
         "SF_RESULT_UNSUPPORTED_SFIR_VERSION",
+        "SF_RESULT_UNSUPPORTED_SFIR_BYTECODE",
         "SF_RESULT_UNKNOWN"
       ],
       "params": [
@@ -1350,6 +1352,7 @@
         "SF_RESULT_OUT_OF_DEVICE_MEMORY",
         "SF_RESULT_MALFORMED_SFIR",
         "SF_RESULT_UNSUPPORTED_SFIR_VERSION",
+        "SF_RESULT_UNSUPPORTED_SFIR_BYTECODE",
         "SF_RESULT_UNKNOWN"
       ],
       "params": [

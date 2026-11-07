@@ -38,6 +38,7 @@ pub const Result = enum(u32) {
     no_backbuffer = 6,
     malformed_sfir = 7,
     unsupported_sfir_version = 8,
+    unsupported_sfir_bytecode = 9,
 };
 
 pub const MemoryKind = enum(u32) {

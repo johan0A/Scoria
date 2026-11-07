@@ -1,5 +1,6 @@
 const std = @import("std");
 pub const SamplerDesc = @import("src/sampler_desc.zig").SamplerDesc;
+pub const SfirBytecode = @import("src/sfir.zig").Bytecode;
 
 pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
@@ -85,7 +86,7 @@ pub fn build(b: *std.Build) void {
     }
 }
 
-pub fn compileShader(
+pub fn compileSlangShader(
     sulfur_dep: *std.Build.Dependency,
     b: *std.Build,
     src: std.Build.LazyPath,
@@ -105,7 +106,44 @@ pub fn compileShader(
     command.addFileArg(src);
     command.addArg("-o");
     const spirv = command.addOutputFileArg("shader.spv");
+    return sfirFromBytecode(sulfur_dep, b, .spirv, spirv, samplers);
+}
 
+pub fn compileZigShader(
+    sulfur_dep: *std.Build.Dependency,
+    b: *std.Build,
+    src: std.Build.LazyPath,
+    optimize: std.builtin.OptimizeMode,
+    cpu_features: []const std.Target.spirv.Feature,
+    samplers: []const SamplerDesc,
+) std.Build.LazyPath {
+    var cpu_features_add = std.Target.spirv.featureSet(cpu_features);
+    cpu_features_add.addFeature(@backingInt(std.Target.spirv.Feature.v1_6));
+    const object = b.addObject(.{
+        .name = "shader",
+        .root_module = b.createModule(.{
+            .root_source_file = src,
+            .target = b.resolveTargetQuery(.{
+                .cpu_arch = .spirv64,
+                .os_tag = .vulkan,
+                .cpu_model = .{ .explicit = &std.Target.spirv.cpu.vulkan_v1_2 },
+                .cpu_features_add = cpu_features_add,
+                .ofmt = .spirv,
+            }),
+            .optimize = optimize,
+        }),
+        .use_llvm = false,
+    });
+    return sfirFromBytecode(sulfur_dep, b, .spirv, object.getEmittedBin(), samplers);
+}
+
+pub fn sfirFromBytecode(
+    sulfur_dep: *std.Build.Dependency,
+    b: *std.Build,
+    bytecode_kind: SfirBytecode,
+    bytecode: std.Build.LazyPath,
+    samplers: []const SamplerDesc,
+) std.Build.LazyPath {
     const sfir = b.addExecutable(.{
         .name = "sfir",
         .root_module = b.createModule(.{
@@ -117,7 +155,8 @@ pub fn compileShader(
     const run_sfir = b.addRunArtifact(sfir);
 
     const shader = run_sfir.addOutputFileArg("shader.sfir");
-    run_sfir.addFileArg(spirv);
+    run_sfir.addArg(@tagName(bytecode_kind));
+    run_sfir.addFileArg(bytecode);
     for (samplers) |sampler| {
         const as_int: u64 = @bitCast(sampler);
         run_sfir.addArg(&std.fmt.hex(as_int));

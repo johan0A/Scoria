@@ -487,6 +487,7 @@ pub const Device = opaque {
         OutOfDeviceMemory,
         MalformedSfir,
         UnsupportedSfirVersion,
+        UnsupportedSfirBytecode,
         Unknown,
     }!*Pipeline {
         const f: *const fn (
@@ -508,6 +509,7 @@ pub const Device = opaque {
             .out_of_device_memory => return error.OutOfDeviceMemory,
             .malformed_sfir => return error.MalformedSfir,
             .unsupported_sfir_version => return error.UnsupportedSfirVersion,
+            .unsupported_sfir_bytecode => return error.UnsupportedSfirBytecode,
             .unknown => return error.Unknown,
             else => unreachable,
         }
@@ -524,6 +526,7 @@ pub const Device = opaque {
         OutOfDeviceMemory,
         MalformedSfir,
         UnsupportedSfirVersion,
+        UnsupportedSfirBytecode,
         Unknown,
     }!*Pipeline {
         const f: *const fn (
@@ -551,6 +554,7 @@ pub const Device = opaque {
             .out_of_device_memory => return error.OutOfDeviceMemory,
             .malformed_sfir => return error.MalformedSfir,
             .unsupported_sfir_version => return error.UnsupportedSfirVersion,
+            .unsupported_sfir_bytecode => return error.UnsupportedSfirBytecode,
             .unknown => return error.Unknown,
             else => unreachable,
         }
@@ -1249,6 +1253,7 @@ pub const Pipeline = opaque {
         OutOfDeviceMemory,
         MalformedSfir,
         UnsupportedSfirVersion,
+        UnsupportedSfirBytecode,
         Unknown,
     }!*Pipeline {
         const f: *const fn (
@@ -1270,6 +1275,7 @@ pub const Pipeline = opaque {
             .out_of_device_memory => return error.OutOfDeviceMemory,
             .malformed_sfir => return error.MalformedSfir,
             .unsupported_sfir_version => return error.UnsupportedSfirVersion,
+            .unsupported_sfir_bytecode => return error.UnsupportedSfirBytecode,
             .unknown => return error.Unknown,
             else => unreachable,
         }
@@ -1286,6 +1292,7 @@ pub const Pipeline = opaque {
         OutOfDeviceMemory,
         MalformedSfir,
         UnsupportedSfirVersion,
+        UnsupportedSfirBytecode,
         Unknown,
     }!*Pipeline {
         const f: *const fn (
@@ -1313,6 +1320,7 @@ pub const Pipeline = opaque {
             .out_of_device_memory => return error.OutOfDeviceMemory,
             .malformed_sfir => return error.MalformedSfir,
             .unsupported_sfir_version => return error.UnsupportedSfirVersion,
+            .unsupported_sfir_bytecode => return error.UnsupportedSfirBytecode,
             .unknown => return error.Unknown,
             else => unreachable,
         }
@@ -1379,6 +1387,7 @@ pub const Result = enum(u32) {
     no_backbuffer = 6,
     malformed_sfir = 7,
     unsupported_sfir_version = 8,
+    unsupported_sfir_bytecode = 9,
 };
 
 pub const MemoryKind = enum(u32) {
