@@ -320,7 +320,7 @@ pub const DeviceAllocator = struct {
         if (@sizeOf(T) == 0) {
             return .{
                 .device = .fromInt((Ptr(.one, T, .{}).alignment orelse .@"1").backward(std.math.maxInt(u64))),
-                .host = undefined,
+                .host = @ptrFromInt(comptime std.mem.alignBackward(usize, std.math.maxInt(usize), @alignOf(T))),
             };
         }
         const result = try a.allocBytesWithAlignment(.of(T), @sizeOf(T), memory, @returnAddress());
@@ -407,7 +407,7 @@ pub const DeviceAllocator = struct {
     ) Error!sf.HostDeviceAddress {
         if (byte_count == 0) return .{
             .device = .{ .addr = alignment.backward(std.math.maxInt(u64)) },
-            .host = undefined,
+            .host = @ptrFromInt(alignment.backward(std.math.maxInt(usize))),
         };
         return try self.rawAlloc(byte_count, alignment, memory, return_address);
     }
