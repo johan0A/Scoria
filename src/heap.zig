@@ -56,6 +56,14 @@ pub fn Ptr(
             break :blk a;
         };
 
+        // like zig, an element pointer only keeps the alignment shared by all elements
+        const element_attributes: PointerAttributes = blk: {
+            const ptr_alignment = alignment orelse break :blk .{};
+            const stride = @sizeOf(Element);
+            const element_alignment = if (stride == 0) ptr_alignment else ptr_alignment.min(.fromByteUnits(stride & -stride));
+            break :blk .{ .@"align" = if (element_alignment == Alignment.of(Element)) null else element_alignment };
+        };
+
         pub fn fromInt(addr: u64) @This() {
             const result: @This() = .{ .addr = addr };
             result.assertAlignment();
@@ -116,6 +124,13 @@ pub fn Ptr(
         pub fn add(ptr: @This(), n: u64) Ptr(.many, Element, .{}) {
             if (attributes.optional) @compileError("cannot be optional");
             return .{ .addr = ptr.addr + n * @sizeOf(Element) };
+        }
+
+        /// equivalent of `&ptr[index]`
+        pub fn elementPtr(ptr: @This(), index: u64) Ptr(.one, Element, element_attributes) {
+            if (size != .many) @compileError("expected a many item pointer");
+            if (attributes.optional) @compileError("cannot be optional");
+            return .fromInt(ptr.addr + index * @sizeOf(Element));
         }
 
         fn assertAlignment(ptr: @This()) void {
