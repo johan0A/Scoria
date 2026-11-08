@@ -262,7 +262,7 @@ pub fn Allocation(Element: type, @"align": ?Alignment) type {
     };
 }
 
-const DeviceAllocator = struct {
+pub const DeviceAllocator = struct {
     pub const Error = error{
         OutOfDeviceMemory,
         OutOfMemory,
