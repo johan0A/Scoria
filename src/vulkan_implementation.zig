@@ -20,6 +20,8 @@ pub const Instance = struct {
         surface: bool = false,
         win32: bool = false,
         xlib: bool = false,
+        capabilities_2: bool = false,
+        maintenance_1: bool = false,
     };
 
     pub fn create(host_allocator: ?*sc.HostAllocator) *Object(Instance) {
@@ -54,6 +56,8 @@ pub const Instance = struct {
             .surface = vk.instance_extensions.khr_surface,
             .win32 = vk.instance_extensions.khr_win_32_surface,
             .xlib = vk.instance_extensions.khr_xlib_surface,
+            .capabilities_2 = vk.instance_extensions.khr_get_surface_capabilities_2,
+            .maintenance_1 = vk.instance_extensions.khr_surface_maintenance_1,
         };
         for (try base_dispatch.enumerateInstanceExtensionPropertiesAlloc(null, arena)) |available_extension| {
             const name = std.mem.sliceTo(&available_extension.extension_name, 0);
@@ -284,14 +288,23 @@ pub const Adapter = opaque {
         mutable_descriptor_type: vk.PhysicalDeviceMutableDescriptorTypeFeaturesEXT = .{},
         unified_image_layouts: vk.PhysicalDeviceUnifiedImageLayoutsFeaturesKHR = .{},
         dynamic_rendering_local_read: vk.PhysicalDeviceDynamicRenderingLocalReadFeaturesKHR = .{},
+        present_id_2: vk.PhysicalDevicePresentId2FeaturesKHR = .{},
+        present_wait_2: vk.PhysicalDevicePresentWait2FeaturesKHR = .{},
+        swapchain_maintenance_1: vk.PhysicalDeviceSwapchainMaintenance1FeaturesKHR = .{},
 
         const Optional = struct {
             unified_image_layouts: bool,
             dynamic_rendering_local_read: bool,
+            present_id_2: bool,
+            present_wait_2: bool,
+            swapchain_maintenance_1: bool,
         };
         const optional_extensions = .{
             .unified_image_layouts = vk.device_extensions.khr_unified_image_layouts,
             .dynamic_rendering_local_read = vk.device_extensions.khr_dynamic_rendering_local_read,
+            .present_id_2 = vk.device_extensions.khr_present_id_2,
+            .present_wait_2 = vk.device_extensions.khr_present_wait_2,
+            .swapchain_maintenance_1 = vk.device_extensions.khr_swapchain_maintenance_1,
         };
 
         const required: Features = .{
@@ -393,9 +406,14 @@ pub const Adapter = opaque {
                 if (family.queue_flags.graphics and family.queue_flags.compute) break true;
             } else false;
 
+            const swapchain = instance.surface_support.surface and hasExtension(extensions, vk.device_extensions.khr_swapchain.name);
+            optional.present_id_2 = optional.present_id_2 and swapchain and instance.surface_support.capabilities_2;
+            optional.present_wait_2 = optional.present_wait_2 and optional.present_id_2;
+            optional.swapchain_maintenance_1 = optional.swapchain_maintenance_1 and swapchain and instance.surface_support.maintenance_1;
+
             return .{
                 .compatible = has_graphics_queue and Features.isSubset(Features.required, supported),
-                .swapchain = instance.surface_support.surface and hasExtension(extensions, vk.device_extensions.khr_swapchain.name),
+                .swapchain = swapchain,
                 .optional = optional,
             };
         }
@@ -434,6 +452,7 @@ pub const Device = struct {
     image_memory_type_bits: u32,
     descriptor_buffer_properties: vk.PhysicalDeviceDescriptorBufferPropertiesEXT,
     swapchain_supported: bool,
+    optional_features: Adapter.Features.Optional,
 
     texture_heap_set_layout: vk.DescriptorSetLayout,
 
@@ -539,7 +558,7 @@ pub const Device = struct {
         }
 
         var features = Adapter.Features.required;
-        var extensions_buffer: [8][*:0]const u8 = undefined;
+        var extensions_buffer: [16][*:0]const u8 = undefined;
         var extensions: std.ArrayList([*:0]const u8) = .initBuffer(&extensions_buffer);
         extensions.appendSliceAssumeCapacity(&Adapter.required_extensions);
         if (support.swapchain) extensions.appendAssumeCapacity(vk.device_extensions.khr_swapchain.name);
@@ -618,6 +637,7 @@ pub const Device = struct {
                 }, null),
                 .pending_command_buffers = .empty,
                 .free_command_buffers = .empty,
+                .pending_acquires = .empty,
                 .d = d_obj.body(),
             });
             initialized_queue_count += 1;
@@ -661,6 +681,7 @@ pub const Device = struct {
             .image_memory_type_bits = image_memory_type_bits,
             .descriptor_buffer_properties = descriptor_buffer_properties,
             .swapchain_supported = support.swapchain,
+            .optional_features = support.optional,
 
             .texture_heap_set_layout = texture_heap_set_layout,
 
@@ -696,6 +717,7 @@ pub const Device = struct {
             d.handle.destroyCommandPool(queue.command_pool, null);
             queue.free_command_buffers.deinit(gpa);
             queue.pending_command_buffers.deinit(gpa);
+            queue.pending_acquires.deinit(gpa);
         }
         d.handle.destroySemaphore(d.texture_init_timeline.semaphore, null);
         d.handle.destroyDescriptorSetLayout(d.texture_heap_set_layout, null);
@@ -823,6 +845,8 @@ pub const Queue = struct {
     command_pool: vk.CommandPool,
     pending_command_buffers: std.ArrayList(PendingCommandBuffer),
     free_command_buffers: std.ArrayList(vk.CommandBuffer),
+    /// swapchains whose back buffer acquire is waited on by the next submission
+    pending_acquires: std.ArrayList(*Swapchain),
     d: *Device,
 
     const PendingCommandBuffer = struct {
@@ -919,25 +943,31 @@ pub const Queue = struct {
                 .p_image_memory_barriers = barriers.ptr,
             });
             try d.handle.endCommandBuffer(init_command_buffer);
-            try queue.submitTextureInit(init_command_buffer, .null);
+
+            const init_timeline = &d.texture_init_timeline;
+            const signals = [2]vk.SemaphoreSubmitInfo{
+                semaphoreSubmitInfo(queue.timeline, queue.last_submitted + 1),
+                semaphoreSubmitInfo(init_timeline.semaphore, init_timeline.value + 1),
+            };
+            try d.handle.queueSubmit2(queue.handle, &.{.{
+                .wait_semaphore_info_count = 1,
+                .p_wait_semaphore_infos = &.{semaphoreSubmitInfo(init_timeline.semaphore, init_timeline.value)},
+                .command_buffer_info_count = 1,
+                .p_command_buffer_infos = &.{.{ .command_buffer = init_command_buffer, .device_mask = 0 }},
+                .signal_semaphore_info_count = signals.len,
+                .p_signal_semaphore_infos = &signals,
+            }}, .null);
+            queue.last_submitted += 1;
+            init_timeline.value += 1;
 
             queue.pending_command_buffers.appendAssumeCapacity(.{ .value = queue.last_submitted, .command_buffer = init_command_buffer });
             d.pending_texture_inits.clearRetainingCapacity();
         }
 
-        const signals = [2]vk.SemaphoreSubmitInfo{
-            semaphoreSubmitInfo(queue.timeline, queue.last_submitted + 1),
-            if (signal) |s| semaphoreSubmitInfo(s.semaphore.handle, s.value) else undefined,
-        };
-        try d.handle.queueSubmit2(queue.handle, &.{.{
-            .wait_semaphore_info_count = 1,
-            .p_wait_semaphore_infos = &.{semaphoreSubmitInfo(d.texture_init_timeline.semaphore, d.texture_init_timeline.value)},
-            .command_buffer_info_count = @intCast(submit_infos.len),
-            .p_command_buffer_infos = submit_infos.ptr,
-            .signal_semaphore_info_count = if (signal == null) 1 else 2,
-            .p_signal_semaphore_infos = &signals,
-        }}, .null);
-        queue.last_submitted += 1;
+        try queue.submitAfterAcquires(
+            submit_infos,
+            if (signal) |s| semaphoreSubmitInfo(s.semaphore.handle, s.value) else null,
+        );
 
         for (command_buffers) |command_buffer| {
             queue.pending_command_buffers.appendAssumeCapacity(.{
@@ -948,28 +978,36 @@ pub const Queue = struct {
         }
     }
 
-    /// submits a texture initialization ordered after all previous ones, later
-    /// submissions on any queue waits for it through the device's texture init timeline
-    fn submitTextureInit(queue: *Queue, command_buffer: ?vk.CommandBuffer, acquire_semaphore: vk.Semaphore) !void {
-        const init_timeline = &queue.d.texture_init_timeline;
-        const waits = [2]vk.SemaphoreSubmitInfo{
-            semaphoreSubmitInfo(init_timeline.semaphore, init_timeline.value),
-            semaphoreSubmitInfo(acquire_semaphore, 0),
-        };
-        const signals = [2]vk.SemaphoreSubmitInfo{
-            semaphoreSubmitInfo(queue.timeline, queue.last_submitted + 1),
-            semaphoreSubmitInfo(init_timeline.semaphore, init_timeline.value + 1),
-        };
-        try queue.d.handle.queueSubmit2(queue.handle, &.{.{
-            .wait_semaphore_info_count = if (acquire_semaphore == .null) 1 else 2,
-            .p_wait_semaphore_infos = &waits,
-            .command_buffer_info_count = @intFromBool(command_buffer != null),
-            .p_command_buffer_infos = &.{.{ .command_buffer = command_buffer orelse undefined, .device_mask = 0 }},
-            .signal_semaphore_info_count = signals.len,
+    /// submits after the pending swapchain acquires and texture initializations, signals `timeline`
+    fn submitAfterAcquires(queue: *Queue, command_buffers: []const vk.CommandBufferSubmitInfo, signal: ?vk.SemaphoreSubmitInfo) !void {
+        const d = queue.d;
+        const acquires = queue.pending_acquires.items;
+        const submit_infos = try d.gpa.alloc(vk.CommandBufferSubmitInfo, acquires.len + command_buffers.len);
+        defer d.gpa.free(submit_infos);
+        const waits = try d.gpa.alloc(vk.SemaphoreSubmitInfo, acquires.len + 1);
+        defer d.gpa.free(waits);
+
+        // waiting at the stages that can access the back buffer
+        for (acquires, submit_infos[0..acquires.len], waits[0..acquires.len]) |swapchain, *submit_info, *wait| {
+            submit_info.* = .{ .command_buffer = swapchain.images[swapchain.current].acquire_command_buffer, .device_mask = 0 };
+            wait.* = .{ .semaphore = swapchain.acquire_semaphore.?.handle, .value = 0, .stage_mask = swapchain.acquire_stage, .device_index = 0 };
+        }
+        @memcpy(submit_infos[acquires.len..], command_buffers);
+        waits[acquires.len] = semaphoreSubmitInfo(d.texture_init_timeline.semaphore, d.texture_init_timeline.value);
+
+        const signals = [2]vk.SemaphoreSubmitInfo{ semaphoreSubmitInfo(queue.timeline, queue.last_submitted + 1), signal orelse undefined };
+        try d.handle.queueSubmit2(queue.handle, &.{.{
+            .wait_semaphore_info_count = @intCast(waits.len),
+            .p_wait_semaphore_infos = waits.ptr,
+            .command_buffer_info_count = @intCast(submit_infos.len),
+            .p_command_buffer_infos = submit_infos.ptr,
+            .signal_semaphore_info_count = if (signal == null) 1 else 2,
             .p_signal_semaphore_infos = &signals,
         }}, .null);
         queue.last_submitted += 1;
-        init_timeline.value += 1;
+
+        for (acquires) |swapchain| swapchain.acquire_semaphore.?.reusable_value = queue.last_submitted;
+        queue.pending_acquires.clearRetainingCapacity();
     }
 
     fn beginCommandBuffer(queue: *Queue, flags: vk.CommandBufferUsageFlags) !vk.CommandBuffer {
@@ -1056,11 +1094,21 @@ pub const Swapchain = struct {
     desc: sc.SwapchainDesc,
     queue: *Queue,
 
+    acquire_stage: vk.PipelineStageFlags2,
+    present_wait_supported: bool,
+
     images: []Image,
+    extent: sc.Extent2D,
     acquire_semaphores: []AcquireSemaphore,
     acquire_count: usize,
+
+    acquire_semaphore: ?*AcquireSemaphore,
     current: u32,
 
+    present_count: u64,
+    retired: std.ArrayList(Retired),
+
+    extent_last: sc.Extent2D,
     needs_recreate: bool,
 
     d: *Device,
@@ -1073,6 +1121,8 @@ pub const Swapchain = struct {
         present_command_buffer: vk.CommandBuffer,
         /// binary, signaled by the present command buffer and waited by present
         present_semaphore: vk.Semaphore,
+        /// signaled once the last present of the image released its resources, null without swapchain maintenance
+        present_fence: vk.Fence,
     };
 
     const AcquireSemaphore = struct {
@@ -1080,6 +1130,23 @@ pub const Swapchain = struct {
         handle: vk.Semaphore,
         /// `queue.timeline` value after which the semaphore has been waited on and can be reused.
         reusable_value: u64,
+    };
+
+    const Retired = struct {
+        handle: vk.SwapchainKHR,
+        images: []Image,
+        acquire_semaphores: []AcquireSemaphore,
+        /// `queue.timeline` value after which no submission uses the swapchain
+        value: u64,
+
+        fn destroy(retired: Retired, queue: *Queue) void {
+            const d = queue.d;
+            deinitImages(queue, retired.images);
+            for (retired.acquire_semaphores) |semaphore| d.handle.destroySemaphore(semaphore.handle, null);
+            d.handle.destroySwapchainKHR(retired.handle, null);
+            d.gpa.free(retired.images);
+            d.gpa.free(retired.acquire_semaphores);
+        }
     };
 
     pub fn create(
@@ -1100,16 +1167,35 @@ pub const Swapchain = struct {
         // TODO: move to adapter picking
         std.debug.assert(d.swapchain_supported and try queue.d.instance.handle.getPhysicalDeviceSurfaceSupportKHR(queue.d.physical_device, queue.family, surface.handle) == .true);
 
+        const present_wait_supported = d.optional_features.present_wait_2 and supported: {
+            var wait_capabilities: vk.SurfaceCapabilitiesPresentWait2KHR = .{ .present_wait_2_supported = .false };
+            var id_capabilities: vk.SurfaceCapabilitiesPresentId2KHR = .{ .p_next = &wait_capabilities, .present_id_2_supported = .false };
+            var capabilities: vk.SurfaceCapabilities2KHR = .{ .p_next = &id_capabilities, .surface_capabilities = undefined };
+            try d.instance.handle.getPhysicalDeviceSurfaceCapabilities2KHR(d.physical_device, &.{ .surface = surface.handle }, &capabilities);
+            break :supported id_capabilities.present_id_2_supported == .true and wait_capabilities.present_wait_2_supported == .true;
+        };
+
         const swapchain = try d.swapchains.create(d.gpa);
         swapchain.set(d.table, .{
             .handle = .null,
             .surface = surface.handle,
             .desc = desc,
             .queue = queue,
+            // storage and sampled usage can touch the back buffer from any stage
+            .acquire_stage = if (desc.usage.storage or desc.usage.sampled)
+                .{ .all_commands = true }
+            else
+                .{ .color_attachment_output = true, .all_transfer = true },
+            .present_wait_supported = present_wait_supported,
             .images = &.{},
+            .extent = .{ .width = 0, .height = 0 },
             .acquire_semaphores = &.{},
             .acquire_count = 0,
+            .acquire_semaphore = null,
             .current = undefined,
+            .present_count = 0,
+            .retired = .empty,
+            .extent_last = .{ .width = 0, .height = 0 },
             .needs_recreate = true,
             .d = d,
         });
@@ -1119,9 +1205,17 @@ pub const Swapchain = struct {
     pub fn destroy(swapchain_obj: *Object(Swapchain)) void {
         const swapchain = swapchain_obj.body();
         const d = swapchain.d;
-        d.handle.queueWaitIdle(swapchain.queue.handle) catch {};
-        swapchain.destroyImageResources();
-        d.handle.destroySwapchainKHR(swapchain.handle, null);
+        const queue = swapchain.queue;
+        d.handle.queueWaitIdle(queue.handle) catch {};
+        if (std.mem.findScalar(*Swapchain, queue.pending_acquires.items, swapchain)) |i| _ = queue.pending_acquires.orderedRemove(i);
+        for (swapchain.retired.items) |retired| retired.destroy(queue);
+        swapchain.retired.deinit(d.gpa);
+        Retired.destroy(.{
+            .handle = swapchain.handle,
+            .images = swapchain.images,
+            .acquire_semaphores = swapchain.acquire_semaphores,
+            .value = queue.last_submitted,
+        }, queue);
         d.swapchains.destroy(swapchain_obj);
     }
 
@@ -1148,11 +1242,28 @@ pub const Swapchain = struct {
     fn acquireInner(swapchain: *Swapchain, extent: sc.Extent2D) !sc.BackBuffer {
         const d = swapchain.d;
         const queue = swapchain.queue;
-        for (0..32) |_| {
-            if (swapchain.needs_recreate) {
-                try d.handle.queueWaitIdle(queue.handle);
-                swapchain.destroyImageResources();
+        std.debug.assert(swapchain.acquire_semaphore == null);
+        try queue.pending_acquires.ensureUnusedCapacity(d.gpa, 1);
 
+        const completed = try d.handle.getSemaphoreCounterValue(queue.timeline);
+        var retired_index: usize = 0;
+        while (retired_index < swapchain.retired.items.len) {
+            const retired = swapchain.retired.items[retired_index];
+            const presented = for (retired.images) |image| {
+                if (image.present_fence != .null and try d.handle.getFenceStatus(image.present_fence) == .not_ready) break false;
+            } else true;
+            if (retired.value <= completed and presented) {
+                retired.destroy(queue);
+                _ = swapchain.retired.swapRemove(retired_index);
+            } else retired_index += 1;
+        }
+
+        // only a change triggers a recreation, the surface may not allow the requested extent
+        const extent_changed = !std.meta.eql(extent, swapchain.extent_last);
+        swapchain.extent_last = extent;
+
+        for (0..32) |_| {
+            if (swapchain.needs_recreate or (extent_changed and !std.meta.eql(extent, swapchain.extent))) {
                 const capabilities = try d.instance.handle.getPhysicalDeviceSurfaceCapabilitiesKHR(d.physical_device, swapchain.surface);
                 const min_extent = capabilities.min_image_extent;
                 const max_extent = capabilities.max_image_extent;
@@ -1165,10 +1276,24 @@ pub const Swapchain = struct {
                 var min_image_count = capabilities.min_image_count + 1;
                 if (capabilities.max_image_count != 0) min_image_count = @min(min_image_count, capabilities.max_image_count);
 
+                // retired first so a failed creation leaves the swapchain empty. Without present fences
+                // there is no way to know when presentation is done with the old swapchain
+                if (!d.optional_features.swapchain_maintenance_1) try d.handle.queueWaitIdle(queue.handle);
                 const old_handle = swapchain.handle;
+                try swapchain.retired.append(d.gpa, .{
+                    .handle = old_handle,
+                    .images = swapchain.images,
+                    .acquire_semaphores = swapchain.acquire_semaphores,
+                    .value = queue.last_submitted,
+                });
                 swapchain.handle = .null;
-                defer d.handle.destroySwapchainKHR(old_handle, null);
+                swapchain.images = &.{};
+                swapchain.acquire_semaphores = &.{};
                 swapchain.handle = try d.handle.createSwapchainKHR(&.{
+                    .flags = .{
+                        .present_id_2_khr = swapchain.present_wait_supported,
+                        .present_wait_2_khr = swapchain.present_wait_supported,
+                    },
                     .surface = swapchain.surface,
                     .min_image_count = min_image_count,
                     .image_format = to_vk.format(swapchain.desc.format),
@@ -1209,13 +1334,23 @@ pub const Swapchain = struct {
                     errdefer d.handle.destroyImageView(default_view, null);
                     const present_semaphore = try d.handle.createSemaphore(&.{}, null);
                     errdefer d.handle.destroySemaphore(present_semaphore, null);
-                    const acquire_command_buffer = try recordLayoutTransition(queue, vk_image, texture_desc, .undefined, .general);
+                    const present_fence: vk.Fence = if (d.optional_features.swapchain_maintenance_1)
+                        try d.handle.createFence(&.{ .flags = .{ .signaled = true } }, null)
+                    else
+                        .null;
+                    errdefer d.handle.destroyFence(present_fence, null);
+
+                    var acquire_barrier = layoutTransition(vk_image, texture_desc, .undefined, .general);
+                    acquire_barrier.src_stage_mask = swapchain.acquire_stage;
+                    acquire_barrier.dst_stage_mask = swapchain.acquire_stage;
+                    const acquire_command_buffer = try recordBarrier(queue, acquire_barrier);
                     errdefer queue.releaseCommandBuffer(acquire_command_buffer);
                     image.* = .{
                         .texture = undefined,
                         .acquire_command_buffer = acquire_command_buffer,
-                        .present_command_buffer = try recordLayoutTransition(queue, vk_image, texture_desc, .general, .present_src_khr),
+                        .present_command_buffer = try recordBarrier(queue, layoutTransition(vk_image, texture_desc, .general, .present_src_khr)),
                         .present_semaphore = present_semaphore,
+                        .present_fence = present_fence,
                     };
                     image.texture.set(d.table, .{
                         .image = vk_image,
@@ -1228,8 +1363,24 @@ pub const Swapchain = struct {
                 }
 
                 swapchain.images = images;
+                swapchain.extent = .{ .width = image_extent.width, .height = image_extent.height };
                 swapchain.acquire_semaphores = acquire_semaphores;
+                swapchain.present_count = 0;
                 swapchain.needs_recreate = false;
+            }
+
+            const latency = swapchain.desc.frame_latency_max;
+            if (swapchain.present_wait_supported and latency != 0 and swapchain.present_count >= latency) {
+                _ = d.handle.waitForPresent2KHR(swapchain.handle, &.{
+                    .present_id = swapchain.present_count + 1 - latency,
+                    .timeout = 100 * std.time.ns_per_ms,
+                }) catch |err| switch (err) {
+                    error.OutOfDateKHR => {
+                        swapchain.needs_recreate = true;
+                        continue;
+                    },
+                    else => |e| return e,
+                };
             }
 
             const acquire_semaphore = &swapchain.acquire_semaphores[swapchain.acquire_count % swapchain.acquire_semaphores.len];
@@ -1248,38 +1399,19 @@ pub const Swapchain = struct {
             };
             if (result.result == .suboptimal_khr) swapchain.needs_recreate = true;
             swapchain.acquire_count += 1;
+            swapchain.acquire_semaphore = acquire_semaphore;
             swapchain.current = result.image_index;
-
-            const image = &swapchain.images[result.image_index];
-            queue.submitTextureInit(image.acquire_command_buffer, acquire_semaphore.handle) catch |err| {
-                swapchain.needs_recreate = true;
-                queue.submitTextureInit(null, acquire_semaphore.handle) catch {
-                    acquire_semaphore.handle = .null;
-                };
-                return err;
-            };
-            acquire_semaphore.reusable_value = queue.last_submitted;
-
-            const texture_extent = image.texture.body().desc.extent;
-            return .{
-                .extent = .{ .width = texture_extent.width, .height = texture_extent.height },
-                .texture = @ptrCast(&image.texture),
-            };
+            queue.pending_acquires.appendAssumeCapacity(swapchain);
+            return .{ .extent = swapchain.extent, .texture = @ptrCast(&swapchain.images[result.image_index].texture) };
         }
         return error.NoBackbuffer;
     }
-    fn recordLayoutTransition(
-        queue: *Queue,
-        image: vk.Image,
-        desc: sc.TextureDesc,
-        old_layout: vk.ImageLayout,
-        new_layout: vk.ImageLayout,
-    ) !vk.CommandBuffer {
+    fn recordBarrier(queue: *Queue, barrier: vk.ImageMemoryBarrier2) !vk.CommandBuffer {
         const command_buffer = try queue.beginCommandBuffer(.{ .simultaneous_use = true });
         errdefer queue.releaseCommandBuffer(command_buffer);
         queue.d.handle.cmdPipelineBarrier2(command_buffer, &.{
             .image_memory_barrier_count = 1,
-            .p_image_memory_barriers = &.{layoutTransition(image, desc, old_layout, new_layout)},
+            .p_image_memory_barriers = &.{barrier},
         });
         try queue.d.handle.endCommandBuffer(command_buffer);
         return command_buffer;
@@ -1287,7 +1419,7 @@ pub const Swapchain = struct {
 
     pub fn present(swapchain: *Object(Swapchain)) !void {
         presentInner(swapchain.body()) catch |err| return switch (err) {
-            error.OutOfHostMemory => error.OutOfMemory,
+            error.OutOfMemory, error.OutOfHostMemory => error.OutOfMemory,
             error.PresentTimingQueueFullEXT, error.Unknown => error.Unknown,
             error.SurfaceLostKHR,
             error.FullScreenExclusiveModeLostEXT,
@@ -1299,15 +1431,26 @@ pub const Swapchain = struct {
         const d = swapchain.d;
         const queue = swapchain.queue;
         const image = &swapchain.images[swapchain.current];
+        std.debug.assert(swapchain.acquire_semaphore != null);
 
-        try d.handle.queueSubmit2(queue.handle, &.{.{
-            .command_buffer_info_count = 1,
-            .p_command_buffer_infos = &.{.{ .command_buffer = image.present_command_buffer, .device_mask = 0 }},
-            .signal_semaphore_info_count = 1,
-            .p_signal_semaphore_infos = &.{semaphoreSubmitInfo(image.present_semaphore, 0)},
-        }}, .null);
+        // also consumes the acquire when nothing was submitted since
+        try queue.submitAfterAcquires(
+            &.{.{ .command_buffer = image.present_command_buffer, .device_mask = 0 }},
+            semaphoreSubmitInfo(image.present_semaphore, 0),
+        );
+        swapchain.acquire_semaphore = null;
+
+        if (image.present_fence != .null) {
+            _ = try d.handle.waitForFences(&.{image.present_fence}, .true, std.math.maxInt(u64));
+            try d.handle.resetFences(&.{image.present_fence});
+        }
+        swapchain.present_count += 1;
+        const fence_info: vk.SwapchainPresentFenceInfoKHR = .{ .swapchain_count = 1, .p_fences = &.{image.present_fence} };
+        const fence_chain: ?*const anyopaque = if (image.present_fence != .null) &fence_info else null;
+        const id_info: vk.PresentId2KHR = .{ .p_next = fence_chain, .swapchain_count = 1, .p_present_ids = &.{swapchain.present_count} };
 
         const result = d.handle.queuePresentKHR(queue.handle, &.{
+            .p_next = if (swapchain.present_wait_supported) &id_info else fence_chain,
             .wait_semaphore_count = 1,
             .p_wait_semaphores = &.{image.present_semaphore},
             .swapchain_count = 1,
@@ -1323,22 +1466,15 @@ pub const Swapchain = struct {
         if (result == .suboptimal_khr) swapchain.needs_recreate = true;
     }
 
-    fn destroyImageResources(swapchain: *Swapchain) void {
-        const d = swapchain.d;
-        deinitImages(swapchain.queue, swapchain.images);
-        for (swapchain.acquire_semaphores) |semaphore| d.handle.destroySemaphore(semaphore.handle, null);
-        d.gpa.free(swapchain.images);
-        d.gpa.free(swapchain.acquire_semaphores);
-        swapchain.images = &.{};
-        swapchain.acquire_semaphores = &.{};
-    }
-
     fn deinitImages(queue: *Queue, images: []Image) void {
+        const d = queue.d;
         for (images) |*image| {
+            if (image.present_fence != .null) _ = d.handle.waitForFences(&.{image.present_fence}, .true, std.math.maxInt(u64)) catch {};
             image.texture.body().deinit(false);
             queue.releaseCommandBuffer(image.acquire_command_buffer);
             queue.releaseCommandBuffer(image.present_command_buffer);
-            queue.d.handle.destroySemaphore(image.present_semaphore, null);
+            d.handle.destroySemaphore(image.present_semaphore, null);
+            d.handle.destroyFence(image.present_fence, null);
         }
     }
 };

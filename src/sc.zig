@@ -1719,6 +1719,8 @@ pub const SwapchainDesc = extern struct {
     format: Format,
     present_mode: PresentMode,
     usage: TextureUsage,
+    /// Acquiring a back buffer blocks until the present from this many frames ago is displayed. 1 gives the lowest latency, 0 disables the wait. Ignored when the platform cannot report presentation.
+    frame_latency_max: u32 = 0,
 };
 
 pub const BackBuffer = extern struct {

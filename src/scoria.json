@@ -155,7 +155,8 @@
       "fields": [
         { "name": "format", "type": { "base": "ScFormat" }, "doc": "" },
         { "name": "present_mode", "type": { "base": "ScPresentMode" }, "doc": "" },
-        { "name": "usage", "type": { "base": "ScTextureUsage" }, "doc": "" }
+        { "name": "usage", "type": { "base": "ScTextureUsage" }, "doc": "" },
+        { "name": "frame_latency_max", "type": { "base": "uint32_t" }, "default": "0", "doc": "Acquiring a back buffer blocks until the present from this many frames ago is displayed. 1 gives the lowest latency, 0 disables the wait. Ignored when the platform cannot report presentation." }
       ],
       "doc": ""
     },

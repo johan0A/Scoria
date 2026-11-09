@@ -85,6 +85,7 @@ pub fn main(init: std.process.Init) !void {
         .format = swapchain_format,
         .usage = .{ .storage = true },
         .present_mode = .fifo,
+        .frame_latency_max = 1,
     });
     defer swapchain.destroy();
 
@@ -106,22 +107,27 @@ pub fn main(init: std.process.Init) !void {
 
     var quit = false;
     while (!quit) {
+        if (frame_index > frames_in_fligt)
+            try frame_semaphore.wait(frame_index - frames_in_fligt);
+
+        const back_buffer_maybe = swapchain.acquireBackBuffer(surface_extent) catch |err| switch (err) {
+            error.NoBackbuffer => null,
+            else => |e| return e,
+        };
+
         var event: c.SDL_Event = undefined;
         while (c.SDL_PollEvent(&event)) switch (event.type) {
             c.SDL_EVENT_QUIT => quit = true,
             else => {},
         };
-
         var c_extent: [2]c_int = undefined;
         if (!c.SDL_GetWindowSizeInPixels(window, &c_extent[0], &c_extent[1])) @panic("SDL_GetWindowSizeInPixels failed");
         surface_extent = .{ .width = @intCast(c_extent[0]), .height = @intCast(c_extent[1]) };
-        if (surface_extent.width == 0 or surface_extent.height == 0) {
+
+        const back_buffer = back_buffer_maybe orelse {
             c.SDL_Delay(16);
             continue;
-        }
-
-        if (frame_index > frames_in_fligt)
-            try frame_semaphore.wait(frame_index - frames_in_fligt);
+        };
 
         const slot: u32 = @intCast(frame_index % frames_in_fligt);
 
@@ -132,13 +138,6 @@ pub fn main(init: std.process.Init) !void {
             .time = @floatCast(elapsed_us / 1e9),
         };
 
-        const back_buffer = swapchain.acquireBackBuffer(surface_extent) catch |err| switch (err) {
-            error.NoBackbuffer => {
-                c.SDL_Delay(16);
-                continue;
-            },
-            else => |e| return e,
-        };
         const descriptor = try back_buffer.texture.storageDescriptor(.{});
         device.storeDescriptor(&descriptor, descriptor_heap.host_ptr, slot);
 

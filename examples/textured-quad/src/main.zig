@@ -80,6 +80,7 @@ pub fn main(init: std.process.Init) !void {
         .format = swapchain_format,
         .usage = .{ .color_attachment = true },
         .present_mode = .fifo,
+        .frame_latency_max = 1,
     });
     defer swapchain.destroy();
 
@@ -162,27 +163,24 @@ pub fn main(init: std.process.Init) !void {
 
     var quit = false;
     while (!quit) {
+        if (frame_index > frames_in_flight)
+            try frame_semaphore.wait(frame_index - frames_in_flight);
+
+        const back_buffer_maybe = swapchain.acquireBackBuffer(.{ .width = @intCast(width), .height = @intCast(height) }) catch |err| switch (err) {
+            error.NoBackbuffer => null,
+            else => |e| return e,
+        };
+
         var event: c.SDL_Event = undefined;
         while (c.SDL_PollEvent(&event)) switch (event.type) {
             c.SDL_EVENT_QUIT => quit = true,
             else => {},
         };
-
         if (!c.SDL_GetWindowSizeInPixels(window, &width, &height)) @panic("SDL_GetWindowSizeInPixels failed");
-        if (width == 0 or height == 0) {
+
+        const back_buffer = back_buffer_maybe orelse {
             c.SDL_Delay(16);
             continue;
-        }
-
-        if (frame_index > frames_in_flight)
-            try frame_semaphore.wait(frame_index - frames_in_flight);
-
-        const back_buffer = swapchain.acquireBackBuffer(.{ .width = @intCast(width), .height = @intCast(height) }) catch |err| switch (err) {
-            error.NoBackbuffer => {
-                c.SDL_Delay(16);
-                continue;
-            },
-            else => |e| return e,
         };
 
         const cb = try queue.startCommandRecording();
