@@ -1,9 +1,9 @@
 const std = @import("std");
-const gpu = @import("sf_minimal.zig");
+const gpu = @import("sc_minimal.zig");
 const impl = @import("vulkan_implementation.zig");
 const symbol_map = @import("loader_symbol_map.zig");
 
-pub export fn sfSymbol(name: [*:0]u8) callconv(gpu.@"callconv") *const anyopaque {
+pub export fn scSymbol(name: [*:0]u8) callconv(gpu.@"callconv") *const anyopaque {
     const map = symbol_map.map(.{
         .Instance = impl.Object(impl.Instance),
         .Adapter = impl.Adapter,

@@ -1,13 +1,13 @@
 const std = @import("std");
 const target = @import("builtin").target;
-const sf = @import("sulfur");
+const sc = @import("scoria");
 const c = @import("c");
 
-const sfSymbol = @extern(sf.Symbol, .{ .name = "sfSymbol" });
+const scSymbol = @extern(sc.Symbol, .{ .name = "scSymbol" });
 
 const Data = extern struct {
-    positions: sf.Ptr(.many, [3]f32, .{}),
-    uvs: sf.Ptr(.many, [2]f32, .{}),
+    positions: sc.Ptr(.many, [3]f32, .{}),
+    uvs: sc.Ptr(.many, [2]f32, .{}),
 };
 
 const frames_in_flight = 2;
@@ -25,7 +25,7 @@ pub fn main(init: std.process.Init) !void {
     const window = c.SDL_CreateWindow("title", width, height, c.SDL_WINDOW_VULKAN | c.SDL_WINDOW_RESIZABLE) orelse @panic("SDL_CreateWindow failed");
     defer c.SDL_DestroyWindow(window);
 
-    const instance = sf.Instance.create(null, sfSymbol);
+    const instance = sc.Instance.create(null, scSymbol);
     defer instance.destroy();
 
     const adapters = try instance.enumerateAdaptersAlloc(arena);
@@ -39,26 +39,26 @@ pub fn main(init: std.process.Init) !void {
     const device = instance.createDevice(adapter);
     defer device.destroy();
 
-    const gpu_gpa = sf.heap.rawDeviceAllocator(device);
-    var fix_buffer_allocator: sf.heap.FixedBufferAllocator = try .initAlloc(gpu_gpa, .initFill(1024 * 1024 * 64));
+    const gpu_gpa = sc.heap.rawDeviceAllocator(device);
+    var fix_buffer_allocator: sc.heap.FixedBufferAllocator = try .initAlloc(gpu_gpa, .initFill(1024 * 1024 * 64));
     defer fix_buffer_allocator.deinit(gpu_gpa);
     const gpu_arena = fix_buffer_allocator.allocator();
 
     const queue = device.getQueue(.graphics);
 
     const props = c.SDL_GetWindowProperties(window);
-    const surface: *sf.Surface = switch (target.os.tag) {
+    const surface: *sc.Surface = switch (target.os.tag) {
         .windows => blk: {
             const hwnd = c.SDL_GetPointerProperty(props, c.SDL_PROP_WINDOW_WIN32_HWND_POINTER, null) orelse @panic("TODO");
             const hinstance = c.SDL_GetPointerProperty(props, c.SDL_PROP_WINDOW_WIN32_INSTANCE_POINTER, null) orelse @panic("TODO");
-            const surface_desc: sf.SurfaceWin32Desc = .{ .hinstance = hinstance, .hwnd = hwnd };
+            const surface_desc: sc.SurfaceWin32Desc = .{ .hinstance = hinstance, .hwnd = hwnd };
             break :blk .createWin32(device, surface_desc);
         },
         else => blk: {
             const display = c.SDL_GetPointerProperty(props, c.SDL_PROP_WINDOW_X11_DISPLAY_POINTER, null) orelse @panic("TODO");
             const x11_window = c.SDL_GetNumberProperty(props, c.SDL_PROP_WINDOW_X11_WINDOW_NUMBER, 0);
             if (x11_window == 0) @panic("TODO");
-            const surface_desc: sf.SurfaceXlibDesc = .{ .display = display, .window = @intCast(x11_window) };
+            const surface_desc: sc.SurfaceXlibDesc = .{ .display = display, .window = @intCast(x11_window) };
             break :blk .createXlib(device, surface_desc);
         },
     };
@@ -76,7 +76,7 @@ pub fn main(init: std.process.Init) !void {
     defer frame_semaphore.destroy();
     var frame_index: u64 = 1;
 
-    const swapchain: *sf.Swapchain = try .create(queue, surface, .{
+    const swapchain: *sc.Swapchain = try .create(queue, surface, .{
         .format = swapchain_format,
         .usage = .{ .color_attachment = true },
         .present_mode = .fifo,
@@ -120,7 +120,7 @@ pub fn main(init: std.process.Init) !void {
     };
 
     const dimensions: [3]u32 = .{ 256, 256, 1 };
-    const texture_desc: sf.TextureDesc = .{
+    const texture_desc: sc.TextureDesc = .{
         .extent = .{ .width = dimensions[0], .height = dimensions[1], .depth = dimensions[2] },
         .format = .rgba8_unorm,
         .usage = .{ .sampled = true },
@@ -151,8 +151,8 @@ pub fn main(init: std.process.Init) !void {
     try queue.submit(&.{upload_cb});
 
     const pipeline = try device.createGraphicsPipeline(
-        @embedFile("vert.sfir"),
-        @embedFile("frag.sfir"),
+        @embedFile("vert.scir"),
+        @embedFile("frag.scir"),
         .{
             .color_target_count = 1,
             .color_targets = &.{.{ .format = swapchain_format }},

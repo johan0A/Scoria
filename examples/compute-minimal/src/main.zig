@@ -1,7 +1,7 @@
 const std = @import("std");
-const sf = @import("sulfur");
+const sc = @import("scoria");
 
-const sfSymbol = @extern(sf.Symbol, .{ .name = "sfSymbol" });
+const scSymbol = @extern(sc.Symbol, .{ .name = "scSymbol" });
 
 const Data = extern struct {
     output_texture: u32,
@@ -15,7 +15,7 @@ pub fn main(init: std.process.Init) !void {
     const width = 256;
     const height = 256;
 
-    const instance = sf.Instance.create(null, sfSymbol);
+    const instance = sc.Instance.create(null, scSymbol);
     defer instance.destroy();
 
     const adapters = try instance.enumerateAdaptersAlloc(arena);
@@ -29,14 +29,14 @@ pub fn main(init: std.process.Init) !void {
     const device = instance.createDevice(adapter);
     defer device.destroy();
 
-    const gpu_gpa = sf.heap.rawDeviceAllocator(device);
-    var fix_buffer_allocator: sf.heap.FixedBufferAllocator = try .initAlloc(gpu_gpa, .initFill(1024 * 1024 * 64));
+    const gpu_gpa = sc.heap.rawDeviceAllocator(device);
+    var fix_buffer_allocator: sc.heap.FixedBufferAllocator = try .initAlloc(gpu_gpa, .initFill(1024 * 1024 * 64));
     defer fix_buffer_allocator.deinit(gpu_gpa);
     const gpu_arena = fix_buffer_allocator.allocator();
 
     const queue = device.getQueue(.graphics);
 
-    const texture_info: sf.TextureDesc = .{
+    const texture_info: sc.TextureDesc = .{
         .dimensions = .{ width, height, 1 },
         .format = .rgba8_unorm,
         .usage = .{ .storage = true },
@@ -57,7 +57,7 @@ pub fn main(init: std.process.Init) !void {
     const pixel_buffer_size = width * height * 4;
     const readback = try gpu_arena.alignedAlloc(u8, .fromByteUnits(256), pixel_buffer_size, .readback);
 
-    const pipeline = try device.createComputePipeline(@embedFile("generate_texture.sfir"));
+    const pipeline = try device.createComputePipeline(@embedFile("generate_texture.scir"));
     defer pipeline.destroy();
 
     const command_buffer = try queue.startCommandRecording();

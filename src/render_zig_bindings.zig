@@ -152,13 +152,13 @@ fn renderBindings(
         try w.writeAll(";\n\n");
     }
     for (registry.structs) |@"struct"| {
-        const is_sf_size_and_align = style == .normal and std.mem.eql(u8, @"struct".name, "SfSizeAlign");
+        const is_sc_size_and_align = style == .normal and std.mem.eql(u8, @"struct".name, "ScSizeAlign");
 
         try renderDeclStart(w, registry, @"struct".doc, @"struct".name);
         try w.writeAll("extern struct {\n");
         for (@"struct".fields) |field| {
             try renderDoc(w, field.doc);
-            if (is_sf_size_and_align and std.mem.eql(u8, field.name, "alignment")) {
+            if (is_sc_size_and_align and std.mem.eql(u8, field.name, "alignment")) {
                 try renderId(w, "alignment_byte_units");
             } else {
                 try renderId(w, field.name);
@@ -171,7 +171,7 @@ fn renderBindings(
             }
             try w.writeAll(",\n");
         }
-        if (is_sf_size_and_align) {
+        if (is_sc_size_and_align) {
             try w.writeAll("\n" ++
                 \\pub fn alignment(size_and_align: SizeAlign) std.mem.Alignment {
                 \\    return .fromByteUnits(size_and_align.alignment_byte_units);
@@ -586,7 +586,7 @@ fn renderSymbolMap(
     try renderHeader(w, registry);
     try w.writeAll(
         \\const std = @import("std");
-        \\const sf = @import("sf_minimal.zig");
+        \\const sc = @import("sc_minimal.zig");
     ++ "\n\n");
 
     const handle_used = try arena.alloc(bool, registry.opaques.len);
@@ -605,7 +605,7 @@ fn renderSymbolMap(
     }
     try w.writeAll("};\n\n");
 
-    const qualifier: TypeQualifier = .{ .decl = "sf.", .handle = "handle_types." };
+    const qualifier: TypeQualifier = .{ .decl = "sc.", .handle = "handle_types." };
 
     try w.writeAll("fn Functions(handle_types: HandleTypes) type {\nreturn struct {\n");
     for (registry.functions) |function| {
@@ -629,7 +629,7 @@ fn renderSymbolMap(
     try renderErrorSet(w, registry, resultErrors(registry));
     try w.writeAll(";\n\n");
 
-    try w.writeAll("fn cResult(result: anytype) sf.");
+    try w.writeAll("fn cResult(result: anytype) sc.");
     try renderTypeName(w, registry, result_enum.name);
     try w.writeAll(" {\nif (result) return .");
     try renderMemberName(w, registry, result_enum.name, resultOk(registry).name);
@@ -650,7 +650,7 @@ fn renderSymbolMap(
         try renderFnName(w, registry, function.name);
         try w.writeByte('(');
         try renderParams(w, registry, .minimal, function.params, qualifier);
-        try w.writeAll(") callconv(sf.@\"callconv\") ");
+        try w.writeAll(") callconv(sc.@\"callconv\") ");
         try renderQualifiedType(w, registry, .minimal, function.return_type, qualifier);
         try w.writeAll(" {\nreturn ");
 

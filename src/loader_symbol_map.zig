@@ -2,7 +2,7 @@
 // version: 0.1.0
 
 const std = @import("std");
-const sf = @import("sf_minimal.zig");
+const sc = @import("sc_minimal.zig");
 
 const HandleTypes = struct {
     Instance: type,
@@ -13,7 +13,7 @@ const HandleTypes = struct {
 fn Functions(handle_types: HandleTypes) type {
     return struct {
         createInstance: fn (
-            allocator: ?*sf.HostAllocator,
+            allocator: ?*sc.HostAllocator,
         ) *handle_types.Instance,
         destroyInstance: fn (
             instance: *handle_types.Instance,
@@ -45,12 +45,12 @@ const Error = error{
     DeviceLost,
     SurfaceLost,
     NoBackbuffer,
-    MalformedSfir,
-    UnsupportedSfirVersion,
-    UnsupportedSfirBytecode,
+    MalformedScir,
+    UnsupportedScirVersion,
+    UnsupportedScirBytecode,
 };
 
-fn cResult(result: anytype) sf.Result {
+fn cResult(result: anytype) sc.Result {
     if (result) return .ok else |err| return switch (@as(Error, err)) {
         error.Unknown => .unknown,
         error.OutOfMemory => .out_of_memory,
@@ -58,17 +58,17 @@ fn cResult(result: anytype) sf.Result {
         error.DeviceLost => .device_lost,
         error.SurfaceLost => .surface_lost,
         error.NoBackbuffer => .no_backbuffer,
-        error.MalformedSfir => .malformed_sfir,
-        error.UnsupportedSfirVersion => .unsupported_sfir_version,
-        error.UnsupportedSfirBytecode => .unsupported_sfir_bytecode,
+        error.MalformedScir => .malformed_scir,
+        error.UnsupportedScirVersion => .unsupported_scir_version,
+        error.UnsupportedScirBytecode => .unsupported_scir_bytecode,
     };
 }
 
 fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(handle_types)) type {
     return struct {
         pub fn createInstance(
-            allocator: ?*sf.HostAllocator,
-        ) callconv(sf.@"callconv") *handle_types.Instance {
+            allocator: ?*sc.HostAllocator,
+        ) callconv(sc.@"callconv") *handle_types.Instance {
             return functions.createInstance(
                 allocator,
             );
@@ -76,7 +76,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn destroyInstance(
             instance: *handle_types.Instance,
-        ) callconv(sf.@"callconv") void {
+        ) callconv(sc.@"callconv") void {
             return functions.destroyInstance(
                 instance,
             );
@@ -85,7 +85,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
         pub fn getSlot(
             instance: *handle_types.Instance,
             name: [*:0]const u8,
-        ) callconv(sf.@"callconv") usize {
+        ) callconv(sc.@"callconv") usize {
             return functions.getSlot(
                 instance,
                 name,
@@ -97,7 +97,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
             adapters_capacity: usize,
             adapters: ?[*]*handle_types.Adapter,
             adapter_count: *usize,
-        ) callconv(sf.@"callconv") void {
+        ) callconv(sc.@"callconv") void {
             return functions.enumerateAdapters(
                 instance,
                 adapters_capacity,
@@ -109,7 +109,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
         pub fn createDevice(
             instance: *handle_types.Instance,
             adapter: *handle_types.Adapter,
-        ) callconv(sf.@"callconv") *handle_types.Device {
+        ) callconv(sc.@"callconv") *handle_types.Device {
             return functions.createDevice(
                 instance,
                 adapter,
@@ -118,7 +118,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn destroyDevice(
             device: *handle_types.Device,
-        ) callconv(sf.@"callconv") void {
+        ) callconv(sc.@"callconv") void {
             return functions.destroyDevice(
                 device,
             );
@@ -132,11 +132,11 @@ pub fn map(
 ) std.StaticStringMap(*const anyopaque) {
     const c_functions = CFunctions(handle_types, functions);
     return .initComptime(@as([]const struct { []const u8, *const anyopaque }, &.{
-        .{ "sfCreateInstance", @ptrCast(&c_functions.createInstance) },
-        .{ "sfDestroyInstance", @ptrCast(&c_functions.destroyInstance) },
-        .{ "sfGetSlot", @ptrCast(&c_functions.getSlot) },
-        .{ "sfEnumerateAdapters", @ptrCast(&c_functions.enumerateAdapters) },
-        .{ "sfCreateDevice", @ptrCast(&c_functions.createDevice) },
-        .{ "sfDestroyDevice", @ptrCast(&c_functions.destroyDevice) },
+        .{ "scCreateInstance", @ptrCast(&c_functions.createInstance) },
+        .{ "scDestroyInstance", @ptrCast(&c_functions.destroyInstance) },
+        .{ "scGetSlot", @ptrCast(&c_functions.getSlot) },
+        .{ "scEnumerateAdapters", @ptrCast(&c_functions.enumerateAdapters) },
+        .{ "scCreateDevice", @ptrCast(&c_functions.createDevice) },
+        .{ "scDestroyDevice", @ptrCast(&c_functions.destroyDevice) },
     }));
 }

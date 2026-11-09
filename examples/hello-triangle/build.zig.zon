@@ -2,7 +2,7 @@
     .name = .example,
     .version = "0.0.1",
     .dependencies = .{
-        .sulfur = .{
+        .scoria = .{
             .path = "../..",
         },
         .sdl = .{

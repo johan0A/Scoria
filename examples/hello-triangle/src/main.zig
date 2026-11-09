@@ -1,15 +1,15 @@
 const std = @import("std");
 const target = @import("builtin").target;
-const sf = @import("sulfur");
+const sc = @import("scoria");
 const c = @import("c");
 
-const sfSymbol = @extern(sf.Symbol, .{ .name = "sfSymbol" });
+const scSymbol = @extern(sc.Symbol, .{ .name = "scSymbol" });
 
 const frames_in_flight = 2;
 
 const Data = extern struct {
-    positions: sf.DeviceAddress,
-    colors: sf.DeviceAddress,
+    positions: sc.DeviceAddress,
+    colors: sc.DeviceAddress,
 };
 
 pub fn main(init: std.process.Init) !void {
@@ -20,7 +20,7 @@ pub fn main(init: std.process.Init) !void {
     const window = c.SDL_CreateWindow("title", width, height, c.SDL_WINDOW_VULKAN | c.SDL_WINDOW_RESIZABLE) orelse
         return error.SdlCreateWindow;
 
-    const instance = sf.Instance.create(null, sfSymbol);
+    const instance = sc.Instance.create(null, scSymbol);
     defer instance.destroy();
 
     const adapters = try instance.enumerateAdaptersAlloc(arena);
@@ -37,15 +37,15 @@ pub fn main(init: std.process.Init) !void {
         .windows => blk: {
             const hwnd = c.SDL_GetPointerProperty(props, c.SDL_PROP_WINDOW_WIN32_HWND_POINTER, null) orelse @panic("TODO");
             const hinstance = c.SDL_GetPointerProperty(props, c.SDL_PROP_WINDOW_WIN32_INSTANCE_POINTER, null) orelse @panic("TODO");
-            const surface_desc: sf.SurfaceWin32Desc = .{ .hinstance = hinstance, .hwnd = hwnd };
-            break :blk sf.Surface.createWin32(device, surface_desc);
+            const surface_desc: sc.SurfaceWin32Desc = .{ .hinstance = hinstance, .hwnd = hwnd };
+            break :blk sc.Surface.createWin32(device, surface_desc);
         },
         else => blk: {
             const display = c.SDL_GetPointerProperty(props, c.SDL_PROP_WINDOW_X11_DISPLAY_POINTER, null) orelse @panic("TODO");
             const x11_window = c.SDL_GetNumberProperty(props, c.SDL_PROP_WINDOW_X11_WINDOW_NUMBER, 0);
             if (x11_window == 0) @panic("TODO");
-            const surface_desc: sf.SurfaceXlibDesc = .{ .display = display, .window = @intCast(x11_window) };
-            break :blk sf.Surface.createXlib(device, surface_desc);
+            const surface_desc: sc.SurfaceXlibDesc = .{ .display = display, .window = @intCast(x11_window) };
+            break :blk sc.Surface.createXlib(device, surface_desc);
         },
     };
     defer surface.destroy();
@@ -93,7 +93,7 @@ pub fn main(init: std.process.Init) !void {
         .colors = colors.gpu,
     };
 
-    const pipeline = try device.createGraphicsPipeline(@embedFile("vert.sfir"), @embedFile("frag.sfir"), .{
+    const pipeline = try device.createGraphicsPipeline(@embedFile("vert.scir"), @embedFile("frag.scir"), .{
         .color_target_count = 1,
         .color_targets = &.{.{ .format = swapchain_format }},
     });
@@ -141,12 +141,12 @@ pub fn main(init: std.process.Init) !void {
 
 fn Mapped(comptime T: type) type {
     return struct {
-        gpu: sf.DeviceAddress,
+        gpu: sc.DeviceAddress,
         cpu: *T,
     };
 }
 
-fn allocMapped(device: *sf.Device, comptime T: type) Mapped(T) {
+fn allocMapped(device: *sc.Device, comptime T: type) Mapped(T) {
     const memory = device.malloc(@sizeOf(T), @alignOf(T), .default);
     return .{
         .gpu = memory,

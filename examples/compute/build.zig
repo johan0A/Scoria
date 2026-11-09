@@ -1,5 +1,5 @@
 const std = @import("std");
-const sulfur = @import("sulfur");
+const scoria = @import("scoria");
 const zon = @import("build.zig.zon");
 
 pub fn build(b: *std.Build) void {
@@ -12,14 +12,14 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    const sulfur_dep = b.dependency("sulfur", .{
+    const scoria_dep = b.dependency("scoria", .{
         .target = target,
         .optimize = optimize,
     });
-    root_module.addImport("sulfur", sulfur_dep.module("sulfur"));
+    root_module.addImport("scoria", scoria_dep.module("scoria"));
 
-    const compute = sulfur.compileSlangShader(sulfur_dep, b, b.path("src/shaders/generate_texture.slang"), "main", &.{});
-    root_module.addAnonymousImport("generate_texture.sfir", .{ .root_source_file = compute });
+    const compute = scoria.compileSlangShader(scoria_dep, b, b.path("src/shaders/generate_texture.slang"), "main", &.{});
+    root_module.addAnonymousImport("generate_texture.scir", .{ .root_source_file = compute });
 
     {
         const sdl_dep = b.dependency("sdl", .{

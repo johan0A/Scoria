@@ -2,7 +2,7 @@
 // version: 0.1.0
 
 const std = @import("std");
-const sf = @import("sf_minimal.zig");
+const sc = @import("sc_minimal.zig");
 
 const HandleTypes = struct {
     Instance: type,
@@ -23,63 +23,63 @@ fn Functions(handle_types: HandleTypes) type {
         adapterInfo: fn (
             instance: *handle_types.Instance,
             adapter: *handle_types.Adapter,
-        ) sf.AdapterInfo,
+        ) sc.AdapterInfo,
         createSurfaceWin32: fn (
             device: *handle_types.Device,
-            desc: sf.SurfaceWin32Desc,
+            desc: sc.SurfaceWin32Desc,
         ) *handle_types.Surface,
         createSurfaceXlib: fn (
             device: *handle_types.Device,
-            desc: sf.SurfaceXlibDesc,
+            desc: sc.SurfaceXlibDesc,
         ) *handle_types.Surface,
         destroySurface: fn (
             surface: *handle_types.Surface,
         ) void,
         surfaceSupportedUsage: fn (
             surface: *handle_types.Surface,
-        ) sf.TextureUsage,
+        ) sc.TextureUsage,
         surfaceSupportedFormats: fn (
             surface: *handle_types.Surface,
             formats_capacity: usize,
-            formats: ?[*]sf.Format,
+            formats: ?[*]sc.Format,
             format_count: *usize,
         ) void,
         surfacePresentModes: fn (
             surface: *handle_types.Surface,
             present_modes_capacity: usize,
-            present_modes: ?[*]sf.PresentMode,
+            present_modes: ?[*]sc.PresentMode,
             present_mode_count: *usize,
         ) void,
         hostFromDevicePointer: fn (
             device: *handle_types.Device,
-            address: sf.DeviceAddress,
+            address: sc.DeviceAddress,
         ) *anyopaque,
         alloc: fn (
             device: *handle_types.Device,
             size: usize,
             alignment: usize,
-            memory: sf.MemoryKind,
-            device_mapping: *sf.HostDeviceAddress,
+            memory: sc.MemoryKind,
+            device_mapping: *sc.HostDeviceAddress,
         ) error{
             OutOfMemory,
             OutOfDeviceMemory,
         }!void,
         free: fn (
             device: *handle_types.Device,
-            address: sf.DeviceAddress,
+            address: sc.DeviceAddress,
         ) void,
         descriptorSizeAndHeapAlign: fn (
             device: *handle_types.Device,
-        ) sf.SizeAlign,
+        ) sc.SizeAlign,
         storeDescriptor: fn (
             device: *handle_types.Device,
-            descriptor: *const sf.Descriptor,
+            descriptor: *const sc.Descriptor,
             descriptor_heap: [*]u8,
             index: usize,
         ) void,
         getQueue: fn (
             device: *handle_types.Device,
-            queue_kind: sf.QueueKind,
+            queue_kind: sc.QueueKind,
         ) *handle_types.Queue,
         startCommandRecording: fn (
             queue: *handle_types.Queue,
@@ -135,7 +135,7 @@ fn Functions(handle_types: HandleTypes) type {
         createSwapchain: fn (
             queue: *handle_types.Queue,
             surface: *handle_types.Surface,
-            desc: sf.SwapchainDesc,
+            desc: sc.SwapchainDesc,
             swapchain: **handle_types.Swapchain,
         ) error{
             OutOfDeviceMemory,
@@ -148,8 +148,8 @@ fn Functions(handle_types: HandleTypes) type {
         ) void,
         acquireBackBuffer: fn (
             swapchain: *handle_types.Swapchain,
-            extent: sf.Extent2D,
-            back_buffer: *sf.BackBuffer,
+            extent: sc.Extent2D,
+            back_buffer: *sc.BackBuffer,
         ) error{
             OutOfMemory,
             OutOfDeviceMemory,
@@ -169,7 +169,7 @@ fn Functions(handle_types: HandleTypes) type {
         }!void,
         setActiveTextureHeap: fn (
             command_buffer: *handle_types.CommandBuffer,
-            heap_address: sf.DeviceAddress,
+            heap_address: sc.DeviceAddress,
         ) void,
         setDepthStencilState: fn (
             command_buffer: *handle_types.CommandBuffer,
@@ -181,74 +181,74 @@ fn Functions(handle_types: HandleTypes) type {
         ) void,
         dispatch: fn (
             command_buffer: *handle_types.CommandBuffer,
-            data: sf.DeviceAddress,
+            data: sc.DeviceAddress,
             x: u32,
             y: u32,
             z: u32,
         ) void,
         barrier: fn (
             command_buffer: *handle_types.CommandBuffer,
-            before: sf.Stage,
-            after: sf.Stage,
-            hazard: sf.Hazard,
+            before: sc.Stage,
+            after: sc.Stage,
+            hazard: sc.Hazard,
         ) void,
         copyTextureToBuffer: fn (
             command_buffer: *handle_types.CommandBuffer,
             source_texture: *handle_types.Texture,
-            destination: sf.DeviceAddress,
+            destination: sc.DeviceAddress,
         ) void,
         copyBufferToTexture: fn (
             command_buffer: *handle_types.CommandBuffer,
-            source: sf.DeviceAddress,
+            source: sc.DeviceAddress,
             destination_texture: *handle_types.Texture,
         ) void,
         beginRenderPass: fn (
             command_buffer: *handle_types.CommandBuffer,
-            desc: sf.RenderPassDesc,
+            desc: sc.RenderPassDesc,
         ) void,
         endRenderPass: fn (
             command_buffer: *handle_types.CommandBuffer,
         ) void,
         draw: fn (
             command_buffer: *handle_types.CommandBuffer,
-            vertex_data: sf.DeviceAddress,
-            pixel_data: sf.DeviceAddress,
+            vertex_data: sc.DeviceAddress,
+            pixel_data: sc.DeviceAddress,
             vertex_count: u32,
             instance_count: u32,
         ) void,
         drawIndexed: fn (
             command_buffer: *handle_types.CommandBuffer,
-            vertex_data: sf.DeviceAddress,
-            pixel_data: sf.DeviceAddress,
-            index_type: sf.IndexType,
-            indices: sf.DeviceAddress,
+            vertex_data: sc.DeviceAddress,
+            pixel_data: sc.DeviceAddress,
+            index_type: sc.IndexType,
+            indices: sc.DeviceAddress,
             index_count: u32,
         ) void,
         drawIndexedInstanced: fn (
             command_buffer: *handle_types.CommandBuffer,
-            vertex_data: sf.DeviceAddress,
-            pixel_data: sf.DeviceAddress,
-            index_type: sf.IndexType,
-            indices: sf.DeviceAddress,
+            vertex_data: sc.DeviceAddress,
+            pixel_data: sc.DeviceAddress,
+            index_type: sc.IndexType,
+            indices: sc.DeviceAddress,
             index_count: u32,
             instance_count: u32,
         ) void,
         drawIndexedInstancedIndirect: fn (
             command_buffer: *handle_types.CommandBuffer,
-            vertex_data: sf.DeviceAddress,
-            pixel_data: sf.DeviceAddress,
-            index_type: sf.IndexType,
-            indices: sf.DeviceAddress,
-            arguments: sf.DeviceAddress,
+            vertex_data: sc.DeviceAddress,
+            pixel_data: sc.DeviceAddress,
+            index_type: sc.IndexType,
+            indices: sc.DeviceAddress,
+            arguments: sc.DeviceAddress,
         ) void,
         textureSizeAlign: fn (
             device: *handle_types.Device,
-            desc: sf.TextureDesc,
-        ) sf.SizeAlign,
+            desc: sc.TextureDesc,
+        ) sc.SizeAlign,
         createTexture: fn (
             device: *handle_types.Device,
-            desc: sf.TextureDesc,
-            data: sf.DeviceAddress,
+            desc: sc.TextureDesc,
+            data: sc.DeviceAddress,
             texture: **handle_types.Texture,
         ) error{
             OutOfMemory,
@@ -260,8 +260,8 @@ fn Functions(handle_types: HandleTypes) type {
         ) void,
         textureStorageDescriptor: fn (
             texture: *handle_types.Texture,
-            desc: sf.TextureViewDesc,
-            descriptor: *sf.Descriptor,
+            desc: sc.TextureViewDesc,
+            descriptor: *sc.Descriptor,
         ) error{
             OutOfMemory,
             OutOfDeviceMemory,
@@ -269,8 +269,8 @@ fn Functions(handle_types: HandleTypes) type {
         }!void,
         textureViewDescriptor: fn (
             texture: *handle_types.Texture,
-            desc: sf.TextureViewDesc,
-            descriptor: *sf.Descriptor,
+            desc: sc.TextureViewDesc,
+            descriptor: *sc.Descriptor,
         ) error{
             OutOfMemory,
             OutOfDeviceMemory,
@@ -284,9 +284,9 @@ fn Functions(handle_types: HandleTypes) type {
         ) error{
             OutOfMemory,
             OutOfDeviceMemory,
-            MalformedSfir,
-            UnsupportedSfirVersion,
-            UnsupportedSfirBytecode,
+            MalformedScir,
+            UnsupportedScirVersion,
+            UnsupportedScirBytecode,
             Unknown,
         }!void,
         createGraphicsPipeline: fn (
@@ -295,14 +295,14 @@ fn Functions(handle_types: HandleTypes) type {
             vertex_ir: [*]const u8,
             pixel_ir_size: usize,
             pixel_ir: [*]const u8,
-            desc: sf.GraphicsPipelineDesc,
+            desc: sc.GraphicsPipelineDesc,
             pipeline: **handle_types.Pipeline,
         ) error{
             OutOfMemory,
             OutOfDeviceMemory,
-            MalformedSfir,
-            UnsupportedSfirVersion,
-            UnsupportedSfirBytecode,
+            MalformedScir,
+            UnsupportedScirVersion,
+            UnsupportedScirBytecode,
             Unknown,
         }!void,
         destroyPipeline: fn (
@@ -310,7 +310,7 @@ fn Functions(handle_types: HandleTypes) type {
         ) void,
         createDepthStencilState: fn (
             device: *handle_types.Device,
-            desc: sf.DepthStencilDesc,
+            desc: sc.DepthStencilDesc,
             depth_stencil_state: **handle_types.DepthStencilState,
         ) error{
             OutOfMemory,
@@ -328,12 +328,12 @@ const Error = error{
     DeviceLost,
     SurfaceLost,
     NoBackbuffer,
-    MalformedSfir,
-    UnsupportedSfirVersion,
-    UnsupportedSfirBytecode,
+    MalformedScir,
+    UnsupportedScirVersion,
+    UnsupportedScirBytecode,
 };
 
-fn cResult(result: anytype) sf.Result {
+fn cResult(result: anytype) sc.Result {
     if (result) return .ok else |err| return switch (@as(Error, err)) {
         error.Unknown => .unknown,
         error.OutOfMemory => .out_of_memory,
@@ -341,9 +341,9 @@ fn cResult(result: anytype) sf.Result {
         error.DeviceLost => .device_lost,
         error.SurfaceLost => .surface_lost,
         error.NoBackbuffer => .no_backbuffer,
-        error.MalformedSfir => .malformed_sfir,
-        error.UnsupportedSfirVersion => .unsupported_sfir_version,
-        error.UnsupportedSfirBytecode => .unsupported_sfir_bytecode,
+        error.MalformedScir => .malformed_scir,
+        error.UnsupportedScirVersion => .unsupported_scir_version,
+        error.UnsupportedScirBytecode => .unsupported_scir_bytecode,
     };
 }
 
@@ -352,7 +352,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
         pub fn adapterInfo(
             instance: *handle_types.Instance,
             adapter: *handle_types.Adapter,
-        ) callconv(sf.@"callconv") sf.AdapterInfo {
+        ) callconv(sc.@"callconv") sc.AdapterInfo {
             return functions.adapterInfo(
                 instance,
                 adapter,
@@ -361,8 +361,8 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn createSurfaceWin32(
             device: *handle_types.Device,
-            desc: sf.SurfaceWin32Desc,
-        ) callconv(sf.@"callconv") *handle_types.Surface {
+            desc: sc.SurfaceWin32Desc,
+        ) callconv(sc.@"callconv") *handle_types.Surface {
             return functions.createSurfaceWin32(
                 device,
                 desc,
@@ -371,8 +371,8 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn createSurfaceXlib(
             device: *handle_types.Device,
-            desc: sf.SurfaceXlibDesc,
-        ) callconv(sf.@"callconv") *handle_types.Surface {
+            desc: sc.SurfaceXlibDesc,
+        ) callconv(sc.@"callconv") *handle_types.Surface {
             return functions.createSurfaceXlib(
                 device,
                 desc,
@@ -381,7 +381,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn destroySurface(
             surface: *handle_types.Surface,
-        ) callconv(sf.@"callconv") void {
+        ) callconv(sc.@"callconv") void {
             return functions.destroySurface(
                 surface,
             );
@@ -389,7 +389,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn surfaceSupportedUsage(
             surface: *handle_types.Surface,
-        ) callconv(sf.@"callconv") sf.TextureUsage {
+        ) callconv(sc.@"callconv") sc.TextureUsage {
             return functions.surfaceSupportedUsage(
                 surface,
             );
@@ -398,9 +398,9 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
         pub fn surfaceSupportedFormats(
             surface: *handle_types.Surface,
             formats_capacity: usize,
-            formats: ?[*]sf.Format,
+            formats: ?[*]sc.Format,
             format_count: *usize,
-        ) callconv(sf.@"callconv") void {
+        ) callconv(sc.@"callconv") void {
             return functions.surfaceSupportedFormats(
                 surface,
                 formats_capacity,
@@ -412,9 +412,9 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
         pub fn surfacePresentModes(
             surface: *handle_types.Surface,
             present_modes_capacity: usize,
-            present_modes: ?[*]sf.PresentMode,
+            present_modes: ?[*]sc.PresentMode,
             present_mode_count: *usize,
-        ) callconv(sf.@"callconv") void {
+        ) callconv(sc.@"callconv") void {
             return functions.surfacePresentModes(
                 surface,
                 present_modes_capacity,
@@ -425,8 +425,8 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn hostFromDevicePointer(
             device: *handle_types.Device,
-            address: sf.DeviceAddress,
-        ) callconv(sf.@"callconv") *anyopaque {
+            address: sc.DeviceAddress,
+        ) callconv(sc.@"callconv") *anyopaque {
             return functions.hostFromDevicePointer(
                 device,
                 address,
@@ -437,9 +437,9 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
             device: *handle_types.Device,
             size: usize,
             alignment: usize,
-            memory: sf.MemoryKind,
-            device_mapping: *sf.HostDeviceAddress,
-        ) callconv(sf.@"callconv") sf.Result {
+            memory: sc.MemoryKind,
+            device_mapping: *sc.HostDeviceAddress,
+        ) callconv(sc.@"callconv") sc.Result {
             return cResult(functions.alloc(
                 device,
                 size,
@@ -451,8 +451,8 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn free(
             device: *handle_types.Device,
-            address: sf.DeviceAddress,
-        ) callconv(sf.@"callconv") void {
+            address: sc.DeviceAddress,
+        ) callconv(sc.@"callconv") void {
             return functions.free(
                 device,
                 address,
@@ -461,7 +461,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn descriptorSizeAndHeapAlign(
             device: *handle_types.Device,
-        ) callconv(sf.@"callconv") sf.SizeAlign {
+        ) callconv(sc.@"callconv") sc.SizeAlign {
             return functions.descriptorSizeAndHeapAlign(
                 device,
             );
@@ -469,10 +469,10 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn storeDescriptor(
             device: *handle_types.Device,
-            descriptor: *const sf.Descriptor,
+            descriptor: *const sc.Descriptor,
             descriptor_heap: [*]u8,
             index: usize,
-        ) callconv(sf.@"callconv") void {
+        ) callconv(sc.@"callconv") void {
             return functions.storeDescriptor(
                 device,
                 descriptor,
@@ -483,8 +483,8 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn getQueue(
             device: *handle_types.Device,
-            queue_kind: sf.QueueKind,
-        ) callconv(sf.@"callconv") *handle_types.Queue {
+            queue_kind: sc.QueueKind,
+        ) callconv(sc.@"callconv") *handle_types.Queue {
             return functions.getQueue(
                 device,
                 queue_kind,
@@ -494,7 +494,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
         pub fn startCommandRecording(
             queue: *handle_types.Queue,
             command_buffer: **handle_types.CommandBuffer,
-        ) callconv(sf.@"callconv") sf.Result {
+        ) callconv(sc.@"callconv") sc.Result {
             return cResult(functions.startCommandRecording(
                 queue,
                 command_buffer,
@@ -505,7 +505,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
             queue: *handle_types.Queue,
             command_buffer_count: usize,
             command_buffers: [*]const *handle_types.CommandBuffer,
-        ) callconv(sf.@"callconv") sf.Result {
+        ) callconv(sc.@"callconv") sc.Result {
             return cResult(functions.submit(
                 queue,
                 command_buffer_count,
@@ -519,7 +519,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
             command_buffers: [*]const *handle_types.CommandBuffer,
             signal_semaphore: *handle_types.Semaphore,
             signal_value: u64,
-        ) callconv(sf.@"callconv") sf.Result {
+        ) callconv(sc.@"callconv") sc.Result {
             return cResult(functions.submitAndSignal(
                 queue,
                 command_buffer_count,
@@ -533,7 +533,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
             device: *handle_types.Device,
             initial_value: u64,
             semaphore: **handle_types.Semaphore,
-        ) callconv(sf.@"callconv") sf.Result {
+        ) callconv(sc.@"callconv") sc.Result {
             return cResult(functions.createSemaphore(
                 device,
                 initial_value,
@@ -543,7 +543,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn destroySemaphore(
             semaphore: *handle_types.Semaphore,
-        ) callconv(sf.@"callconv") void {
+        ) callconv(sc.@"callconv") void {
             return functions.destroySemaphore(
                 semaphore,
             );
@@ -552,7 +552,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
         pub fn waitSemaphore(
             semaphore: *handle_types.Semaphore,
             value: u64,
-        ) callconv(sf.@"callconv") sf.Result {
+        ) callconv(sc.@"callconv") sc.Result {
             return cResult(functions.waitSemaphore(
                 semaphore,
                 value,
@@ -562,9 +562,9 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
         pub fn createSwapchain(
             queue: *handle_types.Queue,
             surface: *handle_types.Surface,
-            desc: sf.SwapchainDesc,
+            desc: sc.SwapchainDesc,
             swapchain: **handle_types.Swapchain,
-        ) callconv(sf.@"callconv") sf.Result {
+        ) callconv(sc.@"callconv") sc.Result {
             return cResult(functions.createSwapchain(
                 queue,
                 surface,
@@ -575,7 +575,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn destroySwapchain(
             swapchain: *handle_types.Swapchain,
-        ) callconv(sf.@"callconv") void {
+        ) callconv(sc.@"callconv") void {
             return functions.destroySwapchain(
                 swapchain,
             );
@@ -583,9 +583,9 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn acquireBackBuffer(
             swapchain: *handle_types.Swapchain,
-            extent: sf.Extent2D,
-            back_buffer: *sf.BackBuffer,
-        ) callconv(sf.@"callconv") sf.Result {
+            extent: sc.Extent2D,
+            back_buffer: *sc.BackBuffer,
+        ) callconv(sc.@"callconv") sc.Result {
             return cResult(functions.acquireBackBuffer(
                 swapchain,
                 extent,
@@ -595,7 +595,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn present(
             swapchain: *handle_types.Swapchain,
-        ) callconv(sf.@"callconv") sf.Result {
+        ) callconv(sc.@"callconv") sc.Result {
             return cResult(functions.present(
                 swapchain,
             ));
@@ -603,8 +603,8 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn setActiveTextureHeap(
             command_buffer: *handle_types.CommandBuffer,
-            heap_address: sf.DeviceAddress,
-        ) callconv(sf.@"callconv") void {
+            heap_address: sc.DeviceAddress,
+        ) callconv(sc.@"callconv") void {
             return functions.setActiveTextureHeap(
                 command_buffer,
                 heap_address,
@@ -614,7 +614,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
         pub fn setDepthStencilState(
             command_buffer: *handle_types.CommandBuffer,
             depth_stencil_state: *handle_types.DepthStencilState,
-        ) callconv(sf.@"callconv") void {
+        ) callconv(sc.@"callconv") void {
             return functions.setDepthStencilState(
                 command_buffer,
                 depth_stencil_state,
@@ -624,7 +624,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
         pub fn setPipeline(
             command_buffer: *handle_types.CommandBuffer,
             pipeline: *handle_types.Pipeline,
-        ) callconv(sf.@"callconv") void {
+        ) callconv(sc.@"callconv") void {
             return functions.setPipeline(
                 command_buffer,
                 pipeline,
@@ -633,11 +633,11 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn dispatch(
             command_buffer: *handle_types.CommandBuffer,
-            data: sf.DeviceAddress,
+            data: sc.DeviceAddress,
             x: u32,
             y: u32,
             z: u32,
-        ) callconv(sf.@"callconv") void {
+        ) callconv(sc.@"callconv") void {
             return functions.dispatch(
                 command_buffer,
                 data,
@@ -649,10 +649,10 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn barrier(
             command_buffer: *handle_types.CommandBuffer,
-            before: sf.Stage,
-            after: sf.Stage,
-            hazard: sf.Hazard,
-        ) callconv(sf.@"callconv") void {
+            before: sc.Stage,
+            after: sc.Stage,
+            hazard: sc.Hazard,
+        ) callconv(sc.@"callconv") void {
             return functions.barrier(
                 command_buffer,
                 before,
@@ -664,8 +664,8 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
         pub fn copyTextureToBuffer(
             command_buffer: *handle_types.CommandBuffer,
             source_texture: *handle_types.Texture,
-            destination: sf.DeviceAddress,
-        ) callconv(sf.@"callconv") void {
+            destination: sc.DeviceAddress,
+        ) callconv(sc.@"callconv") void {
             return functions.copyTextureToBuffer(
                 command_buffer,
                 source_texture,
@@ -675,9 +675,9 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn copyBufferToTexture(
             command_buffer: *handle_types.CommandBuffer,
-            source: sf.DeviceAddress,
+            source: sc.DeviceAddress,
             destination_texture: *handle_types.Texture,
-        ) callconv(sf.@"callconv") void {
+        ) callconv(sc.@"callconv") void {
             return functions.copyBufferToTexture(
                 command_buffer,
                 source,
@@ -687,8 +687,8 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn beginRenderPass(
             command_buffer: *handle_types.CommandBuffer,
-            desc: sf.RenderPassDesc,
-        ) callconv(sf.@"callconv") void {
+            desc: sc.RenderPassDesc,
+        ) callconv(sc.@"callconv") void {
             return functions.beginRenderPass(
                 command_buffer,
                 desc,
@@ -697,7 +697,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn endRenderPass(
             command_buffer: *handle_types.CommandBuffer,
-        ) callconv(sf.@"callconv") void {
+        ) callconv(sc.@"callconv") void {
             return functions.endRenderPass(
                 command_buffer,
             );
@@ -705,11 +705,11 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn draw(
             command_buffer: *handle_types.CommandBuffer,
-            vertex_data: sf.DeviceAddress,
-            pixel_data: sf.DeviceAddress,
+            vertex_data: sc.DeviceAddress,
+            pixel_data: sc.DeviceAddress,
             vertex_count: u32,
             instance_count: u32,
-        ) callconv(sf.@"callconv") void {
+        ) callconv(sc.@"callconv") void {
             return functions.draw(
                 command_buffer,
                 vertex_data,
@@ -721,12 +721,12 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn drawIndexed(
             command_buffer: *handle_types.CommandBuffer,
-            vertex_data: sf.DeviceAddress,
-            pixel_data: sf.DeviceAddress,
-            index_type: sf.IndexType,
-            indices: sf.DeviceAddress,
+            vertex_data: sc.DeviceAddress,
+            pixel_data: sc.DeviceAddress,
+            index_type: sc.IndexType,
+            indices: sc.DeviceAddress,
             index_count: u32,
-        ) callconv(sf.@"callconv") void {
+        ) callconv(sc.@"callconv") void {
             return functions.drawIndexed(
                 command_buffer,
                 vertex_data,
@@ -739,13 +739,13 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn drawIndexedInstanced(
             command_buffer: *handle_types.CommandBuffer,
-            vertex_data: sf.DeviceAddress,
-            pixel_data: sf.DeviceAddress,
-            index_type: sf.IndexType,
-            indices: sf.DeviceAddress,
+            vertex_data: sc.DeviceAddress,
+            pixel_data: sc.DeviceAddress,
+            index_type: sc.IndexType,
+            indices: sc.DeviceAddress,
             index_count: u32,
             instance_count: u32,
-        ) callconv(sf.@"callconv") void {
+        ) callconv(sc.@"callconv") void {
             return functions.drawIndexedInstanced(
                 command_buffer,
                 vertex_data,
@@ -759,12 +759,12 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn drawIndexedInstancedIndirect(
             command_buffer: *handle_types.CommandBuffer,
-            vertex_data: sf.DeviceAddress,
-            pixel_data: sf.DeviceAddress,
-            index_type: sf.IndexType,
-            indices: sf.DeviceAddress,
-            arguments: sf.DeviceAddress,
-        ) callconv(sf.@"callconv") void {
+            vertex_data: sc.DeviceAddress,
+            pixel_data: sc.DeviceAddress,
+            index_type: sc.IndexType,
+            indices: sc.DeviceAddress,
+            arguments: sc.DeviceAddress,
+        ) callconv(sc.@"callconv") void {
             return functions.drawIndexedInstancedIndirect(
                 command_buffer,
                 vertex_data,
@@ -777,8 +777,8 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn textureSizeAlign(
             device: *handle_types.Device,
-            desc: sf.TextureDesc,
-        ) callconv(sf.@"callconv") sf.SizeAlign {
+            desc: sc.TextureDesc,
+        ) callconv(sc.@"callconv") sc.SizeAlign {
             return functions.textureSizeAlign(
                 device,
                 desc,
@@ -787,10 +787,10 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn createTexture(
             device: *handle_types.Device,
-            desc: sf.TextureDesc,
-            data: sf.DeviceAddress,
+            desc: sc.TextureDesc,
+            data: sc.DeviceAddress,
             texture: **handle_types.Texture,
-        ) callconv(sf.@"callconv") sf.Result {
+        ) callconv(sc.@"callconv") sc.Result {
             return cResult(functions.createTexture(
                 device,
                 desc,
@@ -801,7 +801,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn destroyTexture(
             texture: *handle_types.Texture,
-        ) callconv(sf.@"callconv") void {
+        ) callconv(sc.@"callconv") void {
             return functions.destroyTexture(
                 texture,
             );
@@ -809,9 +809,9 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn textureStorageDescriptor(
             texture: *handle_types.Texture,
-            desc: sf.TextureViewDesc,
-            descriptor: *sf.Descriptor,
-        ) callconv(sf.@"callconv") sf.Result {
+            desc: sc.TextureViewDesc,
+            descriptor: *sc.Descriptor,
+        ) callconv(sc.@"callconv") sc.Result {
             return cResult(functions.textureStorageDescriptor(
                 texture,
                 desc,
@@ -821,9 +821,9 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn textureViewDescriptor(
             texture: *handle_types.Texture,
-            desc: sf.TextureViewDesc,
-            descriptor: *sf.Descriptor,
-        ) callconv(sf.@"callconv") sf.Result {
+            desc: sc.TextureViewDesc,
+            descriptor: *sc.Descriptor,
+        ) callconv(sc.@"callconv") sc.Result {
             return cResult(functions.textureViewDescriptor(
                 texture,
                 desc,
@@ -836,7 +836,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
             ir_size: usize,
             ir: [*]const u8,
             pipeline: **handle_types.Pipeline,
-        ) callconv(sf.@"callconv") sf.Result {
+        ) callconv(sc.@"callconv") sc.Result {
             return cResult(functions.createComputePipeline(
                 device,
                 ir_size,
@@ -851,9 +851,9 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
             vertex_ir: [*]const u8,
             pixel_ir_size: usize,
             pixel_ir: [*]const u8,
-            desc: sf.GraphicsPipelineDesc,
+            desc: sc.GraphicsPipelineDesc,
             pipeline: **handle_types.Pipeline,
-        ) callconv(sf.@"callconv") sf.Result {
+        ) callconv(sc.@"callconv") sc.Result {
             return cResult(functions.createGraphicsPipeline(
                 device,
                 vertex_ir_size,
@@ -867,7 +867,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn destroyPipeline(
             pipeline: *handle_types.Pipeline,
-        ) callconv(sf.@"callconv") void {
+        ) callconv(sc.@"callconv") void {
             return functions.destroyPipeline(
                 pipeline,
             );
@@ -875,9 +875,9 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn createDepthStencilState(
             device: *handle_types.Device,
-            desc: sf.DepthStencilDesc,
+            desc: sc.DepthStencilDesc,
             depth_stencil_state: **handle_types.DepthStencilState,
-        ) callconv(sf.@"callconv") sf.Result {
+        ) callconv(sc.@"callconv") sc.Result {
             return cResult(functions.createDepthStencilState(
                 device,
                 desc,
@@ -887,7 +887,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn destroyDepthStencilState(
             depth_stencil_state: *handle_types.DepthStencilState,
-        ) callconv(sf.@"callconv") void {
+        ) callconv(sc.@"callconv") void {
             return functions.destroyDepthStencilState(
                 depth_stencil_state,
             );
@@ -901,51 +901,51 @@ pub fn map(
 ) std.StaticStringMap(*const anyopaque) {
     const c_functions = CFunctions(handle_types, functions);
     return .initComptime(@as([]const struct { []const u8, *const anyopaque }, &.{
-        .{ "sfAdapterInfo", @ptrCast(&c_functions.adapterInfo) },
-        .{ "sfCreateSurfaceWin32", @ptrCast(&c_functions.createSurfaceWin32) },
-        .{ "sfCreateSurfaceXlib", @ptrCast(&c_functions.createSurfaceXlib) },
-        .{ "sfDestroySurface", @ptrCast(&c_functions.destroySurface) },
-        .{ "sfSurfaceSupportedUsage", @ptrCast(&c_functions.surfaceSupportedUsage) },
-        .{ "sfSurfaceSupportedFormats", @ptrCast(&c_functions.surfaceSupportedFormats) },
-        .{ "sfSurfacePresentModes", @ptrCast(&c_functions.surfacePresentModes) },
-        .{ "sfHostFromDevicePointer", @ptrCast(&c_functions.hostFromDevicePointer) },
-        .{ "sfAlloc", @ptrCast(&c_functions.alloc) },
-        .{ "sfFree", @ptrCast(&c_functions.free) },
-        .{ "sfDescriptorSizeAndHeapAlign", @ptrCast(&c_functions.descriptorSizeAndHeapAlign) },
-        .{ "sfStoreDescriptor", @ptrCast(&c_functions.storeDescriptor) },
-        .{ "sfGetQueue", @ptrCast(&c_functions.getQueue) },
-        .{ "sfStartCommandRecording", @ptrCast(&c_functions.startCommandRecording) },
-        .{ "sfSubmit", @ptrCast(&c_functions.submit) },
-        .{ "sfSubmitAndSignal", @ptrCast(&c_functions.submitAndSignal) },
-        .{ "sfCreateSemaphore", @ptrCast(&c_functions.createSemaphore) },
-        .{ "sfDestroySemaphore", @ptrCast(&c_functions.destroySemaphore) },
-        .{ "sfWaitSemaphore", @ptrCast(&c_functions.waitSemaphore) },
-        .{ "sfCreateSwapchain", @ptrCast(&c_functions.createSwapchain) },
-        .{ "sfDestroySwapchain", @ptrCast(&c_functions.destroySwapchain) },
-        .{ "sfAcquireBackBuffer", @ptrCast(&c_functions.acquireBackBuffer) },
-        .{ "sfPresent", @ptrCast(&c_functions.present) },
-        .{ "sfSetActiveTextureHeap", @ptrCast(&c_functions.setActiveTextureHeap) },
-        .{ "sfSetDepthStencilState", @ptrCast(&c_functions.setDepthStencilState) },
-        .{ "sfSetPipeline", @ptrCast(&c_functions.setPipeline) },
-        .{ "sfDispatch", @ptrCast(&c_functions.dispatch) },
-        .{ "sfBarrier", @ptrCast(&c_functions.barrier) },
-        .{ "sfCopyTextureToBuffer", @ptrCast(&c_functions.copyTextureToBuffer) },
-        .{ "sfCopyBufferToTexture", @ptrCast(&c_functions.copyBufferToTexture) },
-        .{ "sfBeginRenderPass", @ptrCast(&c_functions.beginRenderPass) },
-        .{ "sfEndRenderPass", @ptrCast(&c_functions.endRenderPass) },
-        .{ "sfDraw", @ptrCast(&c_functions.draw) },
-        .{ "sfDrawIndexed", @ptrCast(&c_functions.drawIndexed) },
-        .{ "sfDrawIndexedInstanced", @ptrCast(&c_functions.drawIndexedInstanced) },
-        .{ "sfDrawIndexedInstancedIndirect", @ptrCast(&c_functions.drawIndexedInstancedIndirect) },
-        .{ "sfTextureSizeAlign", @ptrCast(&c_functions.textureSizeAlign) },
-        .{ "sfCreateTexture", @ptrCast(&c_functions.createTexture) },
-        .{ "sfDestroyTexture", @ptrCast(&c_functions.destroyTexture) },
-        .{ "sfTextureStorageDescriptor", @ptrCast(&c_functions.textureStorageDescriptor) },
-        .{ "sfTextureViewDescriptor", @ptrCast(&c_functions.textureViewDescriptor) },
-        .{ "sfCreateComputePipeline", @ptrCast(&c_functions.createComputePipeline) },
-        .{ "sfCreateGraphicsPipeline", @ptrCast(&c_functions.createGraphicsPipeline) },
-        .{ "sfDestroyPipeline", @ptrCast(&c_functions.destroyPipeline) },
-        .{ "sfCreateDepthStencilState", @ptrCast(&c_functions.createDepthStencilState) },
-        .{ "sfDestroyDepthStencilState", @ptrCast(&c_functions.destroyDepthStencilState) },
+        .{ "scAdapterInfo", @ptrCast(&c_functions.adapterInfo) },
+        .{ "scCreateSurfaceWin32", @ptrCast(&c_functions.createSurfaceWin32) },
+        .{ "scCreateSurfaceXlib", @ptrCast(&c_functions.createSurfaceXlib) },
+        .{ "scDestroySurface", @ptrCast(&c_functions.destroySurface) },
+        .{ "scSurfaceSupportedUsage", @ptrCast(&c_functions.surfaceSupportedUsage) },
+        .{ "scSurfaceSupportedFormats", @ptrCast(&c_functions.surfaceSupportedFormats) },
+        .{ "scSurfacePresentModes", @ptrCast(&c_functions.surfacePresentModes) },
+        .{ "scHostFromDevicePointer", @ptrCast(&c_functions.hostFromDevicePointer) },
+        .{ "scAlloc", @ptrCast(&c_functions.alloc) },
+        .{ "scFree", @ptrCast(&c_functions.free) },
+        .{ "scDescriptorSizeAndHeapAlign", @ptrCast(&c_functions.descriptorSizeAndHeapAlign) },
+        .{ "scStoreDescriptor", @ptrCast(&c_functions.storeDescriptor) },
+        .{ "scGetQueue", @ptrCast(&c_functions.getQueue) },
+        .{ "scStartCommandRecording", @ptrCast(&c_functions.startCommandRecording) },
+        .{ "scSubmit", @ptrCast(&c_functions.submit) },
+        .{ "scSubmitAndSignal", @ptrCast(&c_functions.submitAndSignal) },
+        .{ "scCreateSemaphore", @ptrCast(&c_functions.createSemaphore) },
+        .{ "scDestroySemaphore", @ptrCast(&c_functions.destroySemaphore) },
+        .{ "scWaitSemaphore", @ptrCast(&c_functions.waitSemaphore) },
+        .{ "scCreateSwapchain", @ptrCast(&c_functions.createSwapchain) },
+        .{ "scDestroySwapchain", @ptrCast(&c_functions.destroySwapchain) },
+        .{ "scAcquireBackBuffer", @ptrCast(&c_functions.acquireBackBuffer) },
+        .{ "scPresent", @ptrCast(&c_functions.present) },
+        .{ "scSetActiveTextureHeap", @ptrCast(&c_functions.setActiveTextureHeap) },
+        .{ "scSetDepthStencilState", @ptrCast(&c_functions.setDepthStencilState) },
+        .{ "scSetPipeline", @ptrCast(&c_functions.setPipeline) },
+        .{ "scDispatch", @ptrCast(&c_functions.dispatch) },
+        .{ "scBarrier", @ptrCast(&c_functions.barrier) },
+        .{ "scCopyTextureToBuffer", @ptrCast(&c_functions.copyTextureToBuffer) },
+        .{ "scCopyBufferToTexture", @ptrCast(&c_functions.copyBufferToTexture) },
+        .{ "scBeginRenderPass", @ptrCast(&c_functions.beginRenderPass) },
+        .{ "scEndRenderPass", @ptrCast(&c_functions.endRenderPass) },
+        .{ "scDraw", @ptrCast(&c_functions.draw) },
+        .{ "scDrawIndexed", @ptrCast(&c_functions.drawIndexed) },
+        .{ "scDrawIndexedInstanced", @ptrCast(&c_functions.drawIndexedInstanced) },
+        .{ "scDrawIndexedInstancedIndirect", @ptrCast(&c_functions.drawIndexedInstancedIndirect) },
+        .{ "scTextureSizeAlign", @ptrCast(&c_functions.textureSizeAlign) },
+        .{ "scCreateTexture", @ptrCast(&c_functions.createTexture) },
+        .{ "scDestroyTexture", @ptrCast(&c_functions.destroyTexture) },
+        .{ "scTextureStorageDescriptor", @ptrCast(&c_functions.textureStorageDescriptor) },
+        .{ "scTextureViewDescriptor", @ptrCast(&c_functions.textureViewDescriptor) },
+        .{ "scCreateComputePipeline", @ptrCast(&c_functions.createComputePipeline) },
+        .{ "scCreateGraphicsPipeline", @ptrCast(&c_functions.createGraphicsPipeline) },
+        .{ "scDestroyPipeline", @ptrCast(&c_functions.destroyPipeline) },
+        .{ "scCreateDepthStencilState", @ptrCast(&c_functions.createDepthStencilState) },
+        .{ "scDestroyDepthStencilState", @ptrCast(&c_functions.destroyDepthStencilState) },
     }));
 }

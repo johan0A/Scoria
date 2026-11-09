@@ -1,10 +1,10 @@
 const std = @import("std");
-const sf = @import("sf_minimal.zig");
+const sc = @import("sc_minimal.zig");
 const SamplerDesc = @import("sampler_desc.zig").SamplerDesc;
 const vk = @import("vulkan");
 
-pub const to_sf = struct {
-    pub fn format(fmt: vk.Format) ?sf.Format {
+pub const to_sc = struct {
+    pub fn format(fmt: vk.Format) ?sc.Format {
         return switch (fmt) {
             .undefined => .none,
             .r8_unorm => .r8_unorm,
@@ -106,7 +106,7 @@ pub const to_sf = struct {
         };
     }
 
-    pub fn usageFlags(flags: vk.ImageUsageFlags) sf.TextureUsage {
+    pub fn usageFlags(flags: vk.ImageUsageFlags) sc.TextureUsage {
         return .{
             .sampled = flags.sampled,
             .storage = flags.storage,
@@ -115,7 +115,7 @@ pub const to_sf = struct {
         };
     }
 
-    pub fn presentMode(mode: vk.PresentModeKHR) ?sf.PresentMode {
+    pub fn presentMode(mode: vk.PresentModeKHR) ?sc.PresentMode {
         return switch (mode) {
             .immediate_khr => .immediate,
             .mailbox_khr => .mailbox,
@@ -125,16 +125,16 @@ pub const to_sf = struct {
         };
     }
 
-    pub fn adapterKind(device_type: vk.PhysicalDeviceType) sf.AdapterKind {
+    pub fn adapterKind(device_type: vk.PhysicalDeviceType) sc.AdapterKind {
         return switch (device_type) {
-            inline else => |t| @field(sf.AdapterKind, @tagName(t)),
+            inline else => |t| @field(sc.AdapterKind, @tagName(t)),
             _ => .other,
         };
     }
 };
 
 pub const to_vk = struct {
-    pub fn format(fmt: sf.Format) vk.Format { // TODO: what usefull formats are we missing?
+    pub fn format(fmt: sc.Format) vk.Format { // TODO: what usefull formats are we missing?
         return switch (fmt) {
             .none => .undefined,
             .r8_unorm => .r8_unorm,
@@ -241,7 +241,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn aspectsForFormat(fmt: sf.Format) vk.ImageAspectFlags {
+    pub fn aspectsForFormat(fmt: sc.Format) vk.ImageAspectFlags {
         return switch (fmt) {
             .stencil8 => .{ .stencil = true },
             .depth16_unorm, .depth24_plus, .depth32_float => .{ .depth = true },
@@ -250,13 +250,13 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn singleAspectForFormat(fmt: sf.Format) vk.ImageAspectFlags {
+    pub fn singleAspectForFormat(fmt: sc.Format) vk.ImageAspectFlags {
         var aspect_mask = aspectsForFormat(fmt);
         if (aspect_mask.depth) aspect_mask.stencil = false;
         return aspect_mask;
     }
 
-    pub fn topology(topo: sf.Topology) vk.PrimitiveTopology {
+    pub fn topology(topo: sc.Topology) vk.PrimitiveTopology {
         return switch (topo) {
             .triangle_list => .triangle_list,
             .triangle_strip => .triangle_strip,
@@ -264,7 +264,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn presentMode(mode: sf.PresentMode) vk.PresentModeKHR {
+    pub fn presentMode(mode: sc.PresentMode) vk.PresentModeKHR {
         return switch (mode) {
             .immediate => .immediate_khr,
             .mailbox => .mailbox_khr,
@@ -273,7 +273,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn pipelineStage(stage: sf.Stage) vk.PipelineStageFlags2 {
+    pub fn pipelineStage(stage: sc.Stage) vk.PipelineStageFlags2 {
         var out: vk.PipelineStageFlags2 = .{};
         if (stage.transfer) out.all_transfer = true;
         if (stage.compute) out.compute_shader = true;
@@ -295,7 +295,7 @@ pub const to_vk = struct {
         return out;
     }
 
-    pub fn textureDimension(tex: sf.TextureDimension) vk.ImageType {
+    pub fn textureDimension(tex: sc.TextureDimension) vk.ImageType {
         return switch (tex) {
             .@"1d" => .@"1d",
             .@"2d" => .@"2d",
@@ -303,7 +303,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn usageFlags(flags: sf.TextureUsage) vk.ImageUsageFlags {
+    pub fn usageFlags(flags: sc.TextureUsage) vk.ImageUsageFlags {
         return .{
             .transfer_src = true,
             .transfer_dst = true,
@@ -314,7 +314,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn viewType(tex: sf.TextureDimension, layer_count: u32) vk.ImageViewType {
+    pub fn viewType(tex: sc.TextureDimension, layer_count: u32) vk.ImageViewType {
         return switch (tex) {
             .@"1d" => if (layer_count > 1) .@"1d_array" else .@"1d",
             .@"2d" => if (layer_count > 1) .@"2d_array" else .@"2d",
@@ -322,11 +322,11 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn extent3D(extent: sf.Extent3D) vk.Extent3D {
+    pub fn extent3D(extent: sc.Extent3D) vk.Extent3D {
         return .{ .width = extent.width, .height = extent.height, .depth = extent.depth };
     }
 
-    pub fn imageCreateInfo(desc: sf.TextureDesc) vk.ImageCreateInfo {
+    pub fn imageCreateInfo(desc: sc.TextureDesc) vk.ImageCreateInfo {
         return .{
             .image_type = textureDimension(desc.type),
             .format = format(desc.format),
@@ -341,7 +341,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn bufferUsage(memory: sf.MemoryKind) vk.BufferUsageFlags {
+    pub fn bufferUsage(memory: sc.MemoryKind) vk.BufferUsageFlags {
         return switch (memory) {
             .upload => .{
                 .storage_buffer = true,
@@ -367,14 +367,14 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn indexType(index_type: sf.IndexType) vk.IndexType {
+    pub fn indexType(index_type: sc.IndexType) vk.IndexType {
         return switch (index_type) {
             .uint16 => .uint16,
             .uint32 => .uint32,
         };
     }
 
-    pub fn blendFactor(factor: sf.BlendFactor) vk.BlendFactor {
+    pub fn blendFactor(factor: sc.BlendFactor) vk.BlendFactor {
         return switch (factor) {
             .zero => .zero,
             .one => .one,
@@ -384,7 +384,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn blendOp(op: sf.BlendOp) vk.BlendOp {
+    pub fn blendOp(op: sc.BlendOp) vk.BlendOp {
         return switch (op) {
             .add => .add,
             .subtract => .subtract,
@@ -394,9 +394,9 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn colorBlendAttachment(blend_state: ?*const sf.BlendDesc, write_mask: sf.ColorWriteMask) vk.PipelineColorBlendAttachmentState {
+    pub fn colorBlendAttachment(blend_state: ?*const sc.BlendDesc, write_mask: sc.ColorWriteMask) vk.PipelineColorBlendAttachmentState {
         // the default blend state is equivalent to disabled blending
-        const blend: sf.BlendDesc = if (blend_state) |b| b.* else .{};
+        const blend: sc.BlendDesc = if (blend_state) |b| b.* else .{};
         return .{
             .blend_enable = .fromBool(blend_state != null),
             .src_color_blend_factor = blendFactor(blend.src_color_factor),
@@ -409,7 +409,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn attachmentLoadOp(op: sf.LoadOp) vk.AttachmentLoadOp {
+    pub fn attachmentLoadOp(op: sc.LoadOp) vk.AttachmentLoadOp {
         return switch (op) {
             .dont_care => .dont_care,
             .load => .load,
@@ -417,7 +417,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn attachmentStoreOp(op: sf.StoreOp) vk.AttachmentStoreOp {
+    pub fn attachmentStoreOp(op: sc.StoreOp) vk.AttachmentStoreOp {
         return switch (op) {
             .dont_care => .dont_care,
             .store => .store,
@@ -434,7 +434,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn writeMask(mask: sf.ColorWriteMask) vk.ColorComponentFlags {
+    pub fn writeMask(mask: sc.ColorWriteMask) vk.ColorComponentFlags {
         return .{
             .r = mask.r,
             .g = mask.g,
@@ -443,7 +443,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn cullMode(c: sf.Cull) vk.CullModeFlags {
+    pub fn cullMode(c: sc.Cull) vk.CullModeFlags {
         return switch (c) {
             .ccw => .{ .front = true },
             .cw => .{ .back = true },
@@ -467,7 +467,7 @@ pub const to_vk = struct {
             .max_anisotropy = anisotropy(s.max_anisotropy),
             .compare_enable = if (s.compare.enable) .true else .false,
             .compare_op = switch (s.compare.op) {
-                inline else => |op| compareOp(@field(sf.CompareOp, @tagName(op))),
+                inline else => |op| compareOp(@field(sc.CompareOp, @tagName(op))),
             },
             .min_lod = if (mips_disabled) 0 else s.lod_min.toF32(),
             .max_lod = if (mips_disabled) 0 else s.lod_max.toF32(),
@@ -521,7 +521,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn stencilOp(op: sf.StencilOp) vk.StencilOp {
+    pub fn stencilOp(op: sc.StencilOp) vk.StencilOp {
         return switch (op) {
             .keep => .keep,
             .zero => .zero,
@@ -534,7 +534,7 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn compareOp(op: sf.CompareOp) vk.CompareOp {
+    pub fn compareOp(op: sc.CompareOp) vk.CompareOp {
         return switch (op) {
             .never => .never,
             .less => .less,

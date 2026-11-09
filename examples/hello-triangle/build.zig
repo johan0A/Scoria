@@ -1,5 +1,5 @@
 const std = @import("std");
-const sulfur = @import("sulfur");
+const scoria = @import("scoria");
 const zon = @import("build.zig.zon");
 
 pub fn build(b: *std.Build) void {
@@ -12,17 +12,17 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    const sulfur_dep = b.dependency("sulfur", .{
+    const scoria_dep = b.dependency("scoria", .{
         .target = target,
         .optimize = optimize,
     });
-    root_module.addImport("sulfur", sulfur_dep.module("sulfur"));
+    root_module.addImport("scoria", scoria_dep.module("scoria"));
 
-    const frag = sulfur.compileSlangShader(sulfur_dep, b, b.path("src/shaders/frag.slang"), "main", &.{.{}});
-    root_module.addAnonymousImport("frag.sfir", .{ .root_source_file = frag });
+    const frag = scoria.compileSlangShader(scoria_dep, b, b.path("src/shaders/frag.slang"), "main", &.{.{}});
+    root_module.addAnonymousImport("frag.scir", .{ .root_source_file = frag });
 
-    const vert = sulfur.compileSlangShader(sulfur_dep, b, b.path("src/shaders/vert.slang"), "main", &.{});
-    root_module.addAnonymousImport("vert.sfir", .{ .root_source_file = vert });
+    const vert = scoria.compileSlangShader(scoria_dep, b, b.path("src/shaders/vert.slang"), "main", &.{});
+    root_module.addAnonymousImport("vert.scir", .{ .root_source_file = vert });
 
     {
         const sdl_dep = b.dependency("sdl", .{

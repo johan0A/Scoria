@@ -1,5 +1,5 @@
 const std = @import("std");
-const sf = @import("sf.zig");
+const sc = @import("sc.zig");
 const Alignment = std.mem.Alignment;
 
 pub const PointerAttributes = struct {
@@ -23,7 +23,7 @@ pub fn Ptr(
     attributes: PointerAttributes,
 ) type {
     return extern struct {
-        addr: sf.DeviceAddress,
+        addr: sc.DeviceAddress,
 
         pub const empty: @This() = .{ .addr = if (alignment) |a| a.toByteUnits() else 1 };
 
@@ -290,17 +290,17 @@ pub const DeviceAllocator = struct {
     vtable: *const VTable,
 
     pub const VTable = struct {
-        alloc: *const fn (*anyopaque, len: usize, alignment: Alignment, memory_type: sf.MemoryKind, ret_addr: usize) Error!sf.HostDeviceAddress,
-        free: *const fn (*anyopaque, memory: ByteSlice, alignment: Alignment, memory_type: sf.MemoryKind, ret_addr: usize) void,
+        alloc: *const fn (*anyopaque, len: usize, alignment: Alignment, memory_type: sc.MemoryKind, ret_addr: usize) Error!sc.HostDeviceAddress,
+        free: *const fn (*anyopaque, memory: ByteSlice, alignment: Alignment, memory_type: sc.MemoryKind, ret_addr: usize) void,
     };
 
     pub fn noAlloc(
         self: *anyopaque,
         len: usize,
         alignment: Alignment,
-        memory_type: sf.MemoryKind,
+        memory_type: sc.MemoryKind,
         ret_addr: usize,
-    ) Error!sf.HostDeviceAddress {
+    ) Error!sc.HostDeviceAddress {
         _ = self;
         _ = len;
         _ = alignment;
@@ -313,7 +313,7 @@ pub const DeviceAllocator = struct {
         self: *anyopaque,
         memory: ByteSlice,
         alignment: Alignment,
-        memory_type: sf.MemoryKind,
+        memory_type: sc.MemoryKind,
         ret_addr: usize,
     ) void {
         _ = self;
@@ -323,15 +323,15 @@ pub const DeviceAllocator = struct {
         _ = ret_addr;
     }
 
-    pub inline fn rawAlloc(a: DeviceAllocator, len: usize, alignment: Alignment, memory_type: sf.MemoryKind, ret_addr: usize) Error!sf.HostDeviceAddress {
+    pub inline fn rawAlloc(a: DeviceAllocator, len: usize, alignment: Alignment, memory_type: sc.MemoryKind, ret_addr: usize) Error!sc.HostDeviceAddress {
         return a.vtable.alloc(a.ptr, len, alignment, memory_type, ret_addr);
     }
 
-    pub inline fn rawFree(a: DeviceAllocator, memory: ByteSlice, alignment: Alignment, memory_type: sf.MemoryKind, ret_addr: usize) void {
+    pub inline fn rawFree(a: DeviceAllocator, memory: ByteSlice, alignment: Alignment, memory_type: sc.MemoryKind, ret_addr: usize) void {
         return a.vtable.free(a.ptr, memory, alignment, memory_type, ret_addr);
     }
 
-    pub fn create(a: DeviceAllocator, comptime T: type, memory: sf.MemoryKind) Error!AllocationOne(T, null) {
+    pub fn create(a: DeviceAllocator, comptime T: type, memory: sc.MemoryKind) Error!AllocationOne(T, null) {
         if (@sizeOf(T) == 0) {
             return .{
                 .device = .fromInt((Ptr(.one, T, .{}).alignment orelse .@"1").backward(std.math.maxInt(u64))),
@@ -345,7 +345,7 @@ pub const DeviceAllocator = struct {
         };
     }
 
-    pub fn destroy(self: DeviceAllocator, allocation: anytype, memory: sf.MemoryKind) void {
+    pub fn destroy(self: DeviceAllocator, allocation: anytype, memory: sc.MemoryKind) void {
         const info = @TypeOf(allocation).info;
         if (info.size != .one) @compileError("owned.device must be a single item device pointer");
         const T = info.Element;
@@ -358,7 +358,7 @@ pub const DeviceAllocator = struct {
         );
     }
 
-    pub fn alloc(self: DeviceAllocator, comptime T: type, n: usize, memory: sf.MemoryKind) Error!Allocation(T, null) {
+    pub fn alloc(self: DeviceAllocator, comptime T: type, n: usize, memory: sc.MemoryKind) Error!Allocation(T, null) {
         return self.alignedAllocWithRetAddr(T, null, n, memory, @returnAddress());
     }
 
@@ -367,7 +367,7 @@ pub const DeviceAllocator = struct {
         comptime T: type,
         comptime alignment: ?Alignment,
         n: usize,
-        memory: sf.MemoryKind,
+        memory: sc.MemoryKind,
     ) Error!Allocation(T, alignment) {
         return self.alignedAllocWithRetAddr(T, alignment, n, memory, @returnAddress());
     }
@@ -377,7 +377,7 @@ pub const DeviceAllocator = struct {
         comptime T: type,
         alignment: Alignment,
         n: usize,
-        memory: sf.MemoryKind,
+        memory: sc.MemoryKind,
     ) Error!Allocation(T, null) {
         return self.runtimeAlignedAllocWithRetAddr(T, alignment, n, memory, @returnAddress());
     }
@@ -387,7 +387,7 @@ pub const DeviceAllocator = struct {
         comptime T: type,
         comptime alignment: ?Alignment,
         n: usize,
-        memory: sf.MemoryKind,
+        memory: sc.MemoryKind,
         return_address: usize,
     ) Error!Allocation(T, alignment) {
         const a: Alignment = alignment orelse comptime .of(T);
@@ -400,7 +400,7 @@ pub const DeviceAllocator = struct {
         comptime T: type,
         alignment: Alignment,
         n: usize,
-        memory: sf.MemoryKind,
+        memory: sc.MemoryKind,
         return_address: usize,
     ) Error!Allocation(T, null) {
         const byte_count = std.math.mul(usize, @sizeOf(T), n) catch return error.OutOfDeviceMemory;
@@ -417,9 +417,9 @@ pub const DeviceAllocator = struct {
         self: DeviceAllocator,
         alignment: Alignment,
         byte_count: usize,
-        memory: sf.MemoryKind,
+        memory: sc.MemoryKind,
         return_address: usize,
-    ) Error!sf.HostDeviceAddress {
+    ) Error!sc.HostDeviceAddress {
         if (byte_count == 0) return .{
             .device = .{ .addr = alignment.backward(std.math.maxInt(u64)) },
             .host = @ptrFromInt(alignment.backward(std.math.maxInt(usize))),
@@ -427,7 +427,7 @@ pub const DeviceAllocator = struct {
         return try self.rawAlloc(byte_count, alignment, memory, return_address);
     }
 
-    pub fn free(self: DeviceAllocator, allocation: anytype, memory_type: sf.MemoryKind) void {
+    pub fn free(self: DeviceAllocator, allocation: anytype, memory_type: sc.MemoryKind) void {
         const info = @TypeOf(allocation).info;
         const T = info.Element;
         const bytes = allocation.asBytes();
@@ -440,7 +440,7 @@ pub const DeviceAllocator = struct {
         );
     }
 
-    pub fn runtimeAlignedfree(self: DeviceAllocator, allocation: anytype, alignment: Alignment, memory_type: sf.MemoryKind) void {
+    pub fn runtimeAlignedfree(self: DeviceAllocator, allocation: anytype, alignment: Alignment, memory_type: sc.MemoryKind) void {
         const bytes = allocation.asBytes();
         if (bytes.len == 0) return;
         self.rawFree(
@@ -463,7 +463,7 @@ pub const DeviceAllocator = struct {
         self: *anyopaque,
         memory: ByteSlice,
         alignment: Alignment,
-        memory_type: sf.MemoryKind,
+        memory_type: sc.MemoryKind,
         ret_addr: usize,
     ) void {
         _ = self;
@@ -475,7 +475,7 @@ pub const DeviceAllocator = struct {
     }
 };
 
-pub fn rawDeviceAllocator(d: *sf.Device) DeviceAllocator {
+pub fn rawDeviceAllocator(d: *sc.Device) DeviceAllocator {
     return .{
         .ptr = @ptrCast(d),
         .vtable = &.{
@@ -490,11 +490,11 @@ pub const raw_device_allocator = struct {
         self: *anyopaque,
         len: usize,
         alignment: std.mem.Alignment,
-        memory_type: sf.MemoryKind,
+        memory_type: sc.MemoryKind,
         ret_addr: usize,
-    ) DeviceAllocator.Error!sf.HostDeviceAddress {
+    ) DeviceAllocator.Error!sc.HostDeviceAddress {
         _ = ret_addr;
-        const device: *sf.Device = @ptrCast(@alignCast(self));
+        const device: *sc.Device = @ptrCast(@alignCast(self));
         return try device.alloc(len, alignment.toByteUnits(), memory_type);
     }
 
@@ -502,19 +502,19 @@ pub const raw_device_allocator = struct {
         self: *anyopaque,
         memory: Slice(u8, .{}),
         alignment: std.mem.Alignment,
-        memory_type: sf.MemoryKind,
+        memory_type: sc.MemoryKind,
         ret_addr: usize,
     ) void {
         _ = alignment;
         _ = memory_type;
         _ = ret_addr;
-        const device: *sf.Device = @ptrCast(@alignCast(self));
+        const device: *sc.Device = @ptrCast(@alignCast(self));
         return device.free(.fromInt(memory.ptr.addr));
     }
 };
 
 pub const FixedBufferAllocator = struct {
-    regions: std.EnumArray(sf.MemoryKind, Region),
+    regions: std.EnumArray(sc.MemoryKind, Region),
 
     const Region = struct {
         buffer: Allocation(u8, null),
@@ -538,7 +538,7 @@ pub const FixedBufferAllocator = struct {
             r: *Region,
             len: usize,
             alignment: std.mem.Alignment,
-        ) DeviceAllocator.Error!sf.HostDeviceAddress {
+        ) DeviceAllocator.Error!sc.HostDeviceAddress {
             if (r.buffer.len == 0) return error.OutOfMemory;
 
             const addr = alignment.forward(r.base() + r.end_index);
@@ -573,9 +573,9 @@ pub const FixedBufferAllocator = struct {
         }
     };
 
-    pub fn init(buffers: std.EnumArray(sf.MemoryKind, Allocation(u8, null))) FixedBufferAllocator {
+    pub fn init(buffers: std.EnumArray(sc.MemoryKind, Allocation(u8, null))) FixedBufferAllocator {
         var fba: FixedBufferAllocator = .{ .regions = .initFill(.empty) };
-        for (std.enums.values(sf.MemoryKind)) |m| {
+        for (std.enums.values(sc.MemoryKind)) |m| {
             fba.regions.getPtr(m).* = .{ .buffer = buffers.get(m), .end_index = 0 };
         }
         return fba;
@@ -583,11 +583,11 @@ pub const FixedBufferAllocator = struct {
 
     pub fn initAlloc(
         gpa: DeviceAllocator,
-        sizes: std.EnumArray(sf.MemoryKind, usize),
+        sizes: std.EnumArray(sc.MemoryKind, usize),
     ) DeviceAllocator.Error!FixedBufferAllocator {
         var fba: FixedBufferAllocator = .{ .regions = .initFill(.empty) };
         errdefer fba.deinit(gpa);
-        for (std.enums.values(sf.MemoryKind)) |m| {
+        for (std.enums.values(sc.MemoryKind)) |m| {
             fba.regions.getPtr(m).* = .{
                 .buffer = try gpa.alloc(u8, sizes.get(m), m),
                 .end_index = 0,
@@ -597,7 +597,7 @@ pub const FixedBufferAllocator = struct {
     }
 
     pub fn deinit(fba: *FixedBufferAllocator, gpa: DeviceAllocator) void {
-        for (std.enums.values(sf.MemoryKind)) |m| {
+        for (std.enums.values(sc.MemoryKind)) |m| {
             const buffer = &fba.regions.getPtr(m).buffer;
             if (buffer.len > 0) gpa.free(buffer.device(), m);
             buffer.* = .empty;
@@ -622,9 +622,9 @@ pub const FixedBufferAllocator = struct {
         self: *anyopaque,
         len: usize,
         alignment: std.mem.Alignment,
-        memory_type: sf.MemoryKind,
+        memory_type: sc.MemoryKind,
         ret_addr: usize,
-    ) DeviceAllocator.Error!sf.HostDeviceAddress {
+    ) DeviceAllocator.Error!sc.HostDeviceAddress {
         _ = ret_addr;
         const fba: *FixedBufferAllocator = @ptrCast(@alignCast(self));
         return fba.regions.getPtr(memory_type).alloc(len, alignment);
@@ -634,7 +634,7 @@ pub const FixedBufferAllocator = struct {
         self: *anyopaque,
         memory: Slice(u8, .{}),
         alignment: std.mem.Alignment,
-        memory_type: sf.MemoryKind,
+        memory_type: sc.MemoryKind,
         ret_addr: usize,
     ) void {
         _ = alignment;

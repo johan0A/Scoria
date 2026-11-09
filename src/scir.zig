@@ -1,7 +1,7 @@
 const std = @import("std");
 const SamplerDesc = @import("sampler_desc.zig").SamplerDesc;
 
-pub const magic: [4]u8 = "sfir".*;
+pub const magic: [4]u8 = "scir".*;
 pub const version: Version = .{ .major = 0, .minor = 2 };
 pub const bytecode_size_max = 1 << 30;
 pub const sampler_count_max = (1 << 30) / sampler_size;
@@ -21,8 +21,8 @@ pub const Bytecode = enum(u32) {
 };
 
 pub const ParseError = error{
-    MalformedSfir,
-    UnsupportedSfirVersion,
+    MalformedScir,
+    UnsupportedScirVersion,
 };
 
 pub const Shader = struct {
@@ -44,8 +44,8 @@ pub const Shader = struct {
         return .{ .shader = shader };
     }
 
-    pub fn spirvAlloc(shader: Shader, gpa: std.mem.Allocator) error{ UnsupportedSfirBytecode, OutOfMemory }![]u32 {
-        if (shader.bytecode_kind != .spirv) return error.UnsupportedSfirBytecode;
+    pub fn spirvAlloc(shader: Shader, gpa: std.mem.Allocator) error{ UnsupportedScirBytecode, OutOfMemory }![]u32 {
+        if (shader.bytecode_kind != .spirv) return error.UnsupportedScirBytecode;
         const words = try gpa.alloc(u32, shader.bytecode.len / 4);
         @memcpy(std.mem.sliceAsBytes(words), shader.bytecode);
         return words;
@@ -117,23 +117,23 @@ comptime {
 }
 
 pub fn parse(bytes: []const u8) ParseError!Shader {
-    if (bytes.len < header_size or !std.mem.eql(u8, bytes[0..4], &magic)) return error.MalformedSfir;
+    if (bytes.len < header_size or !std.mem.eql(u8, bytes[0..4], &magic)) return error.MalformedScir;
 
     const file_version: Version = .{
         .major = std.mem.readInt(u16, bytes[4..6], .little),
         .minor = std.mem.readInt(u16, bytes[6..8], .little),
     };
     if (file_version.major != version.major or
-        (version.major == 0 and file_version.minor != version.minor)) return error.UnsupportedSfirVersion;
+        (version.major == 0 and file_version.minor != version.minor)) return error.UnsupportedScirVersion;
 
     const bytecode_kind: Bytecode = @fromBackingInt(@intCast(std.mem.readInt(u32, bytes[8..12], .little)));
     const bytecode_size = std.mem.readInt(u32, bytes[12..16], .little);
     const sampler_count = std.mem.readInt(u32, bytes[16..20], .little);
-    if (bytecode_size > bytecode_size_max or sampler_count > sampler_count_max) return error.MalformedSfir;
+    if (bytecode_size > bytecode_size_max or sampler_count > sampler_count_max) return error.MalformedScir;
 
     const samplers_offset = header_size + @as(usize, bytecode_size);
     const end = samplers_offset + @as(usize, sampler_count) * sampler_size;
-    if (bytes.len < end) return error.MalformedSfir;
+    if (bytes.len < end) return error.MalformedScir;
 
     const bytecode = bytes[header_size..samplers_offset];
     try validateBytecode(bytecode_kind, bytecode);
@@ -146,15 +146,15 @@ pub fn parse(bytes: []const u8) ParseError!Shader {
     };
 }
 
-pub fn validateBytecode(bytecode_kind: Bytecode, bytecode: []const u8) error{MalformedSfir}!void {
+pub fn validateBytecode(bytecode_kind: Bytecode, bytecode: []const u8) error{MalformedScir}!void {
     switch (bytecode_kind) {
         .spirv => if (bytecode.len < 4 or bytecode.len % 4 != 0 or
-            std.mem.readInt(u32, bytecode[0..4], .little) != spirv_magic) return error.MalformedSfir,
+            std.mem.readInt(u32, bytecode[0..4], .little) != spirv_magic) return error.MalformedScir,
         _ => {},
     }
 }
 
-/// usage: sfir <output> <bytecode kind> <bytecode> [sampler as hex]...
+/// usage: scir <output> <bytecode kind> <bytecode> [sampler as hex]...
 pub fn main(init: std.process.Init) !void {
     const arena = init.arena.allocator();
     const args = try init.minimal.args.toSlice(arena);

@@ -1,5 +1,5 @@
 .{
-    .name = .sulfur,
+    .name = .scoria,
     .version = "0.0.1",
     .dependencies = .{
         .vulkan = .{
@@ -13,5 +13,5 @@
     },
     .minimum_zig_version = "0.17.0",
     .paths = .{""},
-    .fingerprint = 0xdcafd3f9369050be,
+    .fingerprint = 0x585c091a369050be,
 }

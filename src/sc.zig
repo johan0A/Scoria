@@ -472,9 +472,9 @@ pub const Device = opaque {
     ) error{
         OutOfMemory,
         OutOfDeviceMemory,
-        MalformedSfir,
-        UnsupportedSfirVersion,
-        UnsupportedSfirBytecode,
+        MalformedScir,
+        UnsupportedScirVersion,
+        UnsupportedScirBytecode,
         Unknown,
     }!*Pipeline {
         const f: *const fn (
@@ -494,9 +494,9 @@ pub const Device = opaque {
             .ok => {},
             .out_of_memory => return error.OutOfMemory,
             .out_of_device_memory => return error.OutOfDeviceMemory,
-            .malformed_sfir => return error.MalformedSfir,
-            .unsupported_sfir_version => return error.UnsupportedSfirVersion,
-            .unsupported_sfir_bytecode => return error.UnsupportedSfirBytecode,
+            .malformed_scir => return error.MalformedScir,
+            .unsupported_scir_version => return error.UnsupportedScirVersion,
+            .unsupported_scir_bytecode => return error.UnsupportedScirBytecode,
             .unknown => return error.Unknown,
             else => unreachable,
         }
@@ -511,9 +511,9 @@ pub const Device = opaque {
     ) error{
         OutOfMemory,
         OutOfDeviceMemory,
-        MalformedSfir,
-        UnsupportedSfirVersion,
-        UnsupportedSfirBytecode,
+        MalformedScir,
+        UnsupportedScirVersion,
+        UnsupportedScirBytecode,
         Unknown,
     }!*Pipeline {
         const f: *const fn (
@@ -539,9 +539,9 @@ pub const Device = opaque {
             .ok => {},
             .out_of_memory => return error.OutOfMemory,
             .out_of_device_memory => return error.OutOfDeviceMemory,
-            .malformed_sfir => return error.MalformedSfir,
-            .unsupported_sfir_version => return error.UnsupportedSfirVersion,
-            .unsupported_sfir_bytecode => return error.UnsupportedSfirBytecode,
+            .malformed_scir => return error.MalformedScir,
+            .unsupported_scir_version => return error.UnsupportedScirVersion,
+            .unsupported_scir_bytecode => return error.UnsupportedScirBytecode,
             .unknown => return error.Unknown,
             else => unreachable,
         }
@@ -1238,9 +1238,9 @@ pub const Pipeline = opaque {
     ) error{
         OutOfMemory,
         OutOfDeviceMemory,
-        MalformedSfir,
-        UnsupportedSfirVersion,
-        UnsupportedSfirBytecode,
+        MalformedScir,
+        UnsupportedScirVersion,
+        UnsupportedScirBytecode,
         Unknown,
     }!*Pipeline {
         const f: *const fn (
@@ -1260,9 +1260,9 @@ pub const Pipeline = opaque {
             .ok => {},
             .out_of_memory => return error.OutOfMemory,
             .out_of_device_memory => return error.OutOfDeviceMemory,
-            .malformed_sfir => return error.MalformedSfir,
-            .unsupported_sfir_version => return error.UnsupportedSfirVersion,
-            .unsupported_sfir_bytecode => return error.UnsupportedSfirBytecode,
+            .malformed_scir => return error.MalformedScir,
+            .unsupported_scir_version => return error.UnsupportedScirVersion,
+            .unsupported_scir_bytecode => return error.UnsupportedScirBytecode,
             .unknown => return error.Unknown,
             else => unreachable,
         }
@@ -1277,9 +1277,9 @@ pub const Pipeline = opaque {
     ) error{
         OutOfMemory,
         OutOfDeviceMemory,
-        MalformedSfir,
-        UnsupportedSfirVersion,
-        UnsupportedSfirBytecode,
+        MalformedScir,
+        UnsupportedScirVersion,
+        UnsupportedScirBytecode,
         Unknown,
     }!*Pipeline {
         const f: *const fn (
@@ -1305,9 +1305,9 @@ pub const Pipeline = opaque {
             .ok => {},
             .out_of_memory => return error.OutOfMemory,
             .out_of_device_memory => return error.OutOfDeviceMemory,
-            .malformed_sfir => return error.MalformedSfir,
-            .unsupported_sfir_version => return error.UnsupportedSfirVersion,
-            .unsupported_sfir_bytecode => return error.UnsupportedSfirBytecode,
+            .malformed_scir => return error.MalformedScir,
+            .unsupported_scir_version => return error.UnsupportedScirVersion,
+            .unsupported_scir_bytecode => return error.UnsupportedScirBytecode,
             .unknown => return error.Unknown,
             else => unreachable,
         }
@@ -1372,9 +1372,9 @@ pub const Result = enum(u32) {
     device_lost = 4,
     surface_lost = 5,
     no_backbuffer = 6,
-    malformed_sfir = 7,
-    unsupported_sfir_version = 8,
-    unsupported_sfir_bytecode = 9,
+    malformed_scir = 7,
+    unsupported_scir_version = 8,
+    unsupported_scir_bytecode = 9,
 };
 
 pub const MemoryKind = enum(u32) {
@@ -1910,60 +1910,60 @@ const internal = struct {
     } = .{};
 
     fn loadGlobals(getSymbol: Symbol) void {
-        create_instance = @ptrCast(getSymbol("sfCreateInstance"));
-        destroy_instance = @ptrCast(getSymbol("sfDestroyInstance"));
-        get_slot = @ptrCast(getSymbol("sfGetSlot"));
-        enumerate_adapters = @ptrCast(getSymbol("sfEnumerateAdapters"));
-        create_device = @ptrCast(getSymbol("sfCreateDevice"));
-        destroy_device = @ptrCast(getSymbol("sfDestroyDevice"));
+        create_instance = @ptrCast(getSymbol("scCreateInstance"));
+        destroy_instance = @ptrCast(getSymbol("scDestroyInstance"));
+        get_slot = @ptrCast(getSymbol("scGetSlot"));
+        enumerate_adapters = @ptrCast(getSymbol("scEnumerateAdapters"));
+        create_device = @ptrCast(getSymbol("scCreateDevice"));
+        destroy_device = @ptrCast(getSymbol("scDestroyDevice"));
     }
 
     fn loadSlots(instance: *Instance) void {
-        slots.adapter_info = get_slot.?(instance, "sfAdapterInfo");
-        slots.create_surface_win32 = get_slot.?(instance, "sfCreateSurfaceWin32");
-        slots.create_surface_xlib = get_slot.?(instance, "sfCreateSurfaceXlib");
-        slots.destroy_surface = get_slot.?(instance, "sfDestroySurface");
-        slots.surface_supported_usage = get_slot.?(instance, "sfSurfaceSupportedUsage");
-        slots.surface_supported_formats = get_slot.?(instance, "sfSurfaceSupportedFormats");
-        slots.surface_present_modes = get_slot.?(instance, "sfSurfacePresentModes");
-        slots.host_from_device_pointer = get_slot.?(instance, "sfHostFromDevicePointer");
-        slots.alloc = get_slot.?(instance, "sfAlloc");
-        slots.free = get_slot.?(instance, "sfFree");
-        slots.descriptor_size_and_heap_align = get_slot.?(instance, "sfDescriptorSizeAndHeapAlign");
-        slots.store_descriptor = get_slot.?(instance, "sfStoreDescriptor");
-        slots.get_queue = get_slot.?(instance, "sfGetQueue");
-        slots.start_command_recording = get_slot.?(instance, "sfStartCommandRecording");
-        slots.submit = get_slot.?(instance, "sfSubmit");
-        slots.submit_and_signal = get_slot.?(instance, "sfSubmitAndSignal");
-        slots.create_semaphore = get_slot.?(instance, "sfCreateSemaphore");
-        slots.destroy_semaphore = get_slot.?(instance, "sfDestroySemaphore");
-        slots.wait_semaphore = get_slot.?(instance, "sfWaitSemaphore");
-        slots.create_swapchain = get_slot.?(instance, "sfCreateSwapchain");
-        slots.destroy_swapchain = get_slot.?(instance, "sfDestroySwapchain");
-        slots.acquire_back_buffer = get_slot.?(instance, "sfAcquireBackBuffer");
-        slots.present = get_slot.?(instance, "sfPresent");
-        slots.set_active_texture_heap = get_slot.?(instance, "sfSetActiveTextureHeap");
-        slots.set_depth_stencil_state = get_slot.?(instance, "sfSetDepthStencilState");
-        slots.set_pipeline = get_slot.?(instance, "sfSetPipeline");
-        slots.dispatch = get_slot.?(instance, "sfDispatch");
-        slots.barrier = get_slot.?(instance, "sfBarrier");
-        slots.copy_texture_to_buffer = get_slot.?(instance, "sfCopyTextureToBuffer");
-        slots.copy_buffer_to_texture = get_slot.?(instance, "sfCopyBufferToTexture");
-        slots.begin_render_pass = get_slot.?(instance, "sfBeginRenderPass");
-        slots.end_render_pass = get_slot.?(instance, "sfEndRenderPass");
-        slots.draw = get_slot.?(instance, "sfDraw");
-        slots.draw_indexed = get_slot.?(instance, "sfDrawIndexed");
-        slots.draw_indexed_instanced = get_slot.?(instance, "sfDrawIndexedInstanced");
-        slots.draw_indexed_instanced_indirect = get_slot.?(instance, "sfDrawIndexedInstancedIndirect");
-        slots.texture_size_align = get_slot.?(instance, "sfTextureSizeAlign");
-        slots.create_texture = get_slot.?(instance, "sfCreateTexture");
-        slots.destroy_texture = get_slot.?(instance, "sfDestroyTexture");
-        slots.texture_storage_descriptor = get_slot.?(instance, "sfTextureStorageDescriptor");
-        slots.texture_view_descriptor = get_slot.?(instance, "sfTextureViewDescriptor");
-        slots.create_compute_pipeline = get_slot.?(instance, "sfCreateComputePipeline");
-        slots.create_graphics_pipeline = get_slot.?(instance, "sfCreateGraphicsPipeline");
-        slots.destroy_pipeline = get_slot.?(instance, "sfDestroyPipeline");
-        slots.create_depth_stencil_state = get_slot.?(instance, "sfCreateDepthStencilState");
-        slots.destroy_depth_stencil_state = get_slot.?(instance, "sfDestroyDepthStencilState");
+        slots.adapter_info = get_slot.?(instance, "scAdapterInfo");
+        slots.create_surface_win32 = get_slot.?(instance, "scCreateSurfaceWin32");
+        slots.create_surface_xlib = get_slot.?(instance, "scCreateSurfaceXlib");
+        slots.destroy_surface = get_slot.?(instance, "scDestroySurface");
+        slots.surface_supported_usage = get_slot.?(instance, "scSurfaceSupportedUsage");
+        slots.surface_supported_formats = get_slot.?(instance, "scSurfaceSupportedFormats");
+        slots.surface_present_modes = get_slot.?(instance, "scSurfacePresentModes");
+        slots.host_from_device_pointer = get_slot.?(instance, "scHostFromDevicePointer");
+        slots.alloc = get_slot.?(instance, "scAlloc");
+        slots.free = get_slot.?(instance, "scFree");
+        slots.descriptor_size_and_heap_align = get_slot.?(instance, "scDescriptorSizeAndHeapAlign");
+        slots.store_descriptor = get_slot.?(instance, "scStoreDescriptor");
+        slots.get_queue = get_slot.?(instance, "scGetQueue");
+        slots.start_command_recording = get_slot.?(instance, "scStartCommandRecording");
+        slots.submit = get_slot.?(instance, "scSubmit");
+        slots.submit_and_signal = get_slot.?(instance, "scSubmitAndSignal");
+        slots.create_semaphore = get_slot.?(instance, "scCreateSemaphore");
+        slots.destroy_semaphore = get_slot.?(instance, "scDestroySemaphore");
+        slots.wait_semaphore = get_slot.?(instance, "scWaitSemaphore");
+        slots.create_swapchain = get_slot.?(instance, "scCreateSwapchain");
+        slots.destroy_swapchain = get_slot.?(instance, "scDestroySwapchain");
+        slots.acquire_back_buffer = get_slot.?(instance, "scAcquireBackBuffer");
+        slots.present = get_slot.?(instance, "scPresent");
+        slots.set_active_texture_heap = get_slot.?(instance, "scSetActiveTextureHeap");
+        slots.set_depth_stencil_state = get_slot.?(instance, "scSetDepthStencilState");
+        slots.set_pipeline = get_slot.?(instance, "scSetPipeline");
+        slots.dispatch = get_slot.?(instance, "scDispatch");
+        slots.barrier = get_slot.?(instance, "scBarrier");
+        slots.copy_texture_to_buffer = get_slot.?(instance, "scCopyTextureToBuffer");
+        slots.copy_buffer_to_texture = get_slot.?(instance, "scCopyBufferToTexture");
+        slots.begin_render_pass = get_slot.?(instance, "scBeginRenderPass");
+        slots.end_render_pass = get_slot.?(instance, "scEndRenderPass");
+        slots.draw = get_slot.?(instance, "scDraw");
+        slots.draw_indexed = get_slot.?(instance, "scDrawIndexed");
+        slots.draw_indexed_instanced = get_slot.?(instance, "scDrawIndexedInstanced");
+        slots.draw_indexed_instanced_indirect = get_slot.?(instance, "scDrawIndexedInstancedIndirect");
+        slots.texture_size_align = get_slot.?(instance, "scTextureSizeAlign");
+        slots.create_texture = get_slot.?(instance, "scCreateTexture");
+        slots.destroy_texture = get_slot.?(instance, "scDestroyTexture");
+        slots.texture_storage_descriptor = get_slot.?(instance, "scTextureStorageDescriptor");
+        slots.texture_view_descriptor = get_slot.?(instance, "scTextureViewDescriptor");
+        slots.create_compute_pipeline = get_slot.?(instance, "scCreateComputePipeline");
+        slots.create_graphics_pipeline = get_slot.?(instance, "scCreateGraphicsPipeline");
+        slots.destroy_pipeline = get_slot.?(instance, "scDestroyPipeline");
+        slots.create_depth_stencil_state = get_slot.?(instance, "scCreateDepthStencilState");
+        slots.destroy_depth_stencil_state = get_slot.?(instance, "scDestroyDepthStencilState");
     }
 };
