@@ -36,18 +36,15 @@ fn Functions(handle_types: HandleTypes) type {
             surface: *handle_types.Surface,
         ) void,
         surfaceSupportedUsage: fn (
-            device: *handle_types.Device,
             surface: *handle_types.Surface,
         ) sf.TextureUsage,
-        surfaceFormats: fn (
-            device: *handle_types.Device,
+        surfaceSupportedFormats: fn (
             surface: *handle_types.Surface,
             formats_capacity: usize,
             formats: ?[*]sf.Format,
             format_count: *usize,
         ) void,
         surfacePresentModes: fn (
-            device: *handle_types.Device,
             surface: *handle_types.Surface,
             present_modes_capacity: usize,
             present_modes: ?[*]sf.PresentMode,
@@ -391,24 +388,20 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
         }
 
         pub fn surfaceSupportedUsage(
-            device: *handle_types.Device,
             surface: *handle_types.Surface,
         ) callconv(sf.@"callconv") sf.TextureUsage {
             return functions.surfaceSupportedUsage(
-                device,
                 surface,
             );
         }
 
-        pub fn surfaceFormats(
-            device: *handle_types.Device,
+        pub fn surfaceSupportedFormats(
             surface: *handle_types.Surface,
             formats_capacity: usize,
             formats: ?[*]sf.Format,
             format_count: *usize,
         ) callconv(sf.@"callconv") void {
-            return functions.surfaceFormats(
-                device,
+            return functions.surfaceSupportedFormats(
                 surface,
                 formats_capacity,
                 formats,
@@ -417,14 +410,12 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
         }
 
         pub fn surfacePresentModes(
-            device: *handle_types.Device,
             surface: *handle_types.Surface,
             present_modes_capacity: usize,
             present_modes: ?[*]sf.PresentMode,
             present_mode_count: *usize,
         ) callconv(sf.@"callconv") void {
             return functions.surfacePresentModes(
-                device,
                 surface,
                 present_modes_capacity,
                 present_modes,
@@ -915,7 +906,7 @@ pub fn map(
         .{ "sfCreateSurfaceXlib", @ptrCast(&c_functions.createSurfaceXlib) },
         .{ "sfDestroySurface", @ptrCast(&c_functions.destroySurface) },
         .{ "sfSurfaceSupportedUsage", @ptrCast(&c_functions.surfaceSupportedUsage) },
-        .{ "sfSurfaceFormats", @ptrCast(&c_functions.surfaceFormats) },
+        .{ "sfSurfaceSupportedFormats", @ptrCast(&c_functions.surfaceSupportedFormats) },
         .{ "sfSurfacePresentModes", @ptrCast(&c_functions.surfacePresentModes) },
         .{ "sfHostFromDevicePointer", @ptrCast(&c_functions.hostFromDevicePointer) },
         .{ "sfAlloc", @ptrCast(&c_functions.alloc) },

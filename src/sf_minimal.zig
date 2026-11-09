@@ -602,35 +602,29 @@ pub fn destroySurface(
 }
 
 pub fn surfaceSupportedUsage(
-    device: *Device,
     surface: *Surface,
 ) TextureUsage {
     const f: *const fn (
-        device: *Device,
         surface: *Surface,
-    ) callconv(@"callconv") TextureUsage = @ptrCast(internal.table(device)[internal.slots.surface_supported_usage]);
+    ) callconv(@"callconv") TextureUsage = @ptrCast(internal.table(surface)[internal.slots.surface_supported_usage]);
     return f(
-        device,
         surface,
     );
 }
 
-pub fn surfaceFormats(
-    device: *Device,
+pub fn surfaceSupportedFormats(
     surface: *Surface,
     formats_capacity: usize,
     formats: ?[*]Format,
     format_count: *usize,
 ) void {
     const f: *const fn (
-        device: *Device,
         surface: *Surface,
         formats_capacity: usize,
         formats: ?[*]Format,
         format_count: *usize,
-    ) callconv(@"callconv") void = @ptrCast(internal.table(device)[internal.slots.surface_formats]);
+    ) callconv(@"callconv") void = @ptrCast(internal.table(surface)[internal.slots.surface_supported_formats]);
     return f(
-        device,
         surface,
         formats_capacity,
         formats,
@@ -639,21 +633,18 @@ pub fn surfaceFormats(
 }
 
 pub fn surfacePresentModes(
-    device: *Device,
     surface: *Surface,
     present_modes_capacity: usize,
     present_modes: ?[*]PresentMode,
     present_mode_count: *usize,
 ) void {
     const f: *const fn (
-        device: *Device,
         surface: *Surface,
         present_modes_capacity: usize,
         present_modes: ?[*]PresentMode,
         present_mode_count: *usize,
-    ) callconv(@"callconv") void = @ptrCast(internal.table(device)[internal.slots.surface_present_modes]);
+    ) callconv(@"callconv") void = @ptrCast(internal.table(surface)[internal.slots.surface_present_modes]);
     return f(
-        device,
         surface,
         present_modes_capacity,
         present_modes,
@@ -1363,7 +1354,7 @@ const internal = struct {
         create_surface_xlib: usize = 0,
         destroy_surface: usize = 0,
         surface_supported_usage: usize = 0,
-        surface_formats: usize = 0,
+        surface_supported_formats: usize = 0,
         surface_present_modes: usize = 0,
         host_from_device_pointer: usize = 0,
         alloc: usize = 0,
@@ -1421,7 +1412,7 @@ const internal = struct {
         slots.create_surface_xlib = get_slot.?(instance, "sfCreateSurfaceXlib");
         slots.destroy_surface = get_slot.?(instance, "sfDestroySurface");
         slots.surface_supported_usage = get_slot.?(instance, "sfSurfaceSupportedUsage");
-        slots.surface_formats = get_slot.?(instance, "sfSurfaceFormats");
+        slots.surface_supported_formats = get_slot.?(instance, "sfSurfaceSupportedFormats");
         slots.surface_present_modes = get_slot.?(instance, "sfSurfacePresentModes");
         slots.host_from_device_pointer = get_slot.?(instance, "sfHostFromDevicePointer");
         slots.alloc = get_slot.?(instance, "sfAlloc");

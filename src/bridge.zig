@@ -244,12 +244,16 @@ pub const to_vk = struct {
     pub fn aspectsForFormat(fmt: sf.Format) vk.ImageAspectFlags {
         return switch (fmt) {
             .stencil8 => .{ .stencil = true },
-            .depth16_unorm, .depth24_plus => .{ .depth = true },
-            .depth24_plus_stencil8 => .{ .depth = true, .stencil = true },
-            .depth32_float => .{ .depth = true },
-            .depth32_float_stencil8 => .{ .depth = true, .stencil = true },
+            .depth16_unorm, .depth24_plus, .depth32_float => .{ .depth = true },
+            .depth24_plus_stencil8, .depth32_float_stencil8 => .{ .depth = true, .stencil = true },
             else => .{ .color = true },
         };
+    }
+
+    pub fn singleAspectForFormat(fmt: sf.Format) vk.ImageAspectFlags {
+        var aspect_mask = aspectsForFormat(fmt);
+        if (aspect_mask.depth) aspect_mask.stencil = false;
+        return aspect_mask;
     }
 
     pub fn topology(topo: sf.Topology) vk.PrimitiveTopology {
@@ -310,11 +314,63 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn viewType(tex: sf.TextureDimension) vk.ImageViewType {
+    pub fn viewType(tex: sf.TextureDimension, layer_count: u32) vk.ImageViewType {
         return switch (tex) {
-            .@"1d" => .@"1d",
-            .@"2d" => .@"2d",
+            .@"1d" => if (layer_count > 1) .@"1d_array" else .@"1d",
+            .@"2d" => if (layer_count > 1) .@"2d_array" else .@"2d",
             .@"3d" => .@"3d",
+        };
+    }
+
+    pub fn extent3D(extent: sf.Extent3D) vk.Extent3D {
+        return .{ .width = extent.width, .height = extent.height, .depth = extent.depth };
+    }
+
+    pub fn imageCreateInfo(desc: sf.TextureDesc) vk.ImageCreateInfo {
+        return .{
+            .image_type = textureDimension(desc.type),
+            .format = format(desc.format),
+            .extent = extent3D(desc.extent),
+            .mip_levels = desc.mip_count,
+            .array_layers = desc.layer_count,
+            .samples = .{ .@"1" = true },
+            .tiling = .optimal,
+            .usage = usageFlags(desc.usage),
+            .sharing_mode = .exclusive,
+            .initial_layout = .undefined,
+        };
+    }
+
+    pub fn bufferUsage(memory: sf.MemoryKind) vk.BufferUsageFlags {
+        return switch (memory) {
+            .upload => .{
+                .storage_buffer = true,
+                .index_buffer = true,
+                .indirect_buffer = true,
+                .transfer_src = true,
+                .shader_device_address = true,
+                .resource_descriptor_buffer_ext = true,
+            },
+            .device_local => .{
+                .storage_buffer = true,
+                .index_buffer = true,
+                .indirect_buffer = true,
+                .transfer_src = true,
+                .transfer_dst = true,
+                .shader_device_address = true,
+            },
+            .readback => .{
+                .storage_buffer = true,
+                .transfer_dst = true,
+                .shader_device_address = true,
+            },
+        };
+    }
+
+    pub fn indexType(index_type: sf.IndexType) vk.IndexType {
+        return switch (index_type) {
+            .uint16 => .uint16,
+            .uint32 => .uint32,
         };
     }
 
@@ -335,6 +391,21 @@ pub const to_vk = struct {
             .reverse_subtract => .reverse_subtract,
             .min => .min,
             .max => .max,
+        };
+    }
+
+    pub fn colorBlendAttachment(blend_state: ?*const sf.BlendDesc, write_mask: sf.ColorWriteMask) vk.PipelineColorBlendAttachmentState {
+        // the default blend state is equivalent to disabled blending
+        const blend: sf.BlendDesc = if (blend_state) |b| b.* else .{};
+        return .{
+            .blend_enable = .fromBool(blend_state != null),
+            .src_color_blend_factor = blendFactor(blend.src_color_factor),
+            .dst_color_blend_factor = blendFactor(blend.dst_color_factor),
+            .color_blend_op = blendOp(blend.color_op),
+            .src_alpha_blend_factor = blendFactor(blend.src_alpha_factor),
+            .dst_alpha_blend_factor = blendFactor(blend.dst_alpha_factor),
+            .alpha_blend_op = blendOp(blend.alpha_op),
+            .color_write_mask = writeMask(write_mask),
         };
     }
 
@@ -396,14 +467,7 @@ pub const to_vk = struct {
             .max_anisotropy = anisotropy(s.max_anisotropy),
             .compare_enable = if (s.compare.enable) .true else .false,
             .compare_op = switch (s.compare.op) {
-                .never => .never,
-                .less => .less,
-                .equal => .equal,
-                .less_equal => .less_or_equal,
-                .greater => .greater,
-                .not_equal => .not_equal,
-                .greater_equal => .greater_or_equal,
-                .always => .always,
+                inline else => |op| compareOp(@field(sf.CompareOp, @tagName(op))),
             },
             .min_lod = if (mips_disabled) 0 else s.lod_min.toF32(),
             .max_lod = if (mips_disabled) 0 else s.lod_max.toF32(),
@@ -416,6 +480,14 @@ pub const to_vk = struct {
                 .normalized => .false,
                 .pixel => .true,
             },
+        };
+    }
+
+    pub fn samplerReductionMode(r: SamplerDesc.Reduction) vk.SamplerReductionMode {
+        return switch (r) {
+            .weighted_average => .weighted_average,
+            .minimum => .min,
+            .maximum => .max,
         };
     }
 

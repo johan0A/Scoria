@@ -145,6 +145,93 @@ pub const Surface = opaque {
             surface,
         );
     }
+
+    pub fn supportedUsage(
+        surface: *Surface,
+    ) TextureUsage {
+        const f: *const fn (
+            surface: *Surface,
+        ) callconv(@"callconv") TextureUsage = @ptrCast(internal.table(surface)[internal.slots.surface_supported_usage]);
+        return f(
+            surface,
+        );
+    }
+
+    pub fn supportedFormats(
+        surface: *Surface,
+        formats: ?[]Format,
+    ) usize {
+        const f: *const fn (
+            surface: *Surface,
+            formats_capacity: usize,
+            formats: ?[*]Format,
+            format_count: *usize,
+        ) callconv(@"callconv") void = @ptrCast(internal.table(surface)[internal.slots.surface_supported_formats]);
+        var format_count: usize = undefined;
+        f(
+            surface,
+            @intCast((if (formats) |unwrapped| unwrapped.len else 0)),
+            (if (formats) |unwrapped| unwrapped.ptr else null),
+            &format_count,
+        );
+        return format_count;
+    }
+
+    pub fn supportedFormatsAlloc(
+        surface: *Surface,
+        gpa: std.mem.Allocator,
+    ) error{
+        OutOfMemory,
+    }![]Format {
+        var formats: []Format = &.{};
+        errdefer gpa.free(formats);
+        while (true) {
+            const format_count = supportedFormats(
+                surface,
+                formats,
+            );
+            if (format_count <= formats.len) return gpa.realloc(formats, format_count);
+            formats = try gpa.realloc(formats, format_count);
+        }
+    }
+
+    pub fn presentModes(
+        surface: *Surface,
+        present_modes: ?[]PresentMode,
+    ) usize {
+        const f: *const fn (
+            surface: *Surface,
+            present_modes_capacity: usize,
+            present_modes: ?[*]PresentMode,
+            present_mode_count: *usize,
+        ) callconv(@"callconv") void = @ptrCast(internal.table(surface)[internal.slots.surface_present_modes]);
+        var present_mode_count: usize = undefined;
+        f(
+            surface,
+            @intCast((if (present_modes) |unwrapped| unwrapped.len else 0)),
+            (if (present_modes) |unwrapped| unwrapped.ptr else null),
+            &present_mode_count,
+        );
+        return present_mode_count;
+    }
+
+    pub fn presentModesAlloc(
+        surface: *Surface,
+        gpa: std.mem.Allocator,
+    ) error{
+        OutOfMemory,
+    }![]PresentMode {
+        var present_modes: []PresentMode = &.{};
+        errdefer gpa.free(present_modes);
+        while (true) {
+            const present_mode_count = presentModes(
+                surface,
+                present_modes,
+            );
+            if (present_mode_count <= present_modes.len) return gpa.realloc(present_modes, present_mode_count);
+            present_modes = try gpa.realloc(present_modes, present_mode_count);
+        }
+    }
 };
 
 pub const Adapter = opaque {};
@@ -196,106 +283,6 @@ pub const Device = opaque {
             device,
             desc,
         );
-    }
-
-    pub fn surfaceSupportedUsage(
-        device: *Device,
-        surface: *Surface,
-    ) TextureUsage {
-        const f: *const fn (
-            device: *Device,
-            surface: *Surface,
-        ) callconv(@"callconv") TextureUsage = @ptrCast(internal.table(device)[internal.slots.surface_supported_usage]);
-        return f(
-            device,
-            surface,
-        );
-    }
-
-    pub fn surfaceFormats(
-        device: *Device,
-        surface: *Surface,
-        formats: ?[]Format,
-    ) usize {
-        const f: *const fn (
-            device: *Device,
-            surface: *Surface,
-            formats_capacity: usize,
-            formats: ?[*]Format,
-            format_count: *usize,
-        ) callconv(@"callconv") void = @ptrCast(internal.table(device)[internal.slots.surface_formats]);
-        var format_count: usize = undefined;
-        f(
-            device,
-            surface,
-            @intCast((if (formats) |unwrapped| unwrapped.len else 0)),
-            (if (formats) |unwrapped| unwrapped.ptr else null),
-            &format_count,
-        );
-        return format_count;
-    }
-
-    pub fn surfaceFormatsAlloc(
-        device: *Device,
-        surface: *Surface,
-        gpa: std.mem.Allocator,
-    ) error{
-        OutOfMemory,
-    }![]Format {
-        var formats: []Format = &.{};
-        errdefer gpa.free(formats);
-        while (true) {
-            const format_count = surfaceFormats(
-                device,
-                surface,
-                formats,
-            );
-            if (format_count <= formats.len) return gpa.realloc(formats, format_count);
-            formats = try gpa.realloc(formats, format_count);
-        }
-    }
-
-    pub fn surfacePresentModes(
-        device: *Device,
-        surface: *Surface,
-        present_modes: ?[]PresentMode,
-    ) usize {
-        const f: *const fn (
-            device: *Device,
-            surface: *Surface,
-            present_modes_capacity: usize,
-            present_modes: ?[*]PresentMode,
-            present_mode_count: *usize,
-        ) callconv(@"callconv") void = @ptrCast(internal.table(device)[internal.slots.surface_present_modes]);
-        var present_mode_count: usize = undefined;
-        f(
-            device,
-            surface,
-            @intCast((if (present_modes) |unwrapped| unwrapped.len else 0)),
-            (if (present_modes) |unwrapped| unwrapped.ptr else null),
-            &present_mode_count,
-        );
-        return present_mode_count;
-    }
-
-    pub fn surfacePresentModesAlloc(
-        device: *Device,
-        surface: *Surface,
-        gpa: std.mem.Allocator,
-    ) error{
-        OutOfMemory,
-    }![]PresentMode {
-        var present_modes: []PresentMode = &.{};
-        errdefer gpa.free(present_modes);
-        while (true) {
-            const present_mode_count = surfacePresentModes(
-                device,
-                surface,
-                present_modes,
-            );
-            if (present_mode_count <= present_modes.len) return gpa.realloc(present_modes, present_mode_count);
-            present_modes = try gpa.realloc(present_modes, present_mode_count);
-        }
     }
 
     pub fn hostFromPointer(
@@ -1879,7 +1866,7 @@ const internal = struct {
         create_surface_xlib: usize = 0,
         destroy_surface: usize = 0,
         surface_supported_usage: usize = 0,
-        surface_formats: usize = 0,
+        surface_supported_formats: usize = 0,
         surface_present_modes: usize = 0,
         host_from_device_pointer: usize = 0,
         alloc: usize = 0,
@@ -1937,7 +1924,7 @@ const internal = struct {
         slots.create_surface_xlib = get_slot.?(instance, "sfCreateSurfaceXlib");
         slots.destroy_surface = get_slot.?(instance, "sfDestroySurface");
         slots.surface_supported_usage = get_slot.?(instance, "sfSurfaceSupportedUsage");
-        slots.surface_formats = get_slot.?(instance, "sfSurfaceFormats");
+        slots.surface_supported_formats = get_slot.?(instance, "sfSurfaceSupportedFormats");
         slots.surface_present_modes = get_slot.?(instance, "sfSurfacePresentModes");
         slots.host_from_device_pointer = get_slot.?(instance, "sfHostFromDevicePointer");
         slots.alloc = get_slot.?(instance, "sfAlloc");

@@ -810,19 +810,17 @@
       "dispatch": "table",
       "return": { "base": "SfTextureUsage" },
       "params": [
-        { "name": "device", "type": { "base": "SfDevice", "ptr": [{}] }, "doc": "" },
         { "name": "surface", "type": { "base": "SfSurface", "ptr": [{}] }, "doc": "" }
       ],
       "doc": ""
     },
     {
-      "name": "sfSurfaceFormats",
+      "name": "sfSurfaceSupportedFormats",
       "group": "SfSurface",
       "dispatch": "table",
       "enumerate": true,
       "return": { "base": "void" },
       "params": [
-        { "name": "device", "type": { "base": "SfDevice", "ptr": [{}] }, "doc": "" },
         { "name": "surface", "type": { "base": "SfSurface", "ptr": [{}] }, "doc": "" },
         { "name": "formats_capacity", "type": { "base": "size_t" }, "doc": "" },
         { "name": "formats", "type": { "base": "SfFormat", "ptr": [{ "optional": true, "len": "formats_capacity" }] }, "out": true, "doc": "" },
@@ -837,7 +835,6 @@
       "enumerate": true,
       "return": { "base": "void" },
       "params": [
-        { "name": "device", "type": { "base": "SfDevice", "ptr": [{}] }, "doc": "" },
         { "name": "surface", "type": { "base": "SfSurface", "ptr": [{}] }, "doc": "" },
         { "name": "present_modes_capacity", "type": { "base": "size_t" }, "doc": "" },
         { "name": "present_modes", "type": { "base": "SfPresentMode", "ptr": [{ "optional": true, "len": "present_modes_capacity" }] }, "out": true, "doc": "" },

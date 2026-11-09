@@ -64,12 +64,12 @@ pub fn main(init: std.process.Init) !void {
     };
     defer surface.destroy();
 
-    const surface_formats = try device.surfaceFormatsAlloc(surface, arena);
+    const surface_formats = try surface.supportedFormatsAlloc(arena);
     const swapchain_format = for (surface_formats) |f| {
         if (f == .rgba8_unorm_srgb or f == .bgra8_unorm_srgb) break f;
     } else return error.NoSupportedSurfaceFormat;
 
-    const surface_usage = device.surfaceSupportedUsage(surface);
+    const surface_usage = surface.supportedUsage();
     if (!surface_usage.color_attachment) return error.SurfaceColorAttachmentUnsupported;
 
     const frame_semaphore = try device.createSemaphore(0);
@@ -177,7 +177,13 @@ pub fn main(init: std.process.Init) !void {
         if (frame_index > frames_in_flight)
             try frame_semaphore.wait(frame_index - frames_in_flight);
 
-        const back_buffer = try swapchain.acquireBackBuffer(.{ .width = @intCast(width), .height = @intCast(height) });
+        const back_buffer = swapchain.acquireBackBuffer(.{ .width = @intCast(width), .height = @intCast(height) }) catch |err| switch (err) {
+            error.NoBackbuffer => {
+                c.SDL_Delay(16);
+                continue;
+            },
+            else => |e| return e,
+        };
 
         const cb = try queue.startCommandRecording();
         cb.setActiveTextureHeap(descriptor_heap.device_ptr);

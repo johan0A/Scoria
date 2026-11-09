@@ -69,12 +69,12 @@ pub fn main(init: std.process.Init) !void {
     };
     defer surface.destroy();
 
-    const surface_formats = try device.surfaceFormatsAlloc(surface, arena);
+    const surface_formats = try surface.supportedFormatsAlloc(arena);
     const swapchain_format = for (surface_formats) |f| {
         if (f == .rgba8_unorm or f == .bgra8_unorm) break f;
     } else return error.NoSupportedSurfaceFormat;
 
-    const surface_usage = device.surfaceSupportedUsage(surface);
+    const surface_usage = surface.supportedUsage();
     if (!surface_usage.storage) return error.SurfaceStorageUnsupported;
 
     const frame_semaphore = try device.createSemaphore(0);
@@ -132,7 +132,13 @@ pub fn main(init: std.process.Init) !void {
             .time = @floatCast(elapsed_us / 1e9),
         };
 
-        const back_buffer = try swapchain.acquireBackBuffer(surface_extent);
+        const back_buffer = swapchain.acquireBackBuffer(surface_extent) catch |err| switch (err) {
+            error.NoBackbuffer => {
+                c.SDL_Delay(16);
+                continue;
+            },
+            else => |e| return e,
+        };
         const descriptor = try back_buffer.texture.storageDescriptor(.{});
         device.storeDescriptor(&descriptor, descriptor_heap.host_ptr, slot);
 
