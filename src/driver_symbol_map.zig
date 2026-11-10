@@ -209,6 +209,10 @@ fn Functions(handle_types: HandleTypes) type {
         endRenderPass: fn (
             command_buffer: *handle_types.CommandBuffer,
         ) void,
+        setScissor: fn (
+            command_buffer: *handle_types.CommandBuffer,
+            rect: sc.Rect2D,
+        ) void,
         draw: fn (
             command_buffer: *handle_types.CommandBuffer,
             vertex_data: sc.DeviceAddress,
@@ -703,6 +707,16 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
             );
         }
 
+        pub fn setScissor(
+            command_buffer: *handle_types.CommandBuffer,
+            rect: sc.Rect2D,
+        ) callconv(sc.@"callconv") void {
+            return functions.setScissor(
+                command_buffer,
+                rect,
+            );
+        }
+
         pub fn draw(
             command_buffer: *handle_types.CommandBuffer,
             vertex_data: sc.DeviceAddress,
@@ -933,6 +947,7 @@ pub fn map(
         .{ "scCopyBufferToTexture", @ptrCast(&c_functions.copyBufferToTexture) },
         .{ "scBeginRenderPass", @ptrCast(&c_functions.beginRenderPass) },
         .{ "scEndRenderPass", @ptrCast(&c_functions.endRenderPass) },
+        .{ "scSetScissor", @ptrCast(&c_functions.setScissor) },
         .{ "scDraw", @ptrCast(&c_functions.draw) },
         .{ "scDrawIndexed", @ptrCast(&c_functions.drawIndexed) },
         .{ "scDrawIndexedInstanced", @ptrCast(&c_functions.drawIndexedInstanced) },

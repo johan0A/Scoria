@@ -1023,6 +1023,21 @@ pub const CommandBuffer = opaque {
         );
     }
 
+    /// Only valid inside a render pass. Beginning a render pass resets the scissor to the full render target.
+    pub fn setScissor(
+        command_buffer: *CommandBuffer,
+        rect: Rect2D,
+    ) void {
+        const f: *const fn (
+            command_buffer: *CommandBuffer,
+            rect: Rect2D,
+        ) callconv(@"callconv") void = @ptrCast(internal.table(command_buffer)[internal.slots.set_scissor]);
+        return f(
+            command_buffer,
+            rect,
+        );
+    }
+
     pub fn draw(
         command_buffer: *CommandBuffer,
         vertex_data: Ptr(.one, anyopaque, .{}),
@@ -1685,6 +1700,16 @@ pub const Extent3D = extern struct {
     depth: u32,
 };
 
+pub const Offset2D = extern struct {
+    x: i32 = 0,
+    y: i32 = 0,
+};
+
+pub const Rect2D = extern struct {
+    offset: Offset2D,
+    extent: Extent2D,
+};
+
 pub const SizeAlign = extern struct {
     size: usize,
     alignment_byte_units: usize,
@@ -1895,6 +1920,7 @@ const internal = struct {
         copy_buffer_to_texture: usize = 0,
         begin_render_pass: usize = 0,
         end_render_pass: usize = 0,
+        set_scissor: usize = 0,
         draw: usize = 0,
         draw_indexed: usize = 0,
         draw_indexed_instanced: usize = 0,
@@ -1953,6 +1979,7 @@ const internal = struct {
         slots.copy_buffer_to_texture = get_slot.?(instance, "scCopyBufferToTexture");
         slots.begin_render_pass = get_slot.?(instance, "scBeginRenderPass");
         slots.end_render_pass = get_slot.?(instance, "scEndRenderPass");
+        slots.set_scissor = get_slot.?(instance, "scSetScissor");
         slots.draw = get_slot.?(instance, "scDraw");
         slots.draw_indexed = get_slot.?(instance, "scDrawIndexed");
         slots.draw_indexed_instanced = get_slot.?(instance, "scDrawIndexedInstanced");

@@ -1720,6 +1720,14 @@ pub const CommandBuffer = struct {
         cb.in_render_pass = false;
     }
 
+    pub fn setScissor(cb_obj: *Object(CommandBuffer), rect: sc.Rect2D) void {
+        const cb = cb_obj.body();
+        cb.d.handle.cmdSetScissor(cb.handle, 0, &.{.{
+            .offset = .{ .x = rect.offset.x, .y = rect.offset.y },
+            .extent = .{ .width = rect.extent.width, .height = rect.extent.height },
+        }});
+    }
+
     pub fn draw(
         cb: *Object(CommandBuffer),
         vertex_data: sc.DeviceAddress,
@@ -2286,6 +2294,7 @@ pub export fn symbol(name: [*:0]const u8) callconv(sc.@"callconv") *const anyopa
         .copyBufferToTexture = CommandBuffer.copyBufferToTexture,
         .beginRenderPass = CommandBuffer.beginRenderPass,
         .endRenderPass = CommandBuffer.endRenderPass,
+        .setScissor = CommandBuffer.setScissor,
         .draw = CommandBuffer.draw,
         .drawIndexed = CommandBuffer.drawIndexed,
         .drawIndexedInstanced = CommandBuffer.drawIndexedInstanced,

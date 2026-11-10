@@ -109,6 +109,22 @@
       "doc": ""
     },
     {
+      "name": "ScOffset2D",
+      "fields": [
+        { "name": "x", "type": { "base": "int32_t" }, "default": "0", "doc": "" },
+        { "name": "y", "type": { "base": "int32_t" }, "default": "0", "doc": "" }
+      ],
+      "doc": ""
+    },
+    {
+      "name": "ScRect2D",
+      "fields": [
+        { "name": "offset", "type": { "base": "ScOffset2D" }, "doc": "" },
+        { "name": "extent", "type": { "base": "ScExtent2D" }, "doc": "" }
+      ],
+      "doc": ""
+    },
+    {
       "name": "ScSizeAlign",
       "fields": [
         { "name": "size", "type": { "base": "size_t" }, "doc": "" },
@@ -1185,6 +1201,17 @@
         { "name": "command_buffer", "type": { "base": "ScCommandBuffer", "ptr": [{}] }, "doc": "" }
       ],
       "doc": ""
+    },
+    {
+      "name": "scSetScissor",
+      "group": "ScCommandBuffer",
+      "dispatch": "table",
+      "return": { "base": "void" },
+      "params": [
+        { "name": "command_buffer", "type": { "base": "ScCommandBuffer", "ptr": [{}] }, "doc": "" },
+        { "name": "rect", "type": { "base": "ScRect2D" }, "doc": "Offset must not be negative." }
+      ],
+      "doc": "Only valid inside a render pass. Beginning a render pass resets the scissor to the full render target."
     },
     {
       "name": "scDraw",
