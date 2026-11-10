@@ -128,6 +128,12 @@ pub const BlendFactor = enum(u32) {
     src_color = 2,
     dst_color = 3,
     src_alpha = 4,
+    one_minus_src_color = 5,
+    one_minus_src_alpha = 6,
+    one_minus_dst_color = 7,
+    dst_alpha = 8,
+    one_minus_dst_alpha = 9,
+    src_alpha_saturate = 10,
 };
 
 pub const Format = enum(u32) {

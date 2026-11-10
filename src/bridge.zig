@@ -381,6 +381,12 @@ pub const to_vk = struct {
             .src_color => .src_color,
             .dst_color => .dst_color,
             .src_alpha => .src_alpha,
+            .one_minus_src_color => .one_minus_src_color,
+            .one_minus_src_alpha => .one_minus_src_alpha,
+            .one_minus_dst_color => .one_minus_dst_color,
+            .dst_alpha => .dst_alpha,
+            .one_minus_dst_alpha => .one_minus_dst_alpha,
+            .src_alpha_saturate => .src_alpha_saturate,
         };
     }
 

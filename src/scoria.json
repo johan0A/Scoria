@@ -485,7 +485,13 @@
         { "name": "SC_BLEND_FACTOR_ONE", "value": 1, "doc": "" },
         { "name": "SC_BLEND_FACTOR_SRC_COLOR", "value": 2, "doc": "" },
         { "name": "SC_BLEND_FACTOR_DST_COLOR", "value": 3, "doc": "" },
-        { "name": "SC_BLEND_FACTOR_SRC_ALPHA", "value": 4, "doc": "" }
+        { "name": "SC_BLEND_FACTOR_SRC_ALPHA", "value": 4, "doc": "" },
+        { "name": "SC_BLEND_FACTOR_ONE_MINUS_SRC_COLOR", "value": 5, "doc": "" },
+        { "name": "SC_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA", "value": 6, "doc": "" },
+        { "name": "SC_BLEND_FACTOR_ONE_MINUS_DST_COLOR", "value": 7, "doc": "" },
+        { "name": "SC_BLEND_FACTOR_DST_ALPHA", "value": 8, "doc": "" },
+        { "name": "SC_BLEND_FACTOR_ONE_MINUS_DST_ALPHA", "value": 9, "doc": "" },
+        { "name": "SC_BLEND_FACTOR_SRC_ALPHA_SATURATE", "value": 10, "doc": "" }
       ],
       "doc": ""
     },
