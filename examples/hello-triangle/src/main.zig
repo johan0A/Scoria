@@ -1,96 +1,94 @@
 const std = @import("std");
-const target = @import("builtin").target;
 const sc = @import("scoria");
 const c = @import("c");
+const common = @import("common");
 
 const scSymbol = @extern(sc.Symbol, .{ .name = "scSymbol" });
 
 const frames_in_flight = 2;
+const vertex_count = 3;
 
 const Data = extern struct {
-    positions: sc.DeviceAddress,
-    colors: sc.DeviceAddress,
+    positions: sc.Ptr(.many, [3]f32, .{}),
+    colors: sc.Ptr(.many, [3]f32, .{}),
+};
+
+const Renderer = struct {
+    window: *c.SDL_Window,
+    queue: *sc.Queue,
+    swapchain: *sc.Swapchain,
+    frame_semaphore: *sc.Semaphore,
+    frame_index: u64,
+    data: sc.Ptr(.one, Data, .{}),
+    pipeline: *sc.Pipeline,
 };
 
 pub fn main(init: std.process.Init) !void {
     const arena = init.arena.allocator();
 
-    var width: c_int = 512;
-    var height: c_int = 512;
-    const window = c.SDL_CreateWindow("title", width, height, c.SDL_WINDOW_VULKAN | c.SDL_WINDOW_RESIZABLE) orelse
-        return error.SdlCreateWindow;
+    if (!c.SDL_Init(c.SDL_INIT_VIDEO)) return error.SdlInit;
+    defer c.SDL_Quit();
+
+    const window = c.SDL_CreateWindow("hello-triangle", 512, 512, c.SDL_WINDOW_VULKAN | c.SDL_WINDOW_RESIZABLE) orelse return error.SdlCreateWindow;
+    defer c.SDL_DestroyWindow(window);
 
     const instance = sc.Instance.create(null, scSymbol);
     defer instance.destroy();
 
     const adapters = try instance.enumerateAdaptersAlloc(arena);
-
-    const adapter = adapters[0]; // TODO: pick adapter
+    if (adapters.len == 0) return error.NoAdapter;
+    const adapter = for (adapters) |adapter| {
+        if (instance.adapterInfo(adapter).kind == .discrete_gpu) break adapter;
+    } else adapters[0];
+    std.log.info("selected device: {s}", .{std.mem.sliceTo(&instance.adapterInfo(adapter).name, 0)});
 
     const device = instance.createDevice(adapter);
     defer device.destroy();
 
+    const gpu_gpa = sc.heap.rawDeviceAllocator(device);
+    var fixed_buffer_allocator: sc.heap.FixedBufferAllocator = try .initAlloc(gpu_gpa, .initFill(1024 * 1024));
+    defer fixed_buffer_allocator.deinit(gpu_gpa);
+    const gpu_arena = fixed_buffer_allocator.allocator();
+
     const queue = device.getQueue(.graphics);
 
-    const props = c.SDL_GetWindowProperties(window);
-    const surface = switch (target.os.tag) {
-        .windows => blk: {
-            const hwnd = c.SDL_GetPointerProperty(props, c.SDL_PROP_WINDOW_WIN32_HWND_POINTER, null) orelse @panic("TODO");
-            const hinstance = c.SDL_GetPointerProperty(props, c.SDL_PROP_WINDOW_WIN32_INSTANCE_POINTER, null) orelse @panic("TODO");
-            const surface_desc: sc.SurfaceWin32Desc = .{ .hinstance = hinstance, .hwnd = hwnd };
-            break :blk sc.Surface.createWin32(device, surface_desc);
-        },
-        else => blk: {
-            const display = c.SDL_GetPointerProperty(props, c.SDL_PROP_WINDOW_X11_DISPLAY_POINTER, null) orelse @panic("TODO");
-            const x11_window = c.SDL_GetNumberProperty(props, c.SDL_PROP_WINDOW_X11_WINDOW_NUMBER, 0);
-            if (x11_window == 0) @panic("TODO");
-            const surface_desc: sc.SurfaceXlibDesc = .{ .display = display, .window = @intCast(x11_window) };
-            break :blk sc.Surface.createXlib(device, surface_desc);
-        },
-    };
+    const surface = try common.createSurface(device, window);
     defer surface.destroy();
 
-    const surface_formats = try device.surfaceFormatsAlloc(surface, arena);
-    const swapchain_format = for (surface_formats) |format| {
+    if (!surface.supportedUsage().color_attachment) return error.SurfaceColorAttachmentUnsupported;
+    const swapchain_format = for (try surface.supportedFormatsAlloc(arena)) |format| {
         if (format == .rgba8_unorm_srgb or format == .bgra8_unorm_srgb) break format;
-    } else return error.NoSrgbSurfaceFormat;
+    } else return error.NoSupportedSurfaceFormat;
 
-    const swapchain = try queue.createSwapchain(surface, .{
+    const swapchain: *sc.Swapchain = try .create(queue, surface, .{
         .format = swapchain_format,
         .usage = .{ .color_attachment = true },
         .present_mode = .fifo,
+        .frame_latency_max = 1,
     });
     defer swapchain.destroy();
 
     const frame_semaphore = try device.createSemaphore(0);
     defer frame_semaphore.destroy();
-    var frame_index: u64 = 1;
 
-    const descriptor_size_and_align = device.descriptorSizeAndHeapAlign();
-    const descriptor_heap = device.malloc(descriptor_size_and_align.size * 65536, descriptor_size_and_align.alignment, .default);
-    defer device.free(descriptor_heap);
-
-    const positions = allocMapped(device, [3][3]f32);
-    defer device.free(positions.gpu);
-    positions.cpu.* = .{
+    const positions_map = try gpu_arena.create([vertex_count][3]f32, .upload);
+    positions_map.host.* = .{
         .{ -1, 1, 0 },
         .{ 0, -1, 0 },
         .{ 1, 1, 0 },
     };
 
-    const colors = allocMapped(device, [3][3]f32);
-    defer device.free(colors.gpu);
-    colors.cpu.* = .{
+    const colors_map = try gpu_arena.create([vertex_count][3]f32, .upload);
+    colors_map.host.* = .{
         .{ 0, 0, 1 },
         .{ 0, 1, 0 },
         .{ 1, 0, 0 },
     };
 
-    const data = allocMapped(device, Data);
-    defer device.free(data.gpu);
-    data.cpu.* = .{
-        .positions = positions.gpu,
-        .colors = colors.gpu,
+    const data_map = try gpu_arena.create(Data, .upload);
+    data_map.host.* = .{
+        .positions = .ptrCast(positions_map.device),
+        .colors = .ptrCast(colors_map.device),
     };
 
     const pipeline = try device.createGraphicsPipeline(@embedFile("vert.scir"), @embedFile("frag.scir"), .{
@@ -99,57 +97,63 @@ pub fn main(init: std.process.Init) !void {
     });
     defer pipeline.destroy();
 
+    var renderer: Renderer = .{
+        .window = window,
+        .queue = queue,
+        .swapchain = swapchain,
+        .frame_semaphore = frame_semaphore,
+        .frame_index = 1,
+        .data = data_map.device,
+        .pipeline = pipeline,
+    };
+    defer if (renderer.frame_index > 1) renderer.frame_semaphore.wait(renderer.frame_index - 1) catch {};
+
+    if (!c.SDL_AddEventWatch(drawFrameOnExpose, &renderer)) return error.SdlAddEventWatch;
+    defer c.SDL_RemoveEventWatch(drawFrameOnExpose, &renderer);
+
     var quit = false;
     while (!quit) {
         var event: c.SDL_Event = undefined;
-        while (c.SDL_PollEvent(&event)) switch (event.type) {
-            c.SDL_EVENT_QUIT => quit = true,
-            else => {},
-        };
-
-        if (!c.SDL_GetWindowSizeInPixels(window, &width, &height)) return error.SdlWindowSize;
-
-        if (frame_index > frames_in_flight) try frame_semaphore.wait(frame_index - frames_in_flight);
-
-        const back_buffer = try swapchain.acquireBackBuffer(@intCast(width), @intCast(height));
-
-        const command_buffer = try queue.startCommandRecording();
-        command_buffer.setActiveTextureHeap(descriptor_heap);
-        command_buffer.beginRenderPass(.{
-            .stencil_attachment = .{},
-            .depth_attachment = .{},
-            .color_attachment_count = 1,
-            .color_attachments = &.{.{
-                .texture = back_buffer,
-                .load_op = .clear,
-                .store_op = .store,
-                .clear_color = .{ 0, 0, 0, 1 },
-            }},
-        });
-        command_buffer.setPipeline(pipeline);
-        command_buffer.draw(data.gpu, data.gpu, 3, 1);
-        command_buffer.endRenderPass();
-
-        try queue.submitAndSignal(&.{command_buffer}, frame_semaphore, frame_index);
-        try swapchain.present();
-
-        frame_index += 1;
+        while (c.SDL_PollEvent(&event)) quit = quit or event.type == c.SDL_EVENT_QUIT;
+        try drawFrame(&renderer);
     }
-
-    try frame_semaphore.wait(frame_index - 1);
 }
 
-fn Mapped(comptime T: type) type {
-    return struct {
-        gpu: sc.DeviceAddress,
-        cpu: *T,
-    };
+fn drawFrameOnExpose(userdata: ?*anyopaque, event: [*c]c.SDL_Event) callconv(.c) bool {
+    if (event.*.type == c.SDL_EVENT_WINDOW_EXPOSED)
+        drawFrame(@ptrCast(@alignCast(userdata))) catch |err| std.debug.panic("drawFrame failed: {t}", .{err});
+    return true;
 }
 
-fn allocMapped(device: *sc.Device, comptime T: type) Mapped(T) {
-    const memory = device.malloc(@sizeOf(T), @alignOf(T), .default);
-    return .{
-        .gpu = memory,
-        .cpu = @ptrCast(@alignCast(device.toHostPointer(memory))),
+fn drawFrame(renderer: *Renderer) !void {
+    const frame_index = renderer.frame_index;
+    if (frame_index > frames_in_flight) try renderer.frame_semaphore.wait(frame_index - frames_in_flight);
+
+    var width: c_int = undefined;
+    var height: c_int = undefined;
+    if (!c.SDL_GetWindowSizeInPixels(renderer.window, &width, &height)) return error.SdlGetWindowSizeInPixels;
+    const back_buffer = renderer.swapchain.acquireBackBuffer(.{ .width = @intCast(width), .height = @intCast(height) }) catch |err| switch (err) {
+        error.NoBackbuffer => return c.SDL_Delay(16), // minimized
+        else => |e| return e,
     };
+
+    const command_buffer = try renderer.queue.startCommandRecording();
+    command_buffer.beginRenderPass(.{
+        .stencil_attachment = .{},
+        .depth_attachment = .{},
+        .color_attachment_count = 1,
+        .color_attachments = &.{.{
+            .texture = back_buffer.texture,
+            .load_op = .clear,
+            .store_op = .store,
+            .clear_color = .{ 0, 0, 0, 1 },
+        }},
+    });
+    command_buffer.setPipeline(renderer.pipeline);
+    command_buffer.draw(.as(renderer.data), .as(renderer.data), vertex_count, 1);
+    command_buffer.endRenderPass();
+    try renderer.queue.submitAndSignal(&.{command_buffer}, renderer.frame_semaphore, frame_index);
+    try renderer.swapchain.present();
+
+    renderer.frame_index += 1;
 }

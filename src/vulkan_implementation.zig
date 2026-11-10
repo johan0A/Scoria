@@ -1181,7 +1181,6 @@ pub const Swapchain = struct {
             .surface = surface.handle,
             .desc = desc,
             .queue = queue,
-            // storage and sampled usage can touch the back buffer from any stage
             .acquire_stage = if (desc.usage.storage or desc.usage.sampled)
                 .{ .all_commands = true }
             else
@@ -1258,7 +1257,6 @@ pub const Swapchain = struct {
             } else retired_index += 1;
         }
 
-        // only a change triggers a recreation, the surface may not allow the requested extent
         const extent_changed = !std.meta.eql(extent, swapchain.extent_last);
         swapchain.extent_last = extent;
 
@@ -1276,8 +1274,6 @@ pub const Swapchain = struct {
                 var min_image_count = capabilities.min_image_count + 1;
                 if (capabilities.max_image_count != 0) min_image_count = @min(min_image_count, capabilities.max_image_count);
 
-                // retired first so a failed creation leaves the swapchain empty. Without present fences
-                // there is no way to know when presentation is done with the old swapchain
                 if (!d.optional_features.swapchain_maintenance_1) try d.handle.queueWaitIdle(queue.handle);
                 const old_handle = swapchain.handle;
                 try swapchain.retired.append(d.gpa, .{

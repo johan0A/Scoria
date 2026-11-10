@@ -1,16 +1,15 @@
 .{
-    .name = .example,
+    .name = .textured_quad,
     .version = "0.0.1",
     .dependencies = .{
         .scoria = .{
             .path = "../..",
         },
-        .sdl = .{
-            .url = "git+https://github.com/castholm/SDL#dbcb19aa3583c318556ecae3ecbeb29b102d37c5",
-            .hash = "sdl-0.6.0+3.4.18-SDL--p-gqAGWpnfTLlhs0dgjDtc4P4_CHeNLGY_SX_Fv",
+        .common = .{
+            .path = "../common",
         },
     },
     .minimum_zig_version = "0.17.0",
     .paths = .{""},
-    .fingerprint = 0x6eec9b9f12101610,
+    .fingerprint = 0x6de2295aa50c2aae,
 }

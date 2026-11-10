@@ -1,16 +1,15 @@
 .{
-    .name = .example,
+    .name = .hello_triangle,
     .version = "0.0.1",
     .dependencies = .{
         .scoria = .{
             .path = "../..",
         },
-        .sdl = .{
-            .url = "git+https://github.com/castholm/SDL#1994ca5dbad5a3e3c670a9ab8533d86cfd97bdc0",
-            .hash = "sdl-0.2.6+3.2.20-7uIn9NgjfwHH5a6HhyLHat2nHU3OP5B05QHhKJKuxEex",
+        .common = .{
+            .path = "../common",
         },
     },
-    .minimum_zig_version = "0.16.0",
+    .minimum_zig_version = "0.17.0",
     .paths = .{""},
-    .fingerprint = 0x6eec9b9f12101610,
+    .fingerprint = 0x3dc7c757e3c66e43,
 }
