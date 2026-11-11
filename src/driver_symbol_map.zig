@@ -186,6 +186,11 @@ fn Functions(handle_types: HandleTypes) type {
             y: u32,
             z: u32,
         ) void,
+        dispatchIndirect: fn (
+            command_buffer: *handle_types.CommandBuffer,
+            data: sc.DeviceAddress,
+            arguments: sc.DeviceAddress,
+        ) void,
         barrier: fn (
             command_buffer: *handle_types.CommandBuffer,
             before: sc.Stage,
@@ -246,6 +251,14 @@ fn Functions(handle_types: HandleTypes) type {
             index_type: sc.IndexType,
             indices: sc.DeviceAddress,
             arguments: sc.DeviceAddress,
+            draw_count: u32,
+        ) void,
+        drawIndirect: fn (
+            command_buffer: *handle_types.CommandBuffer,
+            vertex_data: sc.DeviceAddress,
+            pixel_data: sc.DeviceAddress,
+            arguments: sc.DeviceAddress,
+            draw_count: u32,
         ) void,
         textureSizeAlign: fn (
             device: *handle_types.Device,
@@ -653,6 +666,18 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
             );
         }
 
+        pub fn dispatchIndirect(
+            command_buffer: *handle_types.CommandBuffer,
+            data: sc.DeviceAddress,
+            arguments: sc.DeviceAddress,
+        ) callconv(sc.@"callconv") void {
+            return functions.dispatchIndirect(
+                command_buffer,
+                data,
+                arguments,
+            );
+        }
+
         pub fn barrier(
             command_buffer: *handle_types.CommandBuffer,
             before: sc.Stage,
@@ -784,6 +809,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
             index_type: sc.IndexType,
             indices: sc.DeviceAddress,
             arguments: sc.DeviceAddress,
+            draw_count: u32,
         ) callconv(sc.@"callconv") void {
             return functions.drawIndexedInstancedIndirect(
                 command_buffer,
@@ -792,6 +818,23 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
                 index_type,
                 indices,
                 arguments,
+                draw_count,
+            );
+        }
+
+        pub fn drawIndirect(
+            command_buffer: *handle_types.CommandBuffer,
+            vertex_data: sc.DeviceAddress,
+            pixel_data: sc.DeviceAddress,
+            arguments: sc.DeviceAddress,
+            draw_count: u32,
+        ) callconv(sc.@"callconv") void {
+            return functions.drawIndirect(
+                command_buffer,
+                vertex_data,
+                pixel_data,
+                arguments,
+                draw_count,
             );
         }
 
@@ -948,6 +991,7 @@ pub fn map(
         .{ "scSetDepthStencilState", @ptrCast(&c_functions.setDepthStencilState) },
         .{ "scSetPipeline", @ptrCast(&c_functions.setPipeline) },
         .{ "scDispatch", @ptrCast(&c_functions.dispatch) },
+        .{ "scDispatchIndirect", @ptrCast(&c_functions.dispatchIndirect) },
         .{ "scBarrier", @ptrCast(&c_functions.barrier) },
         .{ "scCopyTextureToBuffer", @ptrCast(&c_functions.copyTextureToBuffer) },
         .{ "scCopyBufferToTexture", @ptrCast(&c_functions.copyBufferToTexture) },
@@ -958,6 +1002,7 @@ pub fn map(
         .{ "scDrawIndexed", @ptrCast(&c_functions.drawIndexed) },
         .{ "scDrawIndexedInstanced", @ptrCast(&c_functions.drawIndexedInstanced) },
         .{ "scDrawIndexedInstancedIndirect", @ptrCast(&c_functions.drawIndexedInstancedIndirect) },
+        .{ "scDrawIndirect", @ptrCast(&c_functions.drawIndirect) },
         .{ "scTextureSizeAlign", @ptrCast(&c_functions.textureSizeAlign) },
         .{ "scCreateTexture", @ptrCast(&c_functions.createTexture) },
         .{ "scDestroyTexture", @ptrCast(&c_functions.destroyTexture) },

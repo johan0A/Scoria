@@ -943,6 +943,23 @@ pub const CommandBuffer = opaque {
         );
     }
 
+    pub fn dispatchIndirect(
+        command_buffer: *CommandBuffer,
+        data: Ptr(.one, anyopaque, .{}),
+        arguments: Ptr(.one, DispatchArguments, .{}),
+    ) void {
+        const f: *const fn (
+            command_buffer: *CommandBuffer,
+            data: Ptr(.one, anyopaque, .{}),
+            arguments: Ptr(.one, DispatchArguments, .{}),
+        ) callconv(@"callconv") void = @ptrCast(internal.table(command_buffer)[internal.slots.dispatch_indirect]);
+        return f(
+            command_buffer,
+            data,
+            arguments,
+        );
+    }
+
     pub fn barrier(
         command_buffer: *CommandBuffer,
         before: Stage,
@@ -1122,13 +1139,15 @@ pub const CommandBuffer = opaque {
         );
     }
 
+    /// Use SV_DrawIndex in the shader to tell the draws apart.
     pub fn drawIndexedInstancedIndirect(
         command_buffer: *CommandBuffer,
         vertex_data: Ptr(.one, anyopaque, .{}),
         pixel_data: Ptr(.one, anyopaque, .{}),
         index_type: IndexType,
         indices: Ptr(.many, u8, .{}),
-        arguments: Ptr(.many, u8, .{}),
+        arguments: Ptr(.many, DrawIndexedArguments, .{}),
+        draw_count: u32,
     ) void {
         const f: *const fn (
             command_buffer: *CommandBuffer,
@@ -1136,7 +1155,8 @@ pub const CommandBuffer = opaque {
             pixel_data: Ptr(.one, anyopaque, .{}),
             index_type: IndexType,
             indices: Ptr(.many, u8, .{}),
-            arguments: Ptr(.many, u8, .{}),
+            arguments: Ptr(.many, DrawIndexedArguments, .{}),
+            draw_count: u32,
         ) callconv(@"callconv") void = @ptrCast(internal.table(command_buffer)[internal.slots.draw_indexed_instanced_indirect]);
         return f(
             command_buffer,
@@ -1145,6 +1165,31 @@ pub const CommandBuffer = opaque {
             index_type,
             indices,
             arguments,
+            draw_count,
+        );
+    }
+
+    /// Use SV_DrawIndex in the shader to tell the draws apart.
+    pub fn drawIndirect(
+        command_buffer: *CommandBuffer,
+        vertex_data: Ptr(.one, anyopaque, .{}),
+        pixel_data: Ptr(.one, anyopaque, .{}),
+        arguments: Ptr(.many, DrawArguments, .{}),
+        draw_count: u32,
+    ) void {
+        const f: *const fn (
+            command_buffer: *CommandBuffer,
+            vertex_data: Ptr(.one, anyopaque, .{}),
+            pixel_data: Ptr(.one, anyopaque, .{}),
+            arguments: Ptr(.many, DrawArguments, .{}),
+            draw_count: u32,
+        ) callconv(@"callconv") void = @ptrCast(internal.table(command_buffer)[internal.slots.draw_indirect]);
+        return f(
+            command_buffer,
+            vertex_data,
+            pixel_data,
+            arguments,
+            draw_count,
         );
     }
 };
@@ -1807,6 +1852,19 @@ pub const DrawIndexedArguments = extern struct {
     first_instance: u32 = 0,
 };
 
+pub const DrawArguments = extern struct {
+    vertex_count: u32,
+    instance_count: u32 = 1,
+    first_vertex: u32 = 0,
+    first_instance: u32 = 0,
+};
+
+pub const DispatchArguments = extern struct {
+    x: u32,
+    y: u32 = 1,
+    z: u32 = 1,
+};
+
 pub const TextureDesc = extern struct {
     type: TextureDimension = .@"2d",
     extent: Extent3D,
@@ -1947,6 +2005,7 @@ const internal = struct {
         set_depth_stencil_state: usize = 0,
         set_pipeline: usize = 0,
         dispatch: usize = 0,
+        dispatch_indirect: usize = 0,
         barrier: usize = 0,
         copy_texture_to_buffer: usize = 0,
         copy_buffer_to_texture: usize = 0,
@@ -1957,6 +2016,7 @@ const internal = struct {
         draw_indexed: usize = 0,
         draw_indexed_instanced: usize = 0,
         draw_indexed_instanced_indirect: usize = 0,
+        draw_indirect: usize = 0,
         texture_size_align: usize = 0,
         create_texture: usize = 0,
         destroy_texture: usize = 0,
@@ -2006,6 +2066,7 @@ const internal = struct {
         slots.set_depth_stencil_state = get_slot.?(instance, "scSetDepthStencilState");
         slots.set_pipeline = get_slot.?(instance, "scSetPipeline");
         slots.dispatch = get_slot.?(instance, "scDispatch");
+        slots.dispatch_indirect = get_slot.?(instance, "scDispatchIndirect");
         slots.barrier = get_slot.?(instance, "scBarrier");
         slots.copy_texture_to_buffer = get_slot.?(instance, "scCopyTextureToBuffer");
         slots.copy_buffer_to_texture = get_slot.?(instance, "scCopyBufferToTexture");
@@ -2016,6 +2077,7 @@ const internal = struct {
         slots.draw_indexed = get_slot.?(instance, "scDrawIndexed");
         slots.draw_indexed_instanced = get_slot.?(instance, "scDrawIndexedInstanced");
         slots.draw_indexed_instanced_indirect = get_slot.?(instance, "scDrawIndexedInstancedIndirect");
+        slots.draw_indirect = get_slot.?(instance, "scDrawIndirect");
         slots.texture_size_align = get_slot.?(instance, "scTextureSizeAlign");
         slots.create_texture = get_slot.?(instance, "scCreateTexture");
         slots.destroy_texture = get_slot.?(instance, "scDestroyTexture");

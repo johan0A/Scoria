@@ -245,6 +245,25 @@
       "doc": ""
     },
     {
+      "name": "ScDrawArguments",
+      "fields": [
+        { "name": "vertex_count", "type": { "base": "uint32_t" }, "doc": "" },
+        { "name": "instance_count", "type": { "base": "uint32_t" }, "default": "1", "doc": "" },
+        { "name": "first_vertex", "type": { "base": "uint32_t" }, "default": "0", "doc": "" },
+        { "name": "first_instance", "type": { "base": "uint32_t" }, "default": "0", "doc": "" }
+      ],
+      "doc": ""
+    },
+    {
+      "name": "ScDispatchArguments",
+      "fields": [
+        { "name": "x", "type": { "base": "uint32_t" }, "doc": "" },
+        { "name": "y", "type": { "base": "uint32_t" }, "default": "1", "doc": "" },
+        { "name": "z", "type": { "base": "uint32_t" }, "default": "1", "doc": "" }
+      ],
+      "doc": ""
+    },
+    {
       "name": "ScTextureDesc",
       "fields": [
         { "name": "type", "type": { "base": "ScTextureDimension" }, "default": "SC_TEXTURE_DIMENSION_2D", "doc": "" },
@@ -1173,6 +1192,18 @@
       "doc": ""
     },
     {
+      "name": "scDispatchIndirect",
+      "group": "ScCommandBuffer",
+      "dispatch": "table",
+      "return": { "base": "void" },
+      "params": [
+        { "name": "command_buffer", "type": { "base": "ScCommandBuffer", "ptr": [{}] }, "doc": "" },
+        { "name": "data", "type": { "base": "void", "device_ptr": [{}] }, "doc": "" },
+        { "name": "arguments", "type": { "base": "ScDispatchArguments", "device_ptr": [{}] }, "doc": "" }
+      ],
+      "doc": ""
+    },
+    {
       "name": "scBarrier",
       "group": "ScCommandBuffer",
       "dispatch": "table",
@@ -1299,9 +1330,24 @@
         { "name": "pixel_data", "type": { "base": "void", "device_ptr": [{}] }, "doc": "" },
         { "name": "index_type", "type": { "base": "ScIndexType" }, "doc": "" },
         { "name": "indices", "type": { "base": "uint8_t", "device_ptr": [{ "len": "none" }] }, "doc": "" },
-        { "name": "arguments", "type": { "base": "uint8_t", "device_ptr": [{ "len": "none" }] }, "doc": "" }
+        { "name": "arguments", "type": { "base": "ScDrawIndexedArguments", "device_ptr": [{ "len": "draw_count" }] }, "doc": "" },
+        { "name": "draw_count", "type": { "base": "uint32_t" }, "doc": "" }
       ],
-      "doc": ""
+      "doc": "Use SV_DrawIndex in the shader to tell the draws apart."
+    },
+    {
+      "name": "scDrawIndirect",
+      "group": "ScCommandBuffer",
+      "dispatch": "table",
+      "return": { "base": "void" },
+      "params": [
+        { "name": "command_buffer", "type": { "base": "ScCommandBuffer", "ptr": [{}] }, "doc": "" },
+        { "name": "vertex_data", "type": { "base": "void", "device_ptr": [{}] }, "doc": "" },
+        { "name": "pixel_data", "type": { "base": "void", "device_ptr": [{}] }, "doc": "" },
+        { "name": "arguments", "type": { "base": "ScDrawArguments", "device_ptr": [{ "len": "draw_count" }] }, "doc": "" },
+        { "name": "draw_count", "type": { "base": "uint32_t" }, "doc": "" }
+      ],
+      "doc": "Use SV_DrawIndex in the shader to tell the draws apart."
     },
     {
       "name": "scTextureSizeAlign",

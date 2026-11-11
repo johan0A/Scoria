@@ -1561,6 +1561,13 @@ pub const CommandBuffer = struct {
         cb.d.handle.cmdDispatch(cb.handle, x, y, z);
     }
 
+    pub fn dispatchIndirect(cb_obj: *Object(CommandBuffer), data: sc.DeviceAddress, args: sc.DeviceAddress) void {
+        const cb = cb_obj.body();
+        cb.d.handle.cmdPushConstants(cb.handle, cb.pipeline_layout, .{ .compute = true }, 0, @sizeOf(vk.DeviceAddress), &data);
+        const entry, const offset = cb.d.heap.entryAndOffsetFromAddr(args);
+        cb.d.handle.cmdDispatchIndirect(cb.handle, entry.buffer, offset);
+    }
+
     pub fn barrier(
         cb_obj: *Object(CommandBuffer),
         before: sc.Stage,
@@ -1792,11 +1799,24 @@ pub const CommandBuffer = struct {
         index_type: sc.IndexType,
         indices: sc.DeviceAddress,
         args: sc.DeviceAddress,
+        draw_count: u32,
     ) void {
         pushRootPointers(cb.body(), vertex_data, pixel_data);
         bindIndexPointer(cb.body(), index_type, indices);
         const entry, const offset = cb.body().d.heap.entryAndOffsetFromAddr(args);
-        cb.body().d.handle.cmdDrawIndexedIndirect(cb.body().handle, entry.buffer, offset, 1, @sizeOf(sc.DrawIndexedArguments));
+        cb.body().d.handle.cmdDrawIndexedIndirect(cb.body().handle, entry.buffer, offset, draw_count, @sizeOf(sc.DrawIndexedArguments));
+    }
+
+    pub fn drawIndirect(
+        cb: *Object(CommandBuffer),
+        vertex_data: sc.DeviceAddress,
+        pixel_data: sc.DeviceAddress,
+        args: sc.DeviceAddress,
+        draw_count: u32,
+    ) void {
+        pushRootPointers(cb.body(), vertex_data, pixel_data);
+        const entry, const offset = cb.body().d.heap.entryAndOffsetFromAddr(args);
+        cb.body().d.handle.cmdDrawIndirect(cb.body().handle, entry.buffer, offset, draw_count, @sizeOf(sc.DrawArguments));
     }
 
     fn pushRootPointers(cb: *CommandBuffer, vertex_data: sc.DeviceAddress, pixel_data: sc.DeviceAddress) void {
@@ -2310,6 +2330,7 @@ pub export fn symbol(name: [*:0]const u8) callconv(sc.@"callconv") *const anyopa
         .setPipeline = CommandBuffer.setPipeline,
         .setDepthStencilState = CommandBuffer.setDepthStencilState,
         .dispatch = CommandBuffer.dispatch,
+        .dispatchIndirect = CommandBuffer.dispatchIndirect,
         .barrier = CommandBuffer.barrier,
         .copyTextureToBuffer = CommandBuffer.copyTextureToBuffer,
         .copyBufferToTexture = CommandBuffer.copyBufferToTexture,
@@ -2320,6 +2341,7 @@ pub export fn symbol(name: [*:0]const u8) callconv(sc.@"callconv") *const anyopa
         .drawIndexed = CommandBuffer.drawIndexed,
         .drawIndexedInstanced = CommandBuffer.drawIndexedInstanced,
         .drawIndexedInstancedIndirect = CommandBuffer.drawIndexedInstancedIndirect,
+        .drawIndirect = CommandBuffer.drawIndirect,
         .textureSizeAlign = Texture.sizeAlign,
         .createTexture = Texture.create,
         .destroyTexture = Texture.destroy,
