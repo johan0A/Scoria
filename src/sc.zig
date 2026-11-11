@@ -1931,12 +1931,12 @@ pub const BlendDesc = extern struct {
     alpha_op: BlendOp = .add,
     src_alpha_factor: BlendFactor = .one,
     dst_alpha_factor: BlendFactor = .zero,
-    color_write_mask: ColorWriteMask = .all,
 };
 
 pub const ColorTarget = extern struct {
     format: Format = .none,
     write_mask: ColorWriteMask = .all,
+    blend: ?*const BlendDesc = null,
 };
 
 pub const GraphicsPipelineDesc = extern struct {
@@ -1949,7 +1949,6 @@ pub const GraphicsPipelineDesc = extern struct {
     stencil_format: Format = .none,
     color_target_count: u32,
     color_targets: ?[*]const ColorTarget = null,
-    blend_state: ?*const BlendDesc = null,
 };
 
 pub const StencilDesc = extern struct {

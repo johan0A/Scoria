@@ -312,6 +312,7 @@ pub const Adapter = opaque {
                 .shader_int_64 = .true,
                 .shader_int_16 = .true,
                 .sampler_anisotropy = .true,
+                .independent_blend = .true,
                 .multi_draw_indirect = .true,
             } },
             .vk11 = .{
@@ -2077,7 +2078,7 @@ pub const Pipeline = struct {
         d: *Device,
         vertex_ir: []const u8,
         pixel_ir: []const u8,
-        desc: sc.GraphicsPipelineDesc, // TODO: why are BlendDesc.color_write_mask and .support_dual_source_blending never used?
+        desc: sc.GraphicsPipelineDesc, // TODO: why is .support_dual_source_blending never used?
     ) !*Object(Pipeline) {
         const color_targets = if (desc.color_targets) |color_targets| color_targets[0..desc.color_target_count] else &.{};
         std.debug.assert(color_targets.len <= 8);
@@ -2100,7 +2101,7 @@ pub const Pipeline = struct {
         var blend_attachments: [8]vk.PipelineColorBlendAttachmentState = undefined;
         for (color_targets, color_formats[0..color_targets.len], blend_attachments[0..color_targets.len]) |target, *format, *blend_attachment| {
             format.* = to_vk.format(target.format);
-            blend_attachment.* = to_vk.colorBlendAttachment(desc.blend_state, target.write_mask);
+            blend_attachment.* = to_vk.colorBlendAttachment(target.blend, target.write_mask);
         }
 
         const dynamic_states = [_]vk.DynamicState{

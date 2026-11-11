@@ -326,8 +326,7 @@
         { "name": "dst_color_factor", "type": { "base": "ScBlendFactor" }, "default": "SC_BLEND_FACTOR_ZERO", "doc": "" },
         { "name": "alpha_op", "type": { "base": "ScBlendOp" }, "default": "SC_BLEND_OP_ADD", "doc": "" },
         { "name": "src_alpha_factor", "type": { "base": "ScBlendFactor" }, "default": "SC_BLEND_FACTOR_ONE", "doc": "" },
-        { "name": "dst_alpha_factor", "type": { "base": "ScBlendFactor" }, "default": "SC_BLEND_FACTOR_ZERO", "doc": "" },
-        { "name": "color_write_mask", "type": { "base": "ScColorWriteMask" }, "default": "SC_COLOR_WRITE_MASK_ALL", "doc": "" }
+        { "name": "dst_alpha_factor", "type": { "base": "ScBlendFactor" }, "default": "SC_BLEND_FACTOR_ZERO", "doc": "" }
       ],
       "doc": ""
     },
@@ -335,7 +334,8 @@
       "name": "ScColorTarget",
       "fields": [
         { "name": "format", "type": { "base": "ScFormat" }, "default": "SC_FORMAT_NONE", "doc": "" },
-        { "name": "write_mask", "type": { "base": "ScColorWriteMask" }, "default": "SC_COLOR_WRITE_MASK_ALL", "doc": "" }
+        { "name": "write_mask", "type": { "base": "ScColorWriteMask" }, "default": "SC_COLOR_WRITE_MASK_ALL", "doc": "" },
+        { "name": "blend", "type": { "base": "ScBlendDesc", "ptr": [{ "const": true, "optional": true }] }, "default": "NULL", "doc": "" }
       ],
       "doc": ""
     },
@@ -350,8 +350,7 @@
         { "name": "depth_format", "type": { "base": "ScFormat" }, "default": "SC_FORMAT_NONE", "doc": "" },
         { "name": "stencil_format", "type": { "base": "ScFormat" }, "default": "SC_FORMAT_NONE", "doc": "" },
         { "name": "color_target_count", "type": { "base": "uint32_t" }, "doc": "" },
-        { "name": "color_targets", "type": { "base": "ScColorTarget", "ptr": [{ "const": true, "optional": true, "len": "color_target_count" }] }, "default": "NULL", "doc": "" },
-        { "name": "blend_state", "type": { "base": "ScBlendDesc", "ptr": [{ "const": true, "optional": true }] }, "default": "NULL", "doc": "" }
+        { "name": "color_targets", "type": { "base": "ScColorTarget", "ptr": [{ "const": true, "optional": true, "len": "color_target_count" }] }, "default": "NULL", "doc": "" }
       ],
       "doc": ""
     },
