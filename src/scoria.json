@@ -146,6 +146,15 @@
       "doc": ""
     },
     {
+      "name": "ScDepthBias",
+      "fields": [
+        { "name": "constant", "type": { "base": "float" }, "default": "0.0", "doc": "" },
+        { "name": "clamp", "type": { "base": "float" }, "default": "0.0", "doc": "" },
+        { "name": "slope", "type": { "base": "float" }, "default": "0.0", "doc": "" }
+      ],
+      "doc": ""
+    },
+    {
       "name": "ScSizeAlign",
       "fields": [
         { "name": "size", "type": { "base": "size_t" }, "doc": "" },

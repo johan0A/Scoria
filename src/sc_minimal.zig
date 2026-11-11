@@ -380,6 +380,12 @@ pub const Viewport = extern struct {
     max_depth: f32 = 1.0,
 };
 
+pub const DepthBias = extern struct {
+    constant: f32 = 0.0,
+    clamp: f32 = 0.0,
+    slope: f32 = 0.0,
+};
+
 pub const SizeAlign = extern struct {
     size: usize,
     alignment: usize,

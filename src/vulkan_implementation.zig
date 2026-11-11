@@ -1770,6 +1770,21 @@ pub const CommandBuffer = struct {
         }});
     }
 
+    pub fn setDepthBias(cb_obj: *Object(CommandBuffer), depth_bias: sc.DepthBias) void {
+        const cb = cb_obj.body();
+        if (depth_bias.constant == 0 and depth_bias.slope == 0) {
+            cb.d.handle.cmdSetDepthBiasEnable(cb.handle, .false);
+            return;
+        }
+        cb.d.handle.cmdSetDepthBiasEnable(cb.handle, .true);
+        cb.d.handle.cmdSetDepthBias(
+            cb.handle,
+            depth_bias.constant,
+            depth_bias.clamp,
+            depth_bias.slope,
+        );
+    }
+
     pub fn draw(
         cb: *Object(CommandBuffer),
         vertex_data: sc.DeviceAddress,
@@ -2053,6 +2068,7 @@ pub const Pipeline = struct {
         return pipeline_obj;
     }
 
+    // TODO: rename to createRaster?
     pub fn createGraphics(
         d: *Object(Device),
         vertex_ir_size: usize,
