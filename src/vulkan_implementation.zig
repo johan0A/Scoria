@@ -1664,7 +1664,7 @@ pub const CommandBuffer = struct {
                 .aspect_mask = to_vk.singleAspectForFormat(texture.desc.format),
                 .mip_level = desc.mip,
                 .base_array_layer = desc.base_layer,
-                .layer_count = if (desc.layer_count == sc.all_layers) texture.desc.layer_count - desc.base_layer else desc.layer_count,
+                .layer_count = if (desc.layer_count == 0) texture.desc.layer_count - desc.base_layer else desc.layer_count,
             },
             .image_offset = .{ .x = desc.offset.x, .y = desc.offset.y, .z = desc.offset.z },
             .image_extent = .{ .width = extent[0], .height = extent[1], .depth = extent[2] },
@@ -1916,6 +1916,7 @@ pub const Texture = struct {
         };
     }
     fn createInner(d: *Device, desc: Desc, texture_data: sc.DeviceAddress) !*Object(Texture) {
+        std.debug.assert(desc.format != .none);
         const texture = try d.textures.create(d.gpa);
         errdefer d.textures.destroy(texture);
 
@@ -2007,7 +2008,7 @@ pub const Texture = struct {
         view_desc: sc.TextureViewDesc,
         aspect_mask: vk.ImageAspectFlags,
     ) !vk.ImageView {
-        const layer_count = if (view_desc.layer_count == sc.all_layers) texture_desc.layer_count - view_desc.base_layer else view_desc.layer_count;
+        const layer_count = if (view_desc.layer_count == 0) texture_desc.layer_count - view_desc.base_layer else view_desc.layer_count;
         return d.handle.createImageView(&.{
             .image = image,
             .view_type = to_vk.viewType(texture_desc.type, layer_count),
@@ -2015,7 +2016,7 @@ pub const Texture = struct {
             .subresource_range = .{
                 .aspect_mask = aspect_mask,
                 .base_mip_level = view_desc.base_mip,
-                .level_count = if (view_desc.mip_count == sc.all_mips) vk.REMAINING_MIP_LEVELS else view_desc.mip_count,
+                .level_count = if (view_desc.mip_count == 0) vk.REMAINING_MIP_LEVELS else view_desc.mip_count,
                 .base_array_layer = view_desc.base_layer,
                 .layer_count = layer_count,
             },
@@ -2116,6 +2117,7 @@ pub const Pipeline = struct {
         var color_formats: [8]vk.Format = undefined;
         var blend_attachments: [8]vk.PipelineColorBlendAttachmentState = undefined;
         for (color_targets, color_formats[0..color_targets.len], blend_attachments[0..color_targets.len]) |target, *format, *blend_attachment| {
+            std.debug.assert(target.format != .none);
             format.* = to_vk.format(target.format);
             blend_attachment.* = to_vk.colorBlendAttachment(target.blend, target.write_mask);
         }

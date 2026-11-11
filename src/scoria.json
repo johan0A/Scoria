@@ -13,9 +13,7 @@
 
   "constants": [
     { "name": "SC_DESCRIPTOR_SIZE_MAX", "type": "size_t", "value": "64", "doc": "" },
-    { "name": "ADAPTER_NAME_CAPACITY_BYTES", "type": "size_t", "value": "256", "doc": "" },
-    { "name": "SC_ALL_MIPS", "type": "uint32_t", "value": "0xFFFFFFFF", "doc": "" },
-    { "name": "SC_ALL_LAYERS", "type": "uint32_t", "value": "0xFFFFFFFF", "doc": "" }
+    { "name": "ADAPTER_NAME_CAPACITY_BYTES", "type": "size_t", "value": "256", "doc": "" }
   ],
 
   "typedefs": [
@@ -111,24 +109,24 @@
     {
       "name": "ScOffset2D",
       "fields": [
-        { "name": "x", "type": { "base": "int32_t" }, "default": "0", "doc": "" },
-        { "name": "y", "type": { "base": "int32_t" }, "default": "0", "doc": "" }
+        { "name": "x", "type": { "base": "int32_t" }, "default": 0, "doc": "" },
+        { "name": "y", "type": { "base": "int32_t" }, "default": 0, "doc": "" }
       ],
       "doc": ""
     },
     {
       "name": "ScOffset3D",
       "fields": [
-        { "name": "x", "type": { "base": "int32_t" }, "default": "0", "doc": "" },
-        { "name": "y", "type": { "base": "int32_t" }, "default": "0", "doc": "" },
-        { "name": "z", "type": { "base": "int32_t" }, "default": "0", "doc": "" }
+        { "name": "x", "type": { "base": "int32_t" }, "default": 0, "doc": "" },
+        { "name": "y", "type": { "base": "int32_t" }, "default": 0, "doc": "" },
+        { "name": "z", "type": { "base": "int32_t" }, "default": 0, "doc": "" }
       ],
       "doc": ""
     },
     {
       "name": "ScRect2D",
       "fields": [
-        { "name": "offset", "type": { "base": "ScOffset2D" }, "doc": "" },
+        { "name": "offset", "type": { "base": "ScOffset2D" }, "default": {}, "doc": "" },
         { "name": "extent", "type": { "base": "ScExtent2D" }, "doc": "" }
       ],
       "doc": ""
@@ -136,21 +134,21 @@
     {
       "name": "ScViewport",
       "fields": [
-        { "name": "x", "type": { "base": "float" }, "default": "0.0", "doc": "" },
-        { "name": "y", "type": { "base": "float" }, "default": "0.0", "doc": "" },
+        { "name": "x", "type": { "base": "float" }, "default": 0.0, "doc": "" },
+        { "name": "y", "type": { "base": "float" }, "default": 0.0, "doc": "" },
         { "name": "width", "type": { "base": "float" }, "doc": "" },
         { "name": "height", "type": { "base": "float" }, "doc": "" },
-        { "name": "min_depth", "type": { "base": "float" }, "default": "0.0", "doc": "" },
-        { "name": "max_depth", "type": { "base": "float" }, "default": "1.0", "doc": "" }
+        { "name": "min_depth", "type": { "base": "float" }, "default": 0.0, "doc": "" },
+        { "name": "max_depth", "type": { "base": "float" }, "default": 1.0, "doc": "" }
       ],
       "doc": ""
     },
     {
       "name": "ScDepthBias",
       "fields": [
-        { "name": "constant", "type": { "base": "float" }, "default": "0.0", "doc": "" },
-        { "name": "clamp", "type": { "base": "float" }, "default": "0.0", "doc": "" },
-        { "name": "slope", "type": { "base": "float" }, "default": "0.0", "doc": "" }
+        { "name": "constant", "type": { "base": "float" }, "default": 0.0, "doc": "" },
+        { "name": "clamp", "type": { "base": "float" }, "default": 0.0, "doc": "" },
+        { "name": "slope", "type": { "base": "float" }, "default": 0.0, "doc": "" }
       ],
       "doc": ""
     },
@@ -202,7 +200,7 @@
         { "name": "format", "type": { "base": "ScFormat" }, "doc": "" },
         { "name": "present_mode", "type": { "base": "ScPresentMode" }, "doc": "" },
         { "name": "usage", "type": { "base": "ScTextureUsage" }, "doc": "" },
-        { "name": "frame_latency_max", "type": { "base": "uint32_t" }, "default": "0", "doc": "Acquiring a back buffer blocks until the present from this many frames ago is displayed. 1 gives the lowest latency, 0 disables the wait. Ignored when the platform cannot report presentation." }
+        { "name": "frame_latency_max", "type": { "base": "uint32_t" }, "default": 0, "doc": "Acquiring a back buffer blocks until the present from this many frames ago is displayed. 1 gives the lowest latency, 0 disables the wait. Ignored when the platform cannot report presentation." }
       ],
       "doc": ""
     },
@@ -217,20 +215,20 @@
     {
       "name": "ScDepthAttachment",
       "fields": [
-        { "name": "texture", "type": { "base": "ScTexture", "ptr": [{ "optional": true }] }, "default": "NULL", "doc": "" },
+        { "name": "texture", "type": { "base": "ScTexture", "ptr": [{ "optional": true }] }, "default": null, "doc": "" },
         { "name": "load_op", "type": { "base": "ScLoadOp" }, "default": "SC_LOAD_OP_LOAD", "doc": "" },
         { "name": "store_op", "type": { "base": "ScStoreOp" }, "default": "SC_STORE_OP_STORE", "doc": "" },
-        { "name": "clear_value", "type": { "base": "float" }, "default": "1.0", "doc": "" }
+        { "name": "clear_value", "type": { "base": "float" }, "default": 1.0, "doc": "" }
       ],
       "doc": ""
     },
     {
       "name": "ScStencilAttachment",
       "fields": [
-        { "name": "texture", "type": { "base": "ScTexture", "ptr": [{ "optional": true }] }, "default": "NULL", "doc": "" },
+        { "name": "texture", "type": { "base": "ScTexture", "ptr": [{ "optional": true }] }, "default": null, "doc": "" },
         { "name": "load_op", "type": { "base": "ScLoadOp" }, "default": "SC_LOAD_OP_LOAD", "doc": "" },
         { "name": "store_op", "type": { "base": "ScStoreOp" }, "default": "SC_STORE_OP_STORE", "doc": "" },
-        { "name": "clear_value", "type": { "base": "uint32_t" }, "default": "0", "doc": "" }
+        { "name": "clear_value", "type": { "base": "uint32_t" }, "default": 0, "doc": "" }
       ],
       "doc": ""
     },
@@ -240,17 +238,17 @@
         { "name": "texture", "type": { "base": "ScTexture", "ptr": [{}] }, "doc": "" },
         { "name": "load_op", "type": { "base": "ScLoadOp" }, "default": "SC_LOAD_OP_LOAD", "doc": "" },
         { "name": "store_op", "type": { "base": "ScStoreOp" }, "default": "SC_STORE_OP_STORE", "doc": "" },
-        { "name": "clear_color", "type": { "base": "float", "array": 4 }, "default": "0.0", "doc": "" }
+        { "name": "clear_color", "type": { "base": "float", "array": 4 }, "default": [0, 0, 0, 1], "doc": "" }
       ],
       "doc": ""
     },
     {
       "name": "ScRenderPassDesc",
       "fields": [
-        { "name": "depth_attachment", "type": { "base": "ScDepthAttachment" }, "doc": "" },
-        { "name": "stencil_attachment", "type": { "base": "ScStencilAttachment" }, "doc": "" },
-        { "name": "color_attachment_count", "type": { "base": "uint32_t" }, "doc": "" },
-        { "name": "color_attachments", "type": { "base": "ScColorAttachment", "ptr": [{ "const": true, "optional": true, "len": "color_attachment_count" }] }, "default": "NULL", "doc": "" }
+        { "name": "depth_attachment", "type": { "base": "ScDepthAttachment" }, "default": {}, "doc": "" },
+        { "name": "stencil_attachment", "type": { "base": "ScStencilAttachment" }, "default": {}, "doc": "" },
+        { "name": "color_attachment_count", "type": { "base": "uint32_t" }, "default": 0, "doc": "" },
+        { "name": "color_attachments", "type": { "base": "ScColorAttachment", "ptr": [{ "const": true, "optional": true, "len": "color_attachment_count" }] }, "default": null, "doc": "" }
       ],
       "doc": ""
     },
@@ -258,10 +256,10 @@
       "name": "ScDrawIndexedArguments",
       "fields": [
         { "name": "index_count", "type": { "base": "uint32_t" }, "doc": "" },
-        { "name": "instance_count", "type": { "base": "uint32_t" }, "default": "1", "doc": "" },
-        { "name": "first_index", "type": { "base": "uint32_t" }, "default": "0", "doc": "" },
-        { "name": "vertex_offset", "type": { "base": "int32_t" }, "default": "0", "doc": "" },
-        { "name": "first_instance", "type": { "base": "uint32_t" }, "default": "0", "doc": "" }
+        { "name": "instance_count", "type": { "base": "uint32_t" }, "default": 1, "doc": "" },
+        { "name": "first_index", "type": { "base": "uint32_t" }, "default": 0, "doc": "" },
+        { "name": "vertex_offset", "type": { "base": "int32_t" }, "default": 0, "doc": "" },
+        { "name": "first_instance", "type": { "base": "uint32_t" }, "default": 0, "doc": "" }
       ],
       "doc": ""
     },
@@ -269,9 +267,9 @@
       "name": "ScDrawArguments",
       "fields": [
         { "name": "vertex_count", "type": { "base": "uint32_t" }, "doc": "" },
-        { "name": "instance_count", "type": { "base": "uint32_t" }, "default": "1", "doc": "" },
-        { "name": "first_vertex", "type": { "base": "uint32_t" }, "default": "0", "doc": "" },
-        { "name": "first_instance", "type": { "base": "uint32_t" }, "default": "0", "doc": "" }
+        { "name": "instance_count", "type": { "base": "uint32_t" }, "default": 1, "doc": "" },
+        { "name": "first_vertex", "type": { "base": "uint32_t" }, "default": 0, "doc": "" },
+        { "name": "first_instance", "type": { "base": "uint32_t" }, "default": 0, "doc": "" }
       ],
       "doc": ""
     },
@@ -279,8 +277,8 @@
       "name": "ScDispatchArguments",
       "fields": [
         { "name": "x", "type": { "base": "uint32_t" }, "doc": "" },
-        { "name": "y", "type": { "base": "uint32_t" }, "default": "1", "doc": "" },
-        { "name": "z", "type": { "base": "uint32_t" }, "default": "1", "doc": "" }
+        { "name": "y", "type": { "base": "uint32_t" }, "default": 1, "doc": "" },
+        { "name": "z", "type": { "base": "uint32_t" }, "default": 1, "doc": "" }
       ],
       "doc": ""
     },
@@ -289,34 +287,34 @@
       "fields": [
         { "name": "type", "type": { "base": "ScTextureDimension" }, "default": "SC_TEXTURE_DIMENSION_2D", "doc": "" },
         { "name": "extent", "type": { "base": "ScExtent3D" }, "doc": "" },
-        { "name": "mip_count", "type": { "base": "uint32_t" }, "default": "1", "doc": "" },
-        { "name": "layer_count", "type": { "base": "uint32_t" }, "default": "1", "doc": "" },
-        { "name": "format", "type": { "base": "ScFormat" }, "default": "SC_FORMAT_NONE", "doc": "" },
-        { "name": "usage", "type": { "base": "ScTextureUsage" }, "default": "0", "doc": "" }
+        { "name": "mip_count", "type": { "base": "uint32_t" }, "default": 1, "doc": "" },
+        { "name": "layer_count", "type": { "base": "uint32_t" }, "default": 1, "doc": "" },
+        { "name": "format", "type": { "base": "ScFormat" }, "doc": "" },
+        { "name": "usage", "type": { "base": "ScTextureUsage" }, "default": 0, "doc": "" }
       ],
       "doc": ""
     },
     {
       "name": "ScTextureViewDesc",
       "fields": [
-        { "name": "format", "type": { "base": "ScFormat" }, "default": "SC_FORMAT_NONE", "doc": "" },
-        { "name": "base_mip", "type": { "base": "uint32_t" }, "default": "0", "doc": "" },
-        { "name": "mip_count", "type": { "base": "uint32_t" }, "default": "SC_ALL_MIPS", "doc": "" },
-        { "name": "base_layer", "type": { "base": "uint32_t" }, "default": "0", "doc": "" },
-        { "name": "layer_count", "type": { "base": "uint32_t" }, "default": "SC_ALL_LAYERS", "doc": "" }
+        { "name": "format", "type": { "base": "ScFormat" }, "default": "SC_FORMAT_NONE", "doc": "SC_FORMAT_NONE selects the format of the texture." },
+        { "name": "base_mip", "type": { "base": "uint32_t" }, "default": 0, "doc": "" },
+        { "name": "mip_count", "type": { "base": "uint32_t" }, "default": 0, "doc": "0 selects all mips from base_mip." },
+        { "name": "base_layer", "type": { "base": "uint32_t" }, "default": 0, "doc": "" },
+        { "name": "layer_count", "type": { "base": "uint32_t" }, "default": 0, "doc": "0 selects all layers from base_layer." }
       ],
       "doc": ""
     },
     {
       "name": "ScTextureCopyDesc",
       "fields": [
-        { "name": "mip", "type": { "base": "uint32_t" }, "default": "0", "doc": "" },
-        { "name": "base_layer", "type": { "base": "uint32_t" }, "default": "0", "doc": "" },
-        { "name": "layer_count", "type": { "base": "uint32_t" }, "default": "SC_ALL_LAYERS", "doc": "" },
-        { "name": "offset", "type": { "base": "ScOffset3D" }, "default": "{0}", "doc": "Must not be negative. Must be a multiple of the format's block extent." },
-        { "name": "extent", "type": { "base": "ScExtent3D" }, "default": "{0}", "doc": "Zero components select the rest of the mip. Must be a multiple of the format's block extent unless it reaches the edge of the mip." },
-        { "name": "row_pitch_bytes", "type": { "base": "size_t" }, "default": "0", "doc": "Distance between rows of blocks in the buffer, 0 is tightly packed. Must be a multiple of the format's block size." },
-        { "name": "slice_pitch_bytes", "type": { "base": "size_t" }, "default": "0", "doc": "Distance between depth slices or layers in the buffer, 0 is tightly packed. Must be a multiple of the row pitch." }
+        { "name": "mip", "type": { "base": "uint32_t" }, "default": 0, "doc": "" },
+        { "name": "base_layer", "type": { "base": "uint32_t" }, "default": 0, "doc": "" },
+        { "name": "layer_count", "type": { "base": "uint32_t" }, "default": 0, "doc": "0 selects all layers from base_layer." },
+        { "name": "offset", "type": { "base": "ScOffset3D" }, "default": {}, "doc": "Must not be negative. Must be a multiple of the format's block extent." },
+        { "name": "extent", "type": { "base": "ScExtent3D" }, "default": { "width": 0, "height": 0, "depth": 0 }, "doc": "Zero components select the rest of the mip. Must be a multiple of the format's block extent unless it reaches the edge of the mip." },
+        { "name": "row_pitch_bytes", "type": { "base": "size_t" }, "default": 0, "doc": "Distance between rows of blocks in the buffer, 0 is tightly packed. Must be a multiple of the format's block size." },
+        { "name": "slice_pitch_bytes", "type": { "base": "size_t" }, "default": 0, "doc": "Distance between depth slices or layers in the buffer, 0 is tightly packed. Must be a multiple of the row pitch." }
       ],
       "doc": ""
     },
@@ -342,9 +340,9 @@
     {
       "name": "ScColorTarget",
       "fields": [
-        { "name": "format", "type": { "base": "ScFormat" }, "default": "SC_FORMAT_NONE", "doc": "" },
+        { "name": "format", "type": { "base": "ScFormat" }, "doc": "" },
         { "name": "write_mask", "type": { "base": "ScColorWriteMask" }, "default": "SC_COLOR_WRITE_MASK_ALL", "doc": "" },
-        { "name": "blend", "type": { "base": "ScBlendDesc", "ptr": [{ "const": true, "optional": true }] }, "default": "NULL", "doc": "" }
+        { "name": "blend", "type": { "base": "ScBlendDesc", "ptr": [{ "const": true, "optional": true }] }, "default": null, "doc": "" }
       ],
       "doc": ""
     },
@@ -353,12 +351,12 @@
       "fields": [
         { "name": "topology", "type": { "base": "ScTopology" }, "default": "SC_TOPOLOGY_TRIANGLE_LIST", "doc": "" },
         { "name": "cull", "type": { "base": "ScCull" }, "default": "SC_CULL_NONE", "doc": "" },
-        { "name": "alpha_to_coverage", "type": { "base": "bool" }, "default": "false", "doc": "" },
-        { "name": "sample_count", "type": { "base": "uint32_t" }, "default": "1", "doc": "" },
-        { "name": "depth_format", "type": { "base": "ScFormat" }, "default": "SC_FORMAT_NONE", "doc": "" },
-        { "name": "stencil_format", "type": { "base": "ScFormat" }, "default": "SC_FORMAT_NONE", "doc": "" },
-        { "name": "color_target_count", "type": { "base": "uint32_t" }, "doc": "" },
-        { "name": "color_targets", "type": { "base": "ScColorTarget", "ptr": [{ "const": true, "optional": true, "len": "color_target_count" }] }, "default": "NULL", "doc": "" }
+        { "name": "alpha_to_coverage", "type": { "base": "bool" }, "default": false, "doc": "" },
+        { "name": "sample_count", "type": { "base": "uint32_t" }, "default": 1, "doc": "" },
+        { "name": "depth_format", "type": { "base": "ScFormat" }, "default": "SC_FORMAT_NONE", "doc": "SC_FORMAT_NONE for no depth attachment." },
+        { "name": "stencil_format", "type": { "base": "ScFormat" }, "default": "SC_FORMAT_NONE", "doc": "SC_FORMAT_NONE for no stencil attachment." },
+        { "name": "color_target_count", "type": { "base": "uint32_t" }, "default": 0, "doc": "" },
+        { "name": "color_targets", "type": { "base": "ScColorTarget", "ptr": [{ "const": true, "optional": true, "len": "color_target_count" }] }, "default": null, "doc": "" }
       ],
       "doc": ""
     },
@@ -369,22 +367,22 @@
         { "name": "fail_op", "type": { "base": "ScStencilOp" }, "default": "SC_STENCIL_OP_KEEP", "doc": "" },
         { "name": "pass_op", "type": { "base": "ScStencilOp" }, "default": "SC_STENCIL_OP_KEEP", "doc": "" },
         { "name": "depth_fail_op", "type": { "base": "ScStencilOp" }, "default": "SC_STENCIL_OP_KEEP", "doc": "" },
-        { "name": "reference", "type": { "base": "uint8_t" }, "default": "0", "doc": "" }
+        { "name": "reference", "type": { "base": "uint8_t" }, "default": 0, "doc": "" }
       ],
       "doc": ""
     },
     {
       "name": "ScDepthStencilDesc",
       "fields": [
-        { "name": "depth_mode", "type": { "base": "ScDepthFlags" }, "default": "0", "doc": "" },
+        { "name": "depth_mode", "type": { "base": "ScDepthFlags" }, "default": 0, "doc": "" },
         { "name": "depth_test", "type": { "base": "ScCompareOp" }, "default": "SC_COMPARE_OP_ALWAYS", "doc": "" },
-        { "name": "depth_bias", "type": { "base": "float" }, "default": "0", "doc": "" },
-        { "name": "depth_bias_slope_factor", "type": { "base": "float" }, "default": "0", "doc": "" },
-        { "name": "depth_bias_clamp", "type": { "base": "float" }, "default": "0", "doc": "" },
-        { "name": "stencil_read_mask", "type": { "base": "uint8_t" }, "default": "0xff", "doc": "" },
-        { "name": "stencil_write_mask", "type": { "base": "uint8_t" }, "default": "0xff", "doc": "" },
-        { "name": "stencil_front", "type": { "base": "ScStencilDesc" }, "doc": "" },
-        { "name": "stencil_back", "type": { "base": "ScStencilDesc" }, "doc": "" }
+        { "name": "depth_bias", "type": { "base": "float" }, "default": 0, "doc": "" },
+        { "name": "depth_bias_slope_factor", "type": { "base": "float" }, "default": 0, "doc": "" },
+        { "name": "depth_bias_clamp", "type": { "base": "float" }, "default": 0, "doc": "" },
+        { "name": "stencil_read_mask", "type": { "base": "uint8_t" }, "default": 255, "doc": "" },
+        { "name": "stencil_write_mask", "type": { "base": "uint8_t" }, "default": 255, "doc": "" },
+        { "name": "stencil_front", "type": { "base": "ScStencilDesc" }, "default": {}, "doc": "" },
+        { "name": "stencil_back", "type": { "base": "ScStencilDesc" }, "default": {}, "doc": "" }
       ],
       "doc": ""
     }
@@ -445,14 +443,14 @@
       "name": "ScCompareOp",
       "backing_type": "uint32_t",
       "values": [
-        { "name": "SC_COMPARE_OP_NEVER", "value": 0, "doc": "" },
-        { "name": "SC_COMPARE_OP_LESS", "value": 1, "doc": "" },
-        { "name": "SC_COMPARE_OP_EQUAL", "value": 2, "doc": "" },
+        { "name": "SC_COMPARE_OP_ALWAYS", "value": 0, "doc": "" },
+        { "name": "SC_COMPARE_OP_NEVER", "value": 1, "doc": "" },
+        { "name": "SC_COMPARE_OP_LESS", "value": 2, "doc": "" },
         { "name": "SC_COMPARE_OP_LESS_EQUAL", "value": 3, "doc": "" },
         { "name": "SC_COMPARE_OP_GREATER", "value": 4, "doc": "" },
-        { "name": "SC_COMPARE_OP_NOT_EQUAL", "value": 5, "doc": "" },
-        { "name": "SC_COMPARE_OP_GREATER_EQUAL", "value": 6, "doc": "" },
-        { "name": "SC_COMPARE_OP_ALWAYS", "value": 7, "doc": "" }
+        { "name": "SC_COMPARE_OP_GREATER_EQUAL", "value": 5, "doc": "" },
+        { "name": "SC_COMPARE_OP_EQUAL", "value": 6, "doc": "" },
+        { "name": "SC_COMPARE_OP_NOT_EQUAL", "value": 7, "doc": "" }
       ],
       "doc": ""
     },
@@ -498,9 +496,9 @@
       "name": "ScTextureDimension",
       "backing_type": "uint32_t",
       "values": [
-        { "name": "SC_TEXTURE_DIMENSION_1D", "value": 0, "doc": "" },
-        { "name": "SC_TEXTURE_DIMENSION_2D", "value": 1, "doc": "" },
-        { "name": "SC_TEXTURE_DIMENSION_3D", "value": 2, "doc": "" }
+        { "name": "SC_TEXTURE_DIMENSION_2D", "value": 0, "doc": "" },
+        { "name": "SC_TEXTURE_DIMENSION_3D", "value": 1, "doc": "" },
+        { "name": "SC_TEXTURE_DIMENSION_1D", "value": 2, "doc": "" }
       ],
       "doc": ""
     },
@@ -518,10 +516,10 @@
       "name": "ScCull",
       "backing_type": "uint32_t",
       "values": [
-        { "name": "SC_CULL_CCW", "value": 0, "doc": "" },
-        { "name": "SC_CULL_CW", "value": 1, "doc": "" },
-        { "name": "SC_CULL_ALL", "value": 2, "doc": "" },
-        { "name": "SC_CULL_NONE", "value": 3, "doc": "" }
+        { "name": "SC_CULL_NONE", "value": 0, "doc": "" },
+        { "name": "SC_CULL_ALL", "value": 1, "doc": "" },
+        { "name": "SC_CULL_CCW", "value": 2, "doc": "" },
+        { "name": "SC_CULL_CW", "value": 3, "doc": "" }
       ],
       "doc": ""
     },

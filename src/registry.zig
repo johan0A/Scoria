@@ -118,17 +118,36 @@ pub const Registry = struct {
     pub const Field = struct {
         name: []const u8,
         type: Type,
+        /// Null when the field has to be set.
         default: ?Default,
         doc: []const u8,
     };
 
     pub const Default = union(enum) {
+        null,
+        bool: bool,
+        int: i64,
+        float: f64,
         enum_value: EnumValue,
-        raw: []const u8,
+        flags: FlagsValue,
+        array: []const Default,
+        /// Fields left out take their own default.
+        @"struct": []const FieldValue,
 
         pub const EnumValue = struct {
             @"enum": Enum.Index,
             value: u32,
+        };
+
+        pub const FlagsValue = struct {
+            flags: Flags.Index,
+            /// Null for no bits set.
+            combination: ?u32,
+        };
+
+        pub const FieldValue = struct {
+            field: u32,
+            value: Default,
         };
     };
 
@@ -273,8 +292,15 @@ pub const JsonRegistry = struct {
     pub const Field = struct {
         name: []const u8,
         type: Type,
-        default: ?[]const u8 = null,
+        /// Not optional because JSON null is a valid default.
+        default: std.json.Value = no_default,
         doc: []const u8,
+
+        const no_default: std.json.Value = .{ .number_string = "" };
+
+        fn hasDefault(field: Field) bool {
+            return field.default != .number_string or field.default.number_string.len != 0;
+        }
     };
 
     pub const Type = struct {
@@ -554,7 +580,7 @@ fn convertFields(context: Context, json_fields: []const JsonRegistry.Field) ![]c
         field.* = .{
             .name = json_field.name,
             .type = @"type",
-            .default = if (json_field.default) |default| convertDefault(context, @"type", default) else null,
+            .default = if (json_field.hasDefault()) try convertDefault(context, @"type", json_field.default) else null,
             .doc = json_field.doc,
         };
     }
@@ -564,15 +590,70 @@ fn convertFields(context: Context, json_fields: []const JsonRegistry.Field) ![]c
 fn convertDefault(
     context: Context,
     @"type": Registry.Type,
-    raw: []const u8,
-) Registry.Default {
-    const is_plain_enum = @"type".ptrs.len == 0 and @"type".array == null and @"type".base == .@"enum";
-    if (!is_plain_enum) return .{ .raw = raw };
+    value: std.json.Value,
+) !Registry.Default {
+    if (@"type".device_ptrs.len != 0) return error.UnsupportedDefault;
+    if (@"type".ptrs.len != 0) {
+        if (value != .null or !@"type".ptrs[@"type".ptrs.len - 1].optional) return error.InvalidDefault;
+        return .null;
+    }
 
-    const enum_index = @"type".base.@"enum";
-    const json_enum = context.json.enums[@backingInt(enum_index)];
-    const value_index = findByName(json_enum.values, raw) orelse return .{ .raw = raw };
-    return .{ .enum_value = .{ .@"enum" = enum_index, .value = @intCast(value_index) } };
+    if (@"type".array) |array| {
+        if (value != .array) return error.InvalidDefault;
+        const items = value.array.items;
+        if (array == .int and array.int != items.len) return error.InvalidDefault;
+
+        var element_type = @"type";
+        element_type.array = null;
+        const elements = try context.arena.alloc(Registry.Default, items.len);
+        for (items, elements) |item, *element| element.* = try convertDefault(context, element_type, item);
+        return .{ .array = elements };
+    }
+
+    switch (@"type".base) {
+        .builtin => |builtin| switch (builtin) {
+            .void => {},
+            .bool => if (value == .bool) return .{ .bool = value.bool },
+            .float, .double => switch (value) {
+                .integer => |int| return .{ .float = @floatFromInt(int) },
+                .float => |float| return .{ .float = float },
+                else => {},
+            },
+            else => if (value == .integer) return .{ .int = value.integer },
+        },
+        .@"enum" => |index| if (value == .string) {
+            const values = context.json.enums[@backingInt(index)].values;
+            const value_index = findByName(values, value.string) orelse return error.UnknownDefault;
+            return .{ .enum_value = .{ .@"enum" = index, .value = @intCast(value_index) } };
+        },
+        .flags => |index| switch (value) {
+            .integer => |int| if (int == 0) return .{ .flags = .{ .flags = index, .combination = null } },
+            .string => |name| {
+                const combination_index = findByName(context.json.flags[@backingInt(index)].combinations, name) orelse return error.UnknownDefault;
+                return .{ .flags = .{ .flags = index, .combination = @intCast(combination_index) } };
+            },
+            else => {},
+        },
+        .@"struct" => |index| if (value == .object) {
+            const json_fields = context.json.structs[@backingInt(index)].fields;
+            for (json_fields) |json_field| {
+                if (!json_field.hasDefault() and !value.object.contains(json_field.name)) return error.DefaultMissingField;
+            }
+            const field_values = try context.arena.alloc(Registry.Default.FieldValue, value.object.count());
+            for (value.object.keys(), value.object.values(), field_values) |name, field_value, *converted| {
+                const field_index = findByName(json_fields, name) orelse return error.UnknownDefault;
+                const field_type = try convertType(context, json_fields[field_index].type, json_fields);
+                converted.* = .{ .field = @intCast(field_index), .value = try convertDefault(context, field_type, field_value) };
+            }
+            return .{ .@"struct" = field_values };
+        },
+        .typedef => |index| {
+            const base = try resolveTypeBase(context, context.json.typedefs[@backingInt(index)].type);
+            return convertDefault(context, .{ .base = base }, value);
+        },
+        .@"opaque", .function_pointer => {},
+    }
+    return error.InvalidDefault;
 }
 
 fn convertCombinations(context: Context, json_flags: JsonRegistry.Flags) ![]const Registry.Flags.Combination {

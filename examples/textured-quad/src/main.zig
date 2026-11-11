@@ -185,8 +185,6 @@ fn drawFrame(renderer: *Renderer) !void {
     const command_buffer = try renderer.queue.startCommandRecording();
     command_buffer.setActiveTextureHeap(renderer.descriptor_heap);
     command_buffer.beginRenderPass(.{
-        .stencil_attachment = .{},
-        .depth_attachment = .{},
         .color_attachment_count = 1,
         .color_attachments = &.{.{
             .texture = back_buffer.texture,

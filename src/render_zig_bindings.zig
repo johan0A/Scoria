@@ -763,52 +763,42 @@ fn renderDefault(
     default: Registry.Default,
 ) !void {
     switch (default) {
+        .null => try w.writeAll("null"),
+        .bool => |value| try w.writeAll(if (value) "true" else "false"),
+        .int => |int| try w.print("{d}", .{int}),
+        .float => |float| try w.print("{d}", .{float}),
         .enum_value => |enum_value| {
             const @"enum" = registry.enums[@backingInt(enum_value.@"enum")];
             try w.writeByte('.');
             try renderMemberName(w, registry, @"enum".name, @"enum".values[enum_value.value].name);
         },
-        .raw => |raw| {
-            if (@"type".ptrs.len != 0) return w.writeAll("null");
-
-            if (@"type".array != null) {
-                if (raw[0] == '{') return error.UnsupportedRegistry;
-                var element_type = @"type";
-                element_type.array = null;
-                try w.writeAll("@splat(");
-                try renderDefault(w, registry, element_type, default);
-                return w.writeAll(")");
+        .array => |elements| {
+            var element_type = @"type";
+            element_type.array = null;
+            try w.writeAll(".{ ");
+            for (elements, 0..) |element, index| {
+                if (index != 0) try w.writeAll(", ");
+                try renderDefault(w, registry, element_type, element);
             }
-
-            if (@"type".base == .@"struct") {
-                if (!std.mem.eql(u8, raw, "{0}")) return error.UnsupportedRegistry;
-                try w.writeAll("std.mem.zeroes(");
-                try renderTypeName(w, registry, registry.declName(@"type".base));
-                return w.writeAll(")");
+            try w.writeAll(" }");
+        },
+        .flags => |flags_value| {
+            const flags = registry.flags[@backingInt(flags_value.flags)];
+            const combination = flags_value.combination orelse return w.writeAll(".{}");
+            try w.writeByte('.');
+            try renderMemberName(w, registry, flags.name, flags.combinations[combination].name);
+        },
+        .@"struct" => |field_values| {
+            const fields = registry.structs[@backingInt(@"type".base.@"struct")].fields;
+            try w.writeAll(".{");
+            for (field_values, 0..) |field_value, index| {
+                const field = fields[field_value.field];
+                try w.writeAll(if (index == 0) " ." else ", .");
+                try renderId(w, field.name);
+                try w.writeAll(" = ");
+                try renderDefault(w, registry, field.type, field_value.value);
             }
-
-            if (@"type".base == .flags) {
-                if (std.mem.eql(u8, raw, "0")) return w.writeAll(".{}");
-
-                const flags = registry.flags[@backingInt(@"type".base.flags)];
-                for (flags.combinations) |combination| {
-                    if (!std.mem.eql(u8, combination.name, raw)) continue;
-                    try w.writeByte('.');
-                    return renderMemberName(w, registry, flags.name, combination.name);
-                }
-
-                try w.writeAll(".{");
-                var bit_names = std.mem.splitScalar(u8, raw, '|');
-                while (bit_names.next()) |bit_name| {
-                    try w.writeAll(" .");
-                    try renderMemberName(w, registry, flags.name, std.mem.trim(u8, bit_name, " \t"));
-                    try w.writeAll(" = true,");
-                }
-                try w.writeAll(" }");
-            }
-
-            if (std.mem.startsWith(u8, raw, registry.enum_prefix)) return renderConstName(w, registry, raw);
-            try w.writeAll(raw);
+            try w.writeAll(if (field_values.len == 0) "}" else " }");
         },
     }
 }

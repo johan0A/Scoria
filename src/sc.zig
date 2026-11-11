@@ -19,8 +19,6 @@ pub const DeviceAllocator = heap.DeviceAllocator;
 
 pub const descriptor_size_max: usize = 64;
 pub const adapter_name_capacity_bytes: usize = 256;
-pub const all_mips: u32 = 0xFFFFFFFF;
-pub const all_layers: u32 = 0xFFFFFFFF;
 
 pub const DeviceAddress = u64;
 
@@ -1480,14 +1478,14 @@ pub const PresentMode = enum(u32) {
 };
 
 pub const CompareOp = enum(u32) {
-    never = 0,
-    less = 1,
-    equal = 2,
+    always = 0,
+    never = 1,
+    less = 2,
     less_equal = 3,
     greater = 4,
-    not_equal = 5,
-    greater_equal = 6,
-    always = 7,
+    greater_equal = 5,
+    equal = 6,
+    not_equal = 7,
 };
 
 pub const QueueKind = enum(u32) {
@@ -1513,8 +1511,8 @@ pub const IndexType = enum(u32) {
 };
 
 pub const TextureDimension = enum(u32) {
-    @"1d" = 0,
-    @"2d" = 1,
+    @"2d" = 0,
+    @"1d" = 1,
     @"3d" = 2,
 };
 
@@ -1525,10 +1523,10 @@ pub const Topology = enum(u32) {
 };
 
 pub const Cull = enum(u32) {
-    ccw = 0,
-    cw = 1,
-    all = 2,
-    none = 3,
+    none = 0,
+    ccw = 1,
+    cw = 2,
+    all = 3,
 };
 
 pub const BlendOp = enum(u32) {
@@ -1784,23 +1782,23 @@ pub const Offset3D = extern struct {
 };
 
 pub const Rect2D = extern struct {
-    offset: Offset2D,
+    offset: Offset2D = .{},
     extent: Extent2D,
 };
 
 pub const Viewport = extern struct {
-    x: f32 = 0.0,
-    y: f32 = 0.0,
+    x: f32 = 0,
+    y: f32 = 0,
     width: f32,
     height: f32,
-    min_depth: f32 = 0.0,
-    max_depth: f32 = 1.0,
+    min_depth: f32 = 0,
+    max_depth: f32 = 1,
 };
 
 pub const DepthBias = extern struct {
-    constant: f32 = 0.0,
-    clamp: f32 = 0.0,
-    slope: f32 = 0.0,
+    constant: f32 = 0,
+    clamp: f32 = 0,
+    slope: f32 = 0,
 };
 
 pub const SizeAlign = extern struct {
@@ -1850,7 +1848,7 @@ pub const DepthAttachment = extern struct {
     texture: ?*Texture = null,
     load_op: LoadOp = .load,
     store_op: StoreOp = .store,
-    clear_value: f32 = 1.0,
+    clear_value: f32 = 1,
 };
 
 pub const StencilAttachment = extern struct {
@@ -1864,13 +1862,13 @@ pub const ColorAttachment = extern struct {
     texture: *Texture,
     load_op: LoadOp = .load,
     store_op: StoreOp = .store,
-    clear_color: [4]f32 = @splat(0.0),
+    clear_color: [4]f32 = .{ 0, 0, 0, 1 },
 };
 
 pub const RenderPassDesc = extern struct {
-    depth_attachment: DepthAttachment,
-    stencil_attachment: StencilAttachment,
-    color_attachment_count: u32,
+    depth_attachment: DepthAttachment = .{},
+    stencil_attachment: StencilAttachment = .{},
+    color_attachment_count: u32 = 0,
     color_attachments: ?[*]const ColorAttachment = null,
 };
 
@@ -1900,26 +1898,30 @@ pub const TextureDesc = extern struct {
     extent: Extent3D,
     mip_count: u32 = 1,
     layer_count: u32 = 1,
-    format: Format = .none,
+    format: Format,
     usage: TextureUsage = .{},
 };
 
 pub const TextureViewDesc = extern struct {
+    /// SC_FORMAT_NONE selects the format of the texture.
     format: Format = .none,
     base_mip: u32 = 0,
-    mip_count: u32 = all_mips,
+    /// 0 selects all mips from base_mip.
+    mip_count: u32 = 0,
     base_layer: u32 = 0,
-    layer_count: u32 = all_layers,
+    /// 0 selects all layers from base_layer.
+    layer_count: u32 = 0,
 };
 
 pub const TextureCopyDesc = extern struct {
     mip: u32 = 0,
     base_layer: u32 = 0,
-    layer_count: u32 = all_layers,
+    /// 0 selects all layers from base_layer.
+    layer_count: u32 = 0,
     /// Must not be negative. Must be a multiple of the format's block extent.
-    offset: Offset3D = std.mem.zeroes(Offset3D),
+    offset: Offset3D = .{},
     /// Zero components select the rest of the mip. Must be a multiple of the format's block extent unless it reaches the edge of the mip.
-    extent: Extent3D = std.mem.zeroes(Extent3D),
+    extent: Extent3D = .{ .width = 0, .height = 0, .depth = 0 },
     /// Distance between rows of blocks in the buffer, 0 is tightly packed. Must be a multiple of the format's block size.
     row_pitch_bytes: usize = 0,
     /// Distance between depth slices or layers in the buffer, 0 is tightly packed. Must be a multiple of the row pitch.
@@ -1940,7 +1942,7 @@ pub const BlendDesc = extern struct {
 };
 
 pub const ColorTarget = extern struct {
-    format: Format = .none,
+    format: Format,
     write_mask: ColorWriteMask = .all,
     blend: ?*const BlendDesc = null,
 };
@@ -1950,9 +1952,11 @@ pub const GraphicsPipelineDesc = extern struct {
     cull: Cull = .none,
     alpha_to_coverage: bool = false,
     sample_count: u32 = 1,
+    /// SC_FORMAT_NONE for no depth attachment.
     depth_format: Format = .none,
+    /// SC_FORMAT_NONE for no stencil attachment.
     stencil_format: Format = .none,
-    color_target_count: u32,
+    color_target_count: u32 = 0,
     color_targets: ?[*]const ColorTarget = null,
 };
 
@@ -1970,10 +1974,10 @@ pub const DepthStencilDesc = extern struct {
     depth_bias: f32 = 0,
     depth_bias_slope_factor: f32 = 0,
     depth_bias_clamp: f32 = 0,
-    stencil_read_mask: u8 = 0xff,
-    stencil_write_mask: u8 = 0xff,
-    stencil_front: StencilDesc,
-    stencil_back: StencilDesc,
+    stencil_read_mask: u8 = 255,
+    stencil_write_mask: u8 = 255,
+    stencil_front: StencilDesc = .{},
+    stencil_back: StencilDesc = .{},
 };
 
 const internal = struct {

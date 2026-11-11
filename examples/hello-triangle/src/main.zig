@@ -139,15 +139,8 @@ fn drawFrame(renderer: *Renderer) !void {
 
     const command_buffer = try renderer.queue.startCommandRecording();
     command_buffer.beginRenderPass(.{
-        .stencil_attachment = .{},
-        .depth_attachment = .{},
         .color_attachment_count = 1,
-        .color_attachments = &.{.{
-            .texture = back_buffer.texture,
-            .load_op = .clear,
-            .store_op = .store,
-            .clear_color = .{ 0, 0, 0, 1 },
-        }},
+        .color_attachments = &.{.{ .texture = back_buffer.texture, .load_op = .clear }},
     });
     command_buffer.setPipeline(renderer.pipeline);
     command_buffer.draw(.as(renderer.data), .as(renderer.data), vertex_count, 1);
