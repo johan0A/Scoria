@@ -256,6 +256,45 @@ pub const to_vk = struct {
         return aspect_mask;
     }
 
+    pub const Block = struct {
+        width: u32 = 1,
+        height: u32 = 1,
+        size: u32,
+    };
+
+    pub fn blockForFormat(fmt: sc.Format) Block {
+        return switch (fmt) {
+            .none => unreachable,
+            .r8_unorm, .r8_snorm, .r8_uint, .r8_sint, .stencil8 => .{ .size = 1 },
+            .r16_unorm, .r16_snorm, .r16_uint, .r16_sint, .r16_float, .rg8_unorm, .rg8_snorm, .rg8_uint, .rg8_sint, .depth16_unorm => .{ .size = 2 },
+            .r32_float, .r32_uint, .r32_sint, .rg16_unorm, .rg16_snorm, .rg16_uint, .rg16_sint, .rg16_float => .{ .size = 4 },
+            .rgba8_unorm, .rgba8_unorm_srgb, .rgba8_snorm, .rgba8_uint, .rgba8_sint, .bgra8_unorm, .bgra8_unorm_srgb => .{ .size = 4 },
+            .rgb10a2_uint, .rgb10a2_unorm, .rg11b10_ufloat, .rgb9e5_ufloat => .{ .size = 4 },
+            .depth24_plus, .depth24_plus_stencil8, .depth32_float, .depth32_float_stencil8 => .{ .size = 4 },
+            .rg32_float, .rg32_uint, .rg32_sint, .rgba16_unorm, .rgba16_snorm, .rgba16_uint, .rgba16_sint, .rgba16_float => .{ .size = 8 },
+            .rgba32_float, .rgba32_uint, .rgba32_sint => .{ .size = 16 },
+            .bc1rgba_unorm, .bc1rgba_unorm_srgb, .bc4r_unorm, .bc4r_snorm => .{ .width = 4, .height = 4, .size = 8 },
+            .etc2rgb8_unorm, .etc2rgb8_unorm_srgb, .etc2rgb8a1_unorm, .etc2rgb8a1_unorm_srgb, .eacr11_unorm, .eacr11_snorm => .{ .width = 4, .height = 4, .size = 8 },
+            .bc2rgba_unorm, .bc2rgba_unorm_srgb, .bc3rgba_unorm, .bc3rgba_unorm_srgb, .bc5rg_unorm, .bc5rg_snorm => .{ .width = 4, .height = 4, .size = 16 },
+            .bc6hrgb_ufloat, .bc6hrgb_float, .bc7rgba_unorm, .bc7rgba_unorm_srgb => .{ .width = 4, .height = 4, .size = 16 },
+            .etc2rgba8_unorm, .etc2rgba8_unorm_srgb, .eacrg11_unorm, .eacrg11_snorm => .{ .width = 4, .height = 4, .size = 16 },
+            .astc4x4_unorm, .astc4x4_unorm_srgb => .{ .width = 4, .height = 4, .size = 16 },
+            .astc5x4_unorm, .astc5x4_unorm_srgb => .{ .width = 5, .height = 4, .size = 16 },
+            .astc5x5_unorm, .astc5x5_unorm_srgb => .{ .width = 5, .height = 5, .size = 16 },
+            .astc6x5_unorm, .astc6x5_unorm_srgb => .{ .width = 6, .height = 5, .size = 16 },
+            .astc6x6_unorm, .astc6x6_unorm_srgb => .{ .width = 6, .height = 6, .size = 16 },
+            .astc8x5_unorm, .astc8x5_unorm_srgb => .{ .width = 8, .height = 5, .size = 16 },
+            .astc8x6_unorm, .astc8x6_unorm_srgb => .{ .width = 8, .height = 6, .size = 16 },
+            .astc8x8_unorm, .astc8x8_unorm_srgb => .{ .width = 8, .height = 8, .size = 16 },
+            .astc10x5_unorm, .astc10x5_unorm_srgb => .{ .width = 10, .height = 5, .size = 16 },
+            .astc10x6_unorm, .astc10x6_unorm_srgb => .{ .width = 10, .height = 6, .size = 16 },
+            .astc10x8_unorm, .astc10x8_unorm_srgb => .{ .width = 10, .height = 8, .size = 16 },
+            .astc10x10_unorm, .astc10x10_unorm_srgb => .{ .width = 10, .height = 10, .size = 16 },
+            .astc12x10_unorm, .astc12x10_unorm_srgb => .{ .width = 12, .height = 10, .size = 16 },
+            .astc12x12_unorm, .astc12x12_unorm_srgb => .{ .width = 12, .height = 12, .size = 16 },
+        };
+    }
+
     pub fn topology(topo: sc.Topology) vk.PrimitiveTopology {
         return switch (topo) {
             .triangle_list => .triangle_list,

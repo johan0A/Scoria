@@ -968,16 +968,19 @@ pub const CommandBuffer = opaque {
         command_buffer: *CommandBuffer,
         source_texture: *Texture,
         destination: Ptr(.many, u8, .{ .@"align" = .@"16" }),
+        desc: TextureCopyDesc,
     ) void {
         const f: *const fn (
             command_buffer: *CommandBuffer,
             source_texture: *Texture,
             destination: Ptr(.many, u8, .{ .@"align" = .@"16" }),
+            desc: TextureCopyDesc,
         ) callconv(@"callconv") void = @ptrCast(internal.table(command_buffer)[internal.slots.copy_texture_to_buffer]);
         return f(
             command_buffer,
             source_texture,
             destination,
+            desc,
         );
     }
 
@@ -985,16 +988,19 @@ pub const CommandBuffer = opaque {
         command_buffer: *CommandBuffer,
         source: Ptr(.many, u8, .{}),
         destination_texture: *Texture,
+        desc: TextureCopyDesc,
     ) void {
         const f: *const fn (
             command_buffer: *CommandBuffer,
             source: Ptr(.many, u8, .{}),
             destination_texture: *Texture,
+            desc: TextureCopyDesc,
         ) callconv(@"callconv") void = @ptrCast(internal.table(command_buffer)[internal.slots.copy_buffer_to_texture]);
         return f(
             command_buffer,
             source,
             destination_texture,
+            desc,
         );
     }
 
@@ -1711,6 +1717,12 @@ pub const Offset2D = extern struct {
     y: i32 = 0,
 };
 
+pub const Offset3D = extern struct {
+    x: i32 = 0,
+    y: i32 = 0,
+    z: i32 = 0,
+};
+
 pub const Rect2D = extern struct {
     offset: Offset2D,
     extent: Extent2D,
@@ -1810,6 +1822,20 @@ pub const TextureViewDesc = extern struct {
     mip_count: u32 = all_mips,
     base_layer: u32 = 0,
     layer_count: u32 = all_layers,
+};
+
+pub const TextureCopyDesc = extern struct {
+    mip: u32 = 0,
+    base_layer: u32 = 0,
+    layer_count: u32 = all_layers,
+    /// Must not be negative. Must be a multiple of the format's block extent.
+    offset: Offset3D = std.mem.zeroes(Offset3D),
+    /// Zero components select the rest of the mip. Must be a multiple of the format's block extent unless it reaches the edge of the mip.
+    extent: Extent3D = std.mem.zeroes(Extent3D),
+    /// Distance between rows of blocks in the buffer, 0 is tightly packed. Must be a multiple of the format's block size.
+    row_pitch_bytes: usize = 0,
+    /// Distance between depth slices or layers in the buffer, 0 is tightly packed. Must be a multiple of the row pitch.
+    slice_pitch_bytes: usize = 0,
 };
 
 pub const Descriptor = extern struct {

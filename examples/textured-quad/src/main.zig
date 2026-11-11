@@ -131,7 +131,7 @@ pub fn main(init: std.process.Init) !void {
         texture_upload.host()[i * texture_extent.width + i] = .{ 0, 0, 0, 255 };
 
     const upload_command_buffer = try queue.startCommandRecording();
-    upload_command_buffer.copyBufferToTexture(.ptrCast(texture_upload.device_ptr), texture);
+    upload_command_buffer.copyBufferToTexture(.ptrCast(texture_upload.device_ptr), texture, .{});
     upload_command_buffer.barrier(.{ .transfer = true }, .all, .{ .descriptors = true });
     try queue.submit(&.{upload_command_buffer});
 

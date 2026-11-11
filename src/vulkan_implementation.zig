@@ -1595,10 +1595,11 @@ pub const CommandBuffer = struct {
         cb_obj: *Object(CommandBuffer),
         source_texture_obj: *Object(Texture),
         destination: sc.DeviceAddress,
+        desc: sc.TextureCopyDesc,
     ) void {
         const cb = cb_obj.body();
         const source_texture = source_texture_obj.body();
-        const buffer, const region = bufferImageCopy(cb.d, source_texture, destination);
+        const buffer, const region = bufferImageCopy(cb.d, source_texture, destination, desc);
         cb.d.handle.cmdCopyImageToBuffer2(cb.handle, &.{
             .src_image = source_texture.image,
             .src_image_layout = .general,
@@ -1612,10 +1613,11 @@ pub const CommandBuffer = struct {
         cb_obj: *Object(CommandBuffer),
         source: sc.DeviceAddress,
         destination_texture_obj: *Object(Texture),
+        desc: sc.TextureCopyDesc,
     ) void {
         const cb = cb_obj.body();
         const destination_texture = destination_texture_obj.body();
-        const buffer, const region = bufferImageCopy(cb.d, destination_texture, source);
+        const buffer, const region = bufferImageCopy(cb.d, destination_texture, source, desc);
         cb.d.handle.cmdCopyBufferToImage2(cb.handle, &.{
             .src_buffer = buffer,
             .dst_image = destination_texture.image,
@@ -1625,20 +1627,39 @@ pub const CommandBuffer = struct {
         });
     }
 
-    fn bufferImageCopy(d: *Device, texture: *const Texture, address: sc.DeviceAddress) struct { vk.Buffer, vk.BufferImageCopy2 } {
+    fn bufferImageCopy(
+        d: *Device,
+        texture: *const Texture,
+        address: sc.DeviceAddress,
+        desc: sc.TextureCopyDesc,
+    ) struct { vk.Buffer, vk.BufferImageCopy2 } {
         const entry, const offset = d.heap.entryAndOffsetFromAddr(address);
+
+        const texture_extent: [3]u32 = .{ texture.desc.extent.width, texture.desc.extent.height, texture.desc.extent.depth };
+        const texel_offset: [3]u32 = .{ @intCast(desc.offset.x), @intCast(desc.offset.y), @intCast(desc.offset.z) };
+        var extent: [3]u32 = .{ desc.extent.width, desc.extent.height, desc.extent.depth };
+        for (&extent, texel_offset, texture_extent) |*size, start, texture_size| {
+            if (size.* == 0) size.* = @max(texture_size >> @intCast(desc.mip), 1) - start;
+        }
+
+        const block = to_vk.blockForFormat(texture.desc.format);
+        const row_pitch_bytes = if (desc.row_pitch_bytes != 0)
+            desc.row_pitch_bytes
+        else
+            (extent[0] + block.width - 1) / block.width * block.size;
+
         return .{ entry.buffer, .{
             .buffer_offset = offset,
-            .buffer_row_length = 0,
-            .buffer_image_height = 0,
+            .buffer_row_length = @intCast(@divExact(desc.row_pitch_bytes, block.size) * block.width),
+            .buffer_image_height = @intCast(@divExact(desc.slice_pitch_bytes, row_pitch_bytes) * block.height),
             .image_subresource = .{
                 .aspect_mask = to_vk.singleAspectForFormat(texture.desc.format),
-                .mip_level = 0,
-                .base_array_layer = 0,
-                .layer_count = texture.desc.layer_count,
+                .mip_level = desc.mip,
+                .base_array_layer = desc.base_layer,
+                .layer_count = if (desc.layer_count == sc.all_layers) texture.desc.layer_count - desc.base_layer else desc.layer_count,
             },
-            .image_offset = .{ .x = 0, .y = 0, .z = 0 },
-            .image_extent = to_vk.extent3D(texture.desc.extent),
+            .image_offset = .{ .x = desc.offset.x, .y = desc.offset.y, .z = desc.offset.z },
+            .image_extent = .{ .width = extent[0], .height = extent[1], .depth = extent[2] },
         } };
     }
 

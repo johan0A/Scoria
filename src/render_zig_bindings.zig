@@ -780,6 +780,13 @@ fn renderDefault(
                 return w.writeAll(")");
             }
 
+            if (@"type".base == .@"struct") {
+                if (!std.mem.eql(u8, raw, "{0}")) return error.UnsupportedRegistry;
+                try w.writeAll("std.mem.zeroes(");
+                try renderTypeName(w, registry, registry.declName(@"type".base));
+                return w.writeAll(")");
+            }
+
             if (@"type".base == .flags) {
                 if (std.mem.eql(u8, raw, "0")) return w.writeAll(".{}");
 
