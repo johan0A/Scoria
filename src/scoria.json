@@ -134,6 +134,18 @@
       "doc": ""
     },
     {
+      "name": "ScViewport",
+      "fields": [
+        { "name": "x", "type": { "base": "float" }, "default": "0.0", "doc": "" },
+        { "name": "y", "type": { "base": "float" }, "default": "0.0", "doc": "" },
+        { "name": "width", "type": { "base": "float" }, "doc": "" },
+        { "name": "height", "type": { "base": "float" }, "doc": "" },
+        { "name": "min_depth", "type": { "base": "float" }, "default": "0.0", "doc": "" },
+        { "name": "max_depth", "type": { "base": "float" }, "default": "1.0", "doc": "" }
+      ],
+      "doc": ""
+    },
+    {
       "name": "ScSizeAlign",
       "fields": [
         { "name": "size", "type": { "base": "size_t" }, "doc": "" },
@@ -1273,6 +1285,17 @@
         { "name": "rect", "type": { "base": "ScRect2D" }, "doc": "Offset must not be negative." }
       ],
       "doc": "Only valid inside a render pass. Beginning a render pass resets the scissor to the full render target."
+    },
+    {
+      "name": "scSetViewport",
+      "group": "ScCommandBuffer",
+      "dispatch": "table",
+      "return": { "base": "void" },
+      "params": [
+        { "name": "command_buffer", "type": { "base": "ScCommandBuffer", "ptr": [{}] }, "doc": "" },
+        { "name": "viewport", "type": { "base": "ScViewport" }, "doc": "Width and height must be positive. Depths must be in [0, 1]." }
+      ],
+      "doc": "Only valid inside a render pass. Beginning a render pass resets the viewport to the full render target with a [0, 1] depth range."
     },
     {
       "name": "scDraw",

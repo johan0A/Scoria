@@ -1061,6 +1061,21 @@ pub const CommandBuffer = opaque {
         );
     }
 
+    /// Only valid inside a render pass. Beginning a render pass resets the viewport to the full render target with a [0, 1] depth range.
+    pub fn setViewport(
+        command_buffer: *CommandBuffer,
+        viewport: Viewport,
+    ) void {
+        const f: *const fn (
+            command_buffer: *CommandBuffer,
+            viewport: Viewport,
+        ) callconv(@"callconv") void = @ptrCast(internal.table(command_buffer)[internal.slots.set_viewport]);
+        return f(
+            command_buffer,
+            viewport,
+        );
+    }
+
     pub fn draw(
         command_buffer: *CommandBuffer,
         vertex_data: Ptr(.one, anyopaque, .{}),
@@ -1773,6 +1788,15 @@ pub const Rect2D = extern struct {
     extent: Extent2D,
 };
 
+pub const Viewport = extern struct {
+    x: f32 = 0.0,
+    y: f32 = 0.0,
+    width: f32,
+    height: f32,
+    min_depth: f32 = 0.0,
+    max_depth: f32 = 1.0,
+};
+
 pub const SizeAlign = extern struct {
     size: usize,
     alignment_byte_units: usize,
@@ -2012,6 +2036,7 @@ const internal = struct {
         begin_render_pass: usize = 0,
         end_render_pass: usize = 0,
         set_scissor: usize = 0,
+        set_viewport: usize = 0,
         draw: usize = 0,
         draw_indexed: usize = 0,
         draw_indexed_instanced: usize = 0,
@@ -2073,6 +2098,7 @@ const internal = struct {
         slots.begin_render_pass = get_slot.?(instance, "scBeginRenderPass");
         slots.end_render_pass = get_slot.?(instance, "scEndRenderPass");
         slots.set_scissor = get_slot.?(instance, "scSetScissor");
+        slots.set_viewport = get_slot.?(instance, "scSetViewport");
         slots.draw = get_slot.?(instance, "scDraw");
         slots.draw_indexed = get_slot.?(instance, "scDrawIndexed");
         slots.draw_indexed_instanced = get_slot.?(instance, "scDrawIndexedInstanced");

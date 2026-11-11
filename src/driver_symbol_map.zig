@@ -220,6 +220,10 @@ fn Functions(handle_types: HandleTypes) type {
             command_buffer: *handle_types.CommandBuffer,
             rect: sc.Rect2D,
         ) void,
+        setViewport: fn (
+            command_buffer: *handle_types.CommandBuffer,
+            viewport: sc.Viewport,
+        ) void,
         draw: fn (
             command_buffer: *handle_types.CommandBuffer,
             vertex_data: sc.DeviceAddress,
@@ -748,6 +752,16 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
             );
         }
 
+        pub fn setViewport(
+            command_buffer: *handle_types.CommandBuffer,
+            viewport: sc.Viewport,
+        ) callconv(sc.@"callconv") void {
+            return functions.setViewport(
+                command_buffer,
+                viewport,
+            );
+        }
+
         pub fn draw(
             command_buffer: *handle_types.CommandBuffer,
             vertex_data: sc.DeviceAddress,
@@ -998,6 +1012,7 @@ pub fn map(
         .{ "scBeginRenderPass", @ptrCast(&c_functions.beginRenderPass) },
         .{ "scEndRenderPass", @ptrCast(&c_functions.endRenderPass) },
         .{ "scSetScissor", @ptrCast(&c_functions.setScissor) },
+        .{ "scSetViewport", @ptrCast(&c_functions.setViewport) },
         .{ "scDraw", @ptrCast(&c_functions.draw) },
         .{ "scDrawIndexed", @ptrCast(&c_functions.drawIndexed) },
         .{ "scDrawIndexedInstanced", @ptrCast(&c_functions.drawIndexedInstanced) },

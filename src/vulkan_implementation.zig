@@ -1756,6 +1756,19 @@ pub const CommandBuffer = struct {
         }});
     }
 
+    pub fn setViewport(cb_obj: *Object(CommandBuffer), viewport: sc.Viewport) void {
+        const cb = cb_obj.body();
+        std.debug.assert(cb.in_render_pass);
+        cb.d.handle.cmdSetViewport(cb.handle, 0, &.{.{
+            .x = viewport.x,
+            .y = viewport.y,
+            .width = viewport.width,
+            .height = viewport.height,
+            .min_depth = viewport.min_depth,
+            .max_depth = viewport.max_depth,
+        }});
+    }
+
     pub fn draw(
         cb: *Object(CommandBuffer),
         vertex_data: sc.DeviceAddress,
@@ -2337,6 +2350,7 @@ pub export fn symbol(name: [*:0]const u8) callconv(sc.@"callconv") *const anyopa
         .beginRenderPass = CommandBuffer.beginRenderPass,
         .endRenderPass = CommandBuffer.endRenderPass,
         .setScissor = CommandBuffer.setScissor,
+        .setViewport = CommandBuffer.setViewport,
         .draw = CommandBuffer.draw,
         .drawIndexed = CommandBuffer.drawIndexed,
         .drawIndexedInstanced = CommandBuffer.drawIndexedInstanced,
