@@ -528,7 +528,6 @@ pub const GraphicsPipelineDesc = extern struct {
     topology: Topology = .triangle_list,
     cull: Cull = .none,
     alpha_to_coverage: bool = false,
-    support_dual_source_blending: bool = false,
     sample_count: u32 = 1,
     depth_format: Format = .none,
     stencil_format: Format = .none,

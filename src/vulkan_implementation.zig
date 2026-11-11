@@ -2094,7 +2094,7 @@ pub const Pipeline = struct {
         d: *Device,
         vertex_ir: []const u8,
         pixel_ir: []const u8,
-        desc: sc.GraphicsPipelineDesc, // TODO: why is .support_dual_source_blending never used?
+        desc: sc.GraphicsPipelineDesc,
     ) !*Object(Pipeline) {
         const color_targets = if (desc.color_targets) |color_targets| color_targets[0..desc.color_target_count] else &.{};
         std.debug.assert(color_targets.len <= 8);

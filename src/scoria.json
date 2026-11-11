@@ -354,7 +354,6 @@
         { "name": "topology", "type": { "base": "ScTopology" }, "default": "SC_TOPOLOGY_TRIANGLE_LIST", "doc": "" },
         { "name": "cull", "type": { "base": "ScCull" }, "default": "SC_CULL_NONE", "doc": "" },
         { "name": "alpha_to_coverage", "type": { "base": "bool" }, "default": "false", "doc": "" },
-        { "name": "support_dual_source_blending", "type": { "base": "bool" }, "default": "false", "doc": "" },
         { "name": "sample_count", "type": { "base": "uint32_t" }, "default": "1", "doc": "" },
         { "name": "depth_format", "type": { "base": "ScFormat" }, "default": "SC_FORMAT_NONE", "doc": "" },
         { "name": "stencil_format", "type": { "base": "ScFormat" }, "default": "SC_FORMAT_NONE", "doc": "" },
