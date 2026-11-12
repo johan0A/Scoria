@@ -321,8 +321,8 @@
         { "name": "layer_count", "type": { "base": "uint32_t" }, "default": 0, "doc": "0 selects all layers from base_layer." },
         { "name": "offset", "type": { "base": "ScOffset3D" }, "default": {}, "doc": "Must not be negative. Must be a multiple of the format's block extent." },
         { "name": "extent", "type": { "base": "ScExtent3D" }, "default": { "width": 0, "height": 0, "depth": 0 }, "doc": "Zero components select the rest of the mip. Must be a multiple of the format's block extent unless it reaches the edge of the mip." },
-        { "name": "row_pitch_bytes", "type": { "base": "size_t" }, "default": 0, "doc": "Distance between rows of blocks in the buffer, 0 is tightly packed. Must be a multiple of the format's block size." },
-        { "name": "slice_pitch_bytes", "type": { "base": "size_t" }, "default": 0, "doc": "Distance between depth slices or layers in the buffer, 0 is tightly packed. Must be a multiple of the row pitch." }
+        { "name": "row_pitch_bytes", "type": { "base": "size_t" }, "default": 0, "doc": "Distance between rows of blocks in memory, 0 is tightly packed. Must be a multiple of the format's block size." },
+        { "name": "slice_pitch_bytes", "type": { "base": "size_t" }, "default": 0, "doc": "Distance between depth slices or layers in memory, 0 is tightly packed. Must be a multiple of the row pitch." }
       ],
       "doc": ""
     },
@@ -1240,28 +1240,43 @@
       "doc": ""
     },
     {
-      "name": "scCopyTextureToBuffer",
+      "name": "scCopyTextureToMemory",
       "group": "ScCommandBuffer",
       "dispatch": "table",
       "return": { "base": "void" },
       "params": [
         { "name": "command_buffer", "type": { "base": "ScCommandBuffer", "ptr": [{}] }, "doc": "" },
         { "name": "source_texture", "type": { "base": "ScTexture", "ptr": [{}] }, "doc": "" },
-        { "name": "destination", "type": { "base": "uint8_t", "device_ptr": [{ "len": "none", "alignment": 16 }] }, "doc": "" },
+        { "name": "destination", "type": { "base": "uint8_t", "device_ptr": [{ "len": "size", "alignment": 16 }] }, "doc": "" },
+        { "name": "size", "type": { "base": "size_t" }, "doc": "" },
         { "name": "desc", "type": { "base": "ScTextureCopyDesc" }, "doc": "" }
       ],
       "doc": "256 bytes is a typical optimal alignment for destination"
     },
     {
-      "name": "scCopyBufferToTexture",
+      "name": "scCopyMemoryToTexture",
       "group": "ScCommandBuffer",
       "dispatch": "table",
       "return": { "base": "void" },
       "params": [
         { "name": "command_buffer", "type": { "base": "ScCommandBuffer", "ptr": [{}] }, "doc": "" },
-        { "name": "source", "type": { "base": "uint8_t", "device_ptr": [{ "len": "none" }] }, "doc": "" },
+        { "name": "source", "type": { "base": "uint8_t", "device_ptr": [{ "len": "size" }] }, "doc": "" },
+        { "name": "size", "type": { "base": "size_t" }, "doc": "" },
         { "name": "destination_texture", "type": { "base": "ScTexture", "ptr": [{}] }, "doc": "" },
         { "name": "desc", "type": { "base": "ScTextureCopyDesc" }, "doc": "" }
+      ],
+      "doc": ""
+    },
+    {
+      "name": "scCopyMemory",
+      "group": "ScCommandBuffer",
+      "dispatch": "table",
+      "return": { "base": "void" },
+      "params": [
+        { "name": "command_buffer", "type": { "base": "ScCommandBuffer", "ptr": [{}] }, "doc": "" },
+        { "name": "source", "type": { "base": "uint8_t", "device_ptr": [{ "len": "size" }] }, "doc": "" },
+        { "name": "destination", "type": { "base": "uint8_t", "device_ptr": [{ "len": "size" }] }, "doc": "" },
+        { "name": "size", "type": { "base": "size_t" }, "doc": "" }
       ],
       "doc": ""
     },

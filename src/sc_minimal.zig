@@ -506,9 +506,9 @@ pub const TextureCopyDesc = extern struct {
     offset: Offset3D = .{},
     /// Zero components select the rest of the mip. Must be a multiple of the format's block extent unless it reaches the edge of the mip.
     extent: Extent3D = .{ .width = 0, .height = 0, .depth = 0 },
-    /// Distance between rows of blocks in the buffer, 0 is tightly packed. Must be a multiple of the format's block size.
+    /// Distance between rows of blocks in memory, 0 is tightly packed. Must be a multiple of the format's block size.
     row_pitch_bytes: usize = 0,
-    /// Distance between depth slices or layers in the buffer, 0 is tightly packed. Must be a multiple of the row pitch.
+    /// Distance between depth slices or layers in memory, 0 is tightly packed. Must be a multiple of the row pitch.
     slice_pitch_bytes: usize = 0,
 };
 
@@ -1073,43 +1073,69 @@ pub fn barrier(
 }
 
 /// 256 bytes is a typical optimal alignment for destination
-pub fn copyTextureToBuffer(
+pub fn copyTextureToMemory(
     command_buffer: *CommandBuffer,
     source_texture: *Texture,
     destination: DeviceAddress,
+    size: usize,
     desc: TextureCopyDesc,
 ) void {
     const f: *const fn (
         command_buffer: *CommandBuffer,
         source_texture: *Texture,
         destination: DeviceAddress,
+        size: usize,
         desc: TextureCopyDesc,
-    ) callconv(@"callconv") void = @ptrCast(internal.table(command_buffer)[internal.slots.copy_texture_to_buffer]);
+    ) callconv(@"callconv") void = @ptrCast(internal.table(command_buffer)[internal.slots.copy_texture_to_memory]);
     return f(
         command_buffer,
         source_texture,
         destination,
+        size,
         desc,
     );
 }
 
-pub fn copyBufferToTexture(
+pub fn copyMemoryToTexture(
     command_buffer: *CommandBuffer,
     source: DeviceAddress,
+    size: usize,
     destination_texture: *Texture,
     desc: TextureCopyDesc,
 ) void {
     const f: *const fn (
         command_buffer: *CommandBuffer,
         source: DeviceAddress,
+        size: usize,
         destination_texture: *Texture,
         desc: TextureCopyDesc,
-    ) callconv(@"callconv") void = @ptrCast(internal.table(command_buffer)[internal.slots.copy_buffer_to_texture]);
+    ) callconv(@"callconv") void = @ptrCast(internal.table(command_buffer)[internal.slots.copy_memory_to_texture]);
     return f(
         command_buffer,
         source,
+        size,
         destination_texture,
         desc,
+    );
+}
+
+pub fn copyMemory(
+    command_buffer: *CommandBuffer,
+    source: DeviceAddress,
+    destination: DeviceAddress,
+    size: usize,
+) void {
+    const f: *const fn (
+        command_buffer: *CommandBuffer,
+        source: DeviceAddress,
+        destination: DeviceAddress,
+        size: usize,
+    ) callconv(@"callconv") void = @ptrCast(internal.table(command_buffer)[internal.slots.copy_memory]);
+    return f(
+        command_buffer,
+        source,
+        destination,
+        size,
     );
 }
 
@@ -1526,8 +1552,9 @@ const internal = struct {
         dispatch: usize = 0,
         dispatch_indirect: usize = 0,
         barrier: usize = 0,
-        copy_texture_to_buffer: usize = 0,
-        copy_buffer_to_texture: usize = 0,
+        copy_texture_to_memory: usize = 0,
+        copy_memory_to_texture: usize = 0,
+        copy_memory: usize = 0,
         begin_render_pass: usize = 0,
         end_render_pass: usize = 0,
         set_scissor: usize = 0,
@@ -1588,8 +1615,9 @@ const internal = struct {
         slots.dispatch = get_slot.?(instance, "scDispatch");
         slots.dispatch_indirect = get_slot.?(instance, "scDispatchIndirect");
         slots.barrier = get_slot.?(instance, "scBarrier");
-        slots.copy_texture_to_buffer = get_slot.?(instance, "scCopyTextureToBuffer");
-        slots.copy_buffer_to_texture = get_slot.?(instance, "scCopyBufferToTexture");
+        slots.copy_texture_to_memory = get_slot.?(instance, "scCopyTextureToMemory");
+        slots.copy_memory_to_texture = get_slot.?(instance, "scCopyMemoryToTexture");
+        slots.copy_memory = get_slot.?(instance, "scCopyMemory");
         slots.begin_render_pass = get_slot.?(instance, "scBeginRenderPass");
         slots.end_render_pass = get_slot.?(instance, "scEndRenderPass");
         slots.set_scissor = get_slot.?(instance, "scSetScissor");

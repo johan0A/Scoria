@@ -4,6 +4,7 @@
 const std = @import("std");
 const sc = @import("sc.zig");
 const Ptr = sc.Ptr;
+const Slice = sc.Slice;
 const @"callconv" = sc.@"callconv";
 
 pub fn createInstance(
@@ -687,43 +688,67 @@ pub fn barrier(
 }
 
 /// 256 bytes is a typical optimal alignment for destination
-pub fn copyTextureToBuffer(
+pub fn copyTextureToMemory(
     command_buffer: *sc.CommandBuffer,
     source_texture: *sc.Texture,
-    destination: Ptr(.many, u8, .{ .@"align" = .@"16" }),
+    destination: Slice(u8, .{ .@"align" = .@"16" }),
     desc: sc.TextureCopyDesc,
 ) void {
     const f: *const fn (
         command_buffer: *sc.CommandBuffer,
         source_texture: *sc.Texture,
         destination: Ptr(.many, u8, .{ .@"align" = .@"16" }),
+        size: usize,
         desc: sc.TextureCopyDesc,
-    ) callconv(@"callconv") void = @ptrCast(internal.table(command_buffer)[internal.slots.copy_texture_to_buffer]);
+    ) callconv(@"callconv") void = @ptrCast(internal.table(command_buffer)[internal.slots.copy_texture_to_memory]);
     return f(
         command_buffer,
         source_texture,
-        destination,
+        destination.ptr,
+        @intCast(destination.len),
         desc,
     );
 }
 
-pub fn copyBufferToTexture(
+pub fn copyMemoryToTexture(
     command_buffer: *sc.CommandBuffer,
-    source: Ptr(.many, u8, .{}),
+    source: Slice(u8, .{}),
     destination_texture: *sc.Texture,
     desc: sc.TextureCopyDesc,
 ) void {
     const f: *const fn (
         command_buffer: *sc.CommandBuffer,
         source: Ptr(.many, u8, .{}),
+        size: usize,
         destination_texture: *sc.Texture,
         desc: sc.TextureCopyDesc,
-    ) callconv(@"callconv") void = @ptrCast(internal.table(command_buffer)[internal.slots.copy_buffer_to_texture]);
+    ) callconv(@"callconv") void = @ptrCast(internal.table(command_buffer)[internal.slots.copy_memory_to_texture]);
     return f(
         command_buffer,
-        source,
+        source.ptr,
+        @intCast(source.len),
         destination_texture,
         desc,
+    );
+}
+
+pub fn copyMemory(
+    command_buffer: *sc.CommandBuffer,
+    source: Slice(u8, .{}),
+    destination: Slice(u8, .{}),
+) void {
+    const f: *const fn (
+        command_buffer: *sc.CommandBuffer,
+        source: Ptr(.many, u8, .{}),
+        destination: Ptr(.many, u8, .{}),
+        size: usize,
+    ) callconv(@"callconv") void = @ptrCast(internal.table(command_buffer)[internal.slots.copy_memory]);
+    std.debug.assert(source.len == destination.len);
+    return f(
+        command_buffer,
+        source.ptr,
+        destination.ptr,
+        @intCast(source.len),
     );
 }
 
@@ -867,8 +892,7 @@ pub fn drawIndexedInstancedIndirect(
     pixel_data: Ptr(.one, anyopaque, .{}),
     index_type: sc.IndexType,
     indices: Ptr(.many, u8, .{}),
-    arguments: Ptr(.many, sc.DrawIndexedArguments, .{}),
-    draw_count: u32,
+    arguments: Slice(sc.DrawIndexedArguments, .{}),
 ) void {
     const f: *const fn (
         command_buffer: *sc.CommandBuffer,
@@ -885,8 +909,8 @@ pub fn drawIndexedInstancedIndirect(
         pixel_data,
         index_type,
         indices,
-        arguments,
-        draw_count,
+        arguments.ptr,
+        @intCast(arguments.len),
     );
 }
 
@@ -895,8 +919,7 @@ pub fn drawIndirect(
     command_buffer: *sc.CommandBuffer,
     vertex_data: Ptr(.one, anyopaque, .{}),
     pixel_data: Ptr(.one, anyopaque, .{}),
-    arguments: Ptr(.many, sc.DrawArguments, .{}),
-    draw_count: u32,
+    arguments: Slice(sc.DrawArguments, .{}),
 ) void {
     const f: *const fn (
         command_buffer: *sc.CommandBuffer,
@@ -909,8 +932,8 @@ pub fn drawIndirect(
         command_buffer,
         vertex_data,
         pixel_data,
-        arguments,
-        draw_count,
+        arguments.ptr,
+        @intCast(arguments.len),
     );
 }
 
@@ -1217,8 +1240,9 @@ const internal = struct {
         dispatch: usize = 0,
         dispatch_indirect: usize = 0,
         barrier: usize = 0,
-        copy_texture_to_buffer: usize = 0,
-        copy_buffer_to_texture: usize = 0,
+        copy_texture_to_memory: usize = 0,
+        copy_memory_to_texture: usize = 0,
+        copy_memory: usize = 0,
         begin_render_pass: usize = 0,
         end_render_pass: usize = 0,
         set_scissor: usize = 0,
@@ -1279,8 +1303,9 @@ const internal = struct {
         slots.dispatch = get_slot.?(instance, "scDispatch");
         slots.dispatch_indirect = get_slot.?(instance, "scDispatchIndirect");
         slots.barrier = get_slot.?(instance, "scBarrier");
-        slots.copy_texture_to_buffer = get_slot.?(instance, "scCopyTextureToBuffer");
-        slots.copy_buffer_to_texture = get_slot.?(instance, "scCopyBufferToTexture");
+        slots.copy_texture_to_memory = get_slot.?(instance, "scCopyTextureToMemory");
+        slots.copy_memory_to_texture = get_slot.?(instance, "scCopyMemoryToTexture");
+        slots.copy_memory = get_slot.?(instance, "scCopyMemory");
         slots.begin_render_pass = get_slot.?(instance, "scBeginRenderPass");
         slots.end_render_pass = get_slot.?(instance, "scEndRenderPass");
         slots.set_scissor = get_slot.?(instance, "scSetScissor");

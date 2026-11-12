@@ -1600,15 +1600,16 @@ pub const CommandBuffer = struct {
     }
 
     /// 256 bytes is a typical optimal alignment for destination
-    pub fn copyTextureToBuffer(
+    pub fn copyTextureToMemory(
         cb_obj: *Object(CommandBuffer),
         source_texture_obj: *Object(Texture),
         destination: sc.DeviceAddress,
+        size: usize,
         desc: sc.TextureCopyDesc,
     ) void {
         const cb = cb_obj.body();
         const source_texture = source_texture_obj.body();
-        const buffer, const region = bufferImageCopy(cb.d, source_texture, destination, desc);
+        const buffer, const region = bufferImageCopy(cb.d, source_texture, destination, size, desc);
         cb.d.handle.cmdCopyImageToBuffer2(cb.handle, &.{
             .src_image = source_texture.image,
             .src_image_layout = .general,
@@ -1618,15 +1619,16 @@ pub const CommandBuffer = struct {
         });
     }
 
-    pub fn copyBufferToTexture(
+    pub fn copyMemoryToTexture(
         cb_obj: *Object(CommandBuffer),
         source: sc.DeviceAddress,
+        size: usize,
         destination_texture_obj: *Object(Texture),
         desc: sc.TextureCopyDesc,
     ) void {
         const cb = cb_obj.body();
         const destination_texture = destination_texture_obj.body();
-        const buffer, const region = bufferImageCopy(cb.d, destination_texture, source, desc);
+        const buffer, const region = bufferImageCopy(cb.d, destination_texture, source, size, desc);
         cb.d.handle.cmdCopyBufferToImage2(cb.handle, &.{
             .src_buffer = buffer,
             .dst_image = destination_texture.image,
@@ -1640,22 +1642,27 @@ pub const CommandBuffer = struct {
         d: *Device,
         texture: *const Texture,
         address: sc.DeviceAddress,
+        size: usize,
         desc: sc.TextureCopyDesc,
     ) struct { vk.Buffer, vk.BufferImageCopy2 } {
         const entry, const offset = d.heap.entryAndOffsetFromAddr(address);
+        std.debug.assert(offset + size <= entry.size);
 
         const texture_extent: [3]u32 = .{ texture.desc.extent.width, texture.desc.extent.height, texture.desc.extent.depth };
         const texel_offset: [3]u32 = .{ @intCast(desc.offset.x), @intCast(desc.offset.y), @intCast(desc.offset.z) };
         var extent: [3]u32 = .{ desc.extent.width, desc.extent.height, desc.extent.depth };
-        for (&extent, texel_offset, texture_extent) |*size, start, texture_size| {
-            if (size.* == 0) size.* = @max(texture_size >> @intCast(desc.mip), 1) - start;
+        for (&extent, texel_offset, texture_extent) |*extent_size, start, texture_size| {
+            if (extent_size.* == 0) extent_size.* = @max(texture_size >> @intCast(desc.mip), 1) - start;
         }
 
         const block = to_vk.blockForFormat(texture.desc.format);
-        const row_pitch_bytes = if (desc.row_pitch_bytes != 0)
-            desc.row_pitch_bytes
-        else
-            (extent[0] + block.width - 1) / block.width * block.size;
+        const row_bytes = (extent[0] + block.width - 1) / block.width * block.size;
+        const row_pitch_bytes = if (desc.row_pitch_bytes != 0) desc.row_pitch_bytes else row_bytes;
+        const layer_count = if (desc.layer_count == 0) texture.desc.layer_count - desc.base_layer else desc.layer_count;
+
+        const block_row_count = (extent[1] + block.height - 1) / block.height;
+        const slice_pitch_bytes = if (desc.slice_pitch_bytes != 0) desc.slice_pitch_bytes else block_row_count * row_pitch_bytes;
+        std.debug.assert(size >= (extent[2] * layer_count - 1) * slice_pitch_bytes + (block_row_count - 1) * row_pitch_bytes + row_bytes);
 
         return .{ entry.buffer, .{
             .buffer_offset = offset,
@@ -1665,11 +1672,31 @@ pub const CommandBuffer = struct {
                 .aspect_mask = to_vk.singleAspectForFormat(texture.desc.format),
                 .mip_level = desc.mip,
                 .base_array_layer = desc.base_layer,
-                .layer_count = if (desc.layer_count == 0) texture.desc.layer_count - desc.base_layer else desc.layer_count,
+                .layer_count = layer_count,
             },
             .image_offset = .{ .x = desc.offset.x, .y = desc.offset.y, .z = desc.offset.z },
             .image_extent = .{ .width = extent[0], .height = extent[1], .depth = extent[2] },
         } };
+    }
+
+    pub fn copyMemory(
+        cb_obj: *Object(CommandBuffer),
+        source: sc.DeviceAddress,
+        destination: sc.DeviceAddress,
+        size: usize,
+    ) void {
+        const cb = cb_obj.body();
+        if (size == 0) return;
+        const source_entry, const source_offset = cb.d.heap.entryAndOffsetFromAddr(source);
+        const destination_entry, const destination_offset = cb.d.heap.entryAndOffsetFromAddr(destination);
+        std.debug.assert(source_offset + size <= source_entry.size);
+        std.debug.assert(destination_offset + size <= destination_entry.size);
+        cb.d.handle.cmdCopyBuffer2(cb.handle, &.{
+            .src_buffer = source_entry.buffer,
+            .dst_buffer = destination_entry.buffer,
+            .region_count = 1,
+            .p_regions = &.{.{ .src_offset = source_offset, .dst_offset = destination_offset, .size = size }},
+        });
     }
 
     pub fn beginRenderPass(cb_obj: *Object(CommandBuffer), desc: sc.RenderPassDesc) void {
@@ -2365,8 +2392,9 @@ pub export fn symbol(name: [*:0]const u8) callconv(sc.@"callconv") *const anyopa
         .dispatch = CommandBuffer.dispatch,
         .dispatchIndirect = CommandBuffer.dispatchIndirect,
         .barrier = CommandBuffer.barrier,
-        .copyTextureToBuffer = CommandBuffer.copyTextureToBuffer,
-        .copyBufferToTexture = CommandBuffer.copyBufferToTexture,
+        .copyTextureToMemory = CommandBuffer.copyTextureToMemory,
+        .copyMemoryToTexture = CommandBuffer.copyMemoryToTexture,
+        .copyMemory = CommandBuffer.copyMemory,
         .beginRenderPass = CommandBuffer.beginRenderPass,
         .endRenderPass = CommandBuffer.endRenderPass,
         .setScissor = CommandBuffer.setScissor,

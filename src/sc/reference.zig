@@ -4,6 +4,7 @@
 const std = @import("std");
 const sc = @import("sc.zig");
 const Ptr = sc.Ptr;
+const Slice = sc.Slice;
 const @"callconv" = sc.@"callconv";
 
 pub const descriptor_size_max: usize = 64;
@@ -503,9 +504,9 @@ pub const TextureCopyDesc = extern struct {
     offset: sc.Offset3D = .{},
     /// Zero components select the rest of the mip. Must be a multiple of the format's block extent unless it reaches the edge of the mip.
     extent: sc.Extent3D = .{ .width = 0, .height = 0, .depth = 0 },
-    /// Distance between rows of blocks in the buffer, 0 is tightly packed. Must be a multiple of the format's block size.
+    /// Distance between rows of blocks in memory, 0 is tightly packed. Must be a multiple of the format's block size.
     row_pitch_bytes: usize = 0,
-    /// Distance between depth slices or layers in the buffer, 0 is tightly packed. Must be a multiple of the row pitch.
+    /// Distance between depth slices or layers in memory, 0 is tightly packed. Must be a multiple of the row pitch.
     slice_pitch_bytes: usize = 0,
 };
 

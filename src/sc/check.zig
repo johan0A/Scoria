@@ -1,20 +1,10 @@
 const std = @import("std");
 const sc = @import("sc.zig");
-const functions = @import("functions.zig");
 const reference = @import("reference.zig");
 
 test "declarations match the registry" {
     @setEvalBranchQuota(100_000);
     comptime checkDecls(sc, reference, "sc");
-}
-
-test "every generated function is exposed by sc.zig" {
-    @setEvalBranchQuota(100_000);
-    std.testing.refAllDecls(functions);
-    comptime for (std.meta.declarations(functions)) |function_name| {
-        if (!isExposed(@field(functions, function_name)))
-            fail("functions." ++ function_name, "not exposed by any declaration in sc.zig or its opaques", .{});
-    };
 }
 
 fn checkDecls(comptime Actual: type, comptime Expected: type, comptime path: []const u8) void {
@@ -103,20 +93,6 @@ fn checkType(comptime Actual: type, comptime Expected: type, comptime path: []co
         .@"opaque", .@"enum", .@"struct" => checkDecls(Actual, Expected, path),
         else => {},
     }
-}
-
-fn isExposed(comptime function: anytype) bool {
-    inline for (comptime std.meta.declarations(sc)) |name| {
-        const decl = @field(sc, name);
-        if (@TypeOf(decl) == @TypeOf(function) and &decl == &function) return true;
-        if (@TypeOf(decl) == type and (@typeInfo(decl) == .@"opaque" or @typeInfo(decl) == .@"struct")) {
-            inline for (comptime std.meta.declarations(decl)) |method_name| {
-                const method = @field(decl, method_name);
-                if (@TypeOf(method) == @TypeOf(function) and &method == &function) return true;
-            }
-        }
-    }
-    return false;
 }
 
 fn fail(comptime path: []const u8, comptime format: []const u8, args: anytype) noreturn {

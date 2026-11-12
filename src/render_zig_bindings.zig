@@ -79,6 +79,7 @@ const sc_imports =
     \\const std = @import("std");
     \\const sc = @import("sc.zig");
     \\const Ptr = sc.Ptr;
+    \\const Slice = sc.Slice;
     \\const @"callconv" = sc.@"callconv";
 ++ "\n\n";
 
@@ -391,8 +392,7 @@ fn paramRole(function: Registry.Function, param_index: usize, out_param_index: ?
 }
 
 fn sliceLengthIndex(function: Registry.Function, param: Registry.Param) ?usize {
-    if (param.type.ptrs.len == 0) return null;
-    const outermost = param.type.ptrs[param.type.ptrs.len - 1];
+    const outermost = outermostPointer(param.type) orelse return null;
     if (outermost.size != .sized_by_arg) return null;
 
     const length_param = function.params[outermost.size.sized_by_arg];
@@ -408,7 +408,8 @@ fn sliceIndexForLength(function: Registry.Function, length_index: usize) ?usize 
 }
 
 fn renderSliceField(w: *std.Io.Writer, param: Registry.Param, field: enum { ptr, len }) !void {
-    const optional = param.type.ptrs[param.type.ptrs.len - 1].optional;
+    // device slices encode optionality in their pointer instead of wrapping the slice
+    const optional = param.type.ptrs.len != 0 and param.type.ptrs[param.type.ptrs.len - 1].optional;
     if (!optional) {
         try renderId(w, param.name);
         try w.print(".{s}", .{@tagName(field)});
@@ -427,7 +428,14 @@ fn renderSliceField(w: *std.Io.Writer, param: Registry.Param, field: enum { ptr,
 }
 
 fn renderSliceType(w: *std.Io.Writer, registry: Registry, style: BindingStyle, @"type": Registry.Type) !void {
-    const outermost = @"type".ptrs[@"type".ptrs.len - 1];
+    const outermost = outermostPointer(@"type").?;
+    if (@"type".ptrs.len == 0) {
+        try w.writeAll("Slice(");
+        try renderSliceElementType(w, registry, style, @"type");
+        try w.writeAll(", ");
+        try renderDevicePointerAttributes(w, outermost);
+        return w.writeByte(')');
+    }
     if (outermost.optional) try w.writeByte('?');
     try w.writeAll("[]");
     if (outermost.@"const") try w.writeAll("const ");
@@ -436,14 +444,25 @@ fn renderSliceType(w: *std.Io.Writer, registry: Registry, style: BindingStyle, @
 
 fn renderSliceElementType(w: *std.Io.Writer, registry: Registry, style: BindingStyle, @"type": Registry.Type) !void {
     const element = pointee(@"type");
-    const is_untyped = element.ptrs.len == 0 and element.base == .builtin and element.base.builtin == .void;
+    const is_untyped = element.ptrs.len == 0 and element.device_ptrs.len == 0 and element.base == .builtin and element.base.builtin == .void;
     if (is_untyped) return w.writeAll("u8");
     try renderType(w, registry, style, element);
 }
 
+/// Host pointers wrap device pointers, so the outermost pointer is a host one when there are any.
+fn outermostPointer(@"type": Registry.Type) ?Registry.Type.Pointer {
+    const pointers = if (@"type".ptrs.len != 0) @"type".ptrs else @"type".device_ptrs;
+    if (pointers.len == 0) return null;
+    return pointers[pointers.len - 1];
+}
+
 fn pointee(@"type": Registry.Type) Registry.Type {
     var result = @"type";
-    result.ptrs = result.ptrs[0 .. result.ptrs.len - 1];
+    if (result.ptrs.len != 0) {
+        result.ptrs = result.ptrs[0 .. result.ptrs.len - 1];
+    } else {
+        result.device_ptrs = result.device_ptrs[0 .. result.device_ptrs.len - 1];
+    }
     return result;
 }
 
@@ -857,22 +876,19 @@ fn renderQualifiedType(
     }
 
     for (@"type".device_ptrs) |device_ptr| {
-        try w.writeAll(", .{");
-        if (device_ptr.alignment) |a| {
-            try w.writeAll(".@\"align\" = ");
-            try w.writeAll(switch (a) {
-                1 => ".@\"1\"",
-                2 => ".@\"2\"",
-                4 => ".@\"4\"",
-                8 => ".@\"8\"",
-                16 => ".@\"16\"",
-                32 => ".@\"32\"",
-                64 => ".@\"64\"",
-                else => @panic(""),
-            });
-        }
-        try w.writeAll("})");
+        try w.writeAll(", ");
+        try renderDevicePointerAttributes(w, device_ptr);
+        try w.writeByte(')');
     }
+}
+
+fn renderDevicePointerAttributes(w: *std.Io.Writer, pointer: Registry.Type.Pointer) !void {
+    try w.writeAll(".{");
+    if (pointer.alignment) |alignment| {
+        if (!std.math.isPowerOfTwo(alignment)) return error.UnsupportedRegistry;
+        try w.print(".@\"align\" = .@\"{d}\"", .{alignment});
+    }
+    try w.writeByte('}');
 }
 
 fn renderBuiltinType(w: *std.Io.Writer, builtin: Registry.Builtin) !void {

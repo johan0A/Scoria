@@ -195,17 +195,25 @@ fn Functions(handle_types: HandleTypes) type {
             after: sc.Stage,
             hazard: sc.Hazard,
         ) void,
-        copyTextureToBuffer: fn (
+        copyTextureToMemory: fn (
             command_buffer: *handle_types.CommandBuffer,
             source_texture: *handle_types.Texture,
             destination: sc.DeviceAddress,
+            size: usize,
             desc: sc.TextureCopyDesc,
         ) void,
-        copyBufferToTexture: fn (
+        copyMemoryToTexture: fn (
             command_buffer: *handle_types.CommandBuffer,
             source: sc.DeviceAddress,
+            size: usize,
             destination_texture: *handle_types.Texture,
             desc: sc.TextureCopyDesc,
+        ) void,
+        copyMemory: fn (
+            command_buffer: *handle_types.CommandBuffer,
+            source: sc.DeviceAddress,
+            destination: sc.DeviceAddress,
+            size: usize,
         ) void,
         beginRenderPass: fn (
             command_buffer: *handle_types.CommandBuffer,
@@ -690,31 +698,49 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
             );
         }
 
-        pub fn copyTextureToBuffer(
+        pub fn copyTextureToMemory(
             command_buffer: *handle_types.CommandBuffer,
             source_texture: *handle_types.Texture,
             destination: sc.DeviceAddress,
+            size: usize,
             desc: sc.TextureCopyDesc,
         ) callconv(sc.@"callconv") void {
-            return functions.copyTextureToBuffer(
+            return functions.copyTextureToMemory(
                 command_buffer,
                 source_texture,
                 destination,
+                size,
                 desc,
             );
         }
 
-        pub fn copyBufferToTexture(
+        pub fn copyMemoryToTexture(
             command_buffer: *handle_types.CommandBuffer,
             source: sc.DeviceAddress,
+            size: usize,
             destination_texture: *handle_types.Texture,
             desc: sc.TextureCopyDesc,
         ) callconv(sc.@"callconv") void {
-            return functions.copyBufferToTexture(
+            return functions.copyMemoryToTexture(
                 command_buffer,
                 source,
+                size,
                 destination_texture,
                 desc,
+            );
+        }
+
+        pub fn copyMemory(
+            command_buffer: *handle_types.CommandBuffer,
+            source: sc.DeviceAddress,
+            destination: sc.DeviceAddress,
+            size: usize,
+        ) callconv(sc.@"callconv") void {
+            return functions.copyMemory(
+                command_buffer,
+                source,
+                destination,
+                size,
             );
         }
 
@@ -1001,8 +1027,9 @@ pub fn map(
         .{ "scDispatch", @ptrCast(&c_functions.dispatch) },
         .{ "scDispatchIndirect", @ptrCast(&c_functions.dispatchIndirect) },
         .{ "scBarrier", @ptrCast(&c_functions.barrier) },
-        .{ "scCopyTextureToBuffer", @ptrCast(&c_functions.copyTextureToBuffer) },
-        .{ "scCopyBufferToTexture", @ptrCast(&c_functions.copyBufferToTexture) },
+        .{ "scCopyTextureToMemory", @ptrCast(&c_functions.copyTextureToMemory) },
+        .{ "scCopyMemoryToTexture", @ptrCast(&c_functions.copyMemoryToTexture) },
+        .{ "scCopyMemory", @ptrCast(&c_functions.copyMemory) },
         .{ "scBeginRenderPass", @ptrCast(&c_functions.beginRenderPass) },
         .{ "scEndRenderPass", @ptrCast(&c_functions.endRenderPass) },
         .{ "scSetScissor", @ptrCast(&c_functions.setScissor) },

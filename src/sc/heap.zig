@@ -189,7 +189,7 @@ pub fn Slice(
             }
         }
 
-        pub fn cast(src: anytype) @This() {
+        pub fn ptrCast(src: anytype) @This() {
             const Src = @TypeOf(src);
             comptime if (!isDeviceSlice(Src))
                 @compileError("expected a device slice, found '" ++ @typeName(Src) ++ "'");
