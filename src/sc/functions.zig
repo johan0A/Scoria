@@ -385,8 +385,7 @@ pub fn submit(
 pub fn submitAndSignal(
     queue: *sc.Queue,
     command_buffers: []const *sc.CommandBuffer,
-    signal_semaphore: *sc.Semaphore,
-    signal_value: u64,
+    signal: sc.TimelinePoint,
 ) error{
     OutOfDeviceMemory,
     OutOfMemory,
@@ -397,15 +396,13 @@ pub fn submitAndSignal(
         queue: *sc.Queue,
         command_buffer_count: usize,
         command_buffers: [*]const *sc.CommandBuffer,
-        signal_semaphore: *sc.Semaphore,
-        signal_value: u64,
+        signal: sc.TimelinePoint,
     ) callconv(@"callconv") sc.Result = @ptrCast(internal.table(queue)[internal.slots.submit_and_signal]);
     const result = f(
         queue,
         @intCast(command_buffers.len),
         command_buffers.ptr,
-        signal_semaphore,
-        signal_value,
+        signal,
     );
     switch (result) {
         .ok => {},
@@ -417,24 +414,24 @@ pub fn submitAndSignal(
     }
 }
 
-pub fn createSemaphore(
+pub fn createTimeline(
     device: *sc.Device,
     initial_value: u64,
 ) error{
     OutOfMemory,
     OutOfDeviceMemory,
     Unknown,
-}!*sc.Semaphore {
+}!*sc.Timeline {
     const f: *const fn (
         device: *sc.Device,
         initial_value: u64,
-        semaphore: **sc.Semaphore,
-    ) callconv(@"callconv") sc.Result = @ptrCast(internal.table(device)[internal.slots.create_semaphore]);
-    var semaphore: *sc.Semaphore = undefined;
+        timeline: **sc.Timeline,
+    ) callconv(@"callconv") sc.Result = @ptrCast(internal.table(device)[internal.slots.create_timeline]);
+    var timeline: *sc.Timeline = undefined;
     const result = f(
         device,
         initial_value,
-        &semaphore,
+        &timeline,
     );
     switch (result) {
         .ok => {},
@@ -443,23 +440,22 @@ pub fn createSemaphore(
         .unknown => return error.Unknown,
         else => unreachable,
     }
-    return semaphore;
+    return timeline;
 }
 
-pub fn destroySemaphore(
-    semaphore: *sc.Semaphore,
+pub fn destroyTimeline(
+    timeline: *sc.Timeline,
 ) void {
     const f: *const fn (
-        semaphore: *sc.Semaphore,
-    ) callconv(@"callconv") void = @ptrCast(internal.table(semaphore)[internal.slots.destroy_semaphore]);
+        timeline: *sc.Timeline,
+    ) callconv(@"callconv") void = @ptrCast(internal.table(timeline)[internal.slots.destroy_timeline]);
     return f(
-        semaphore,
+        timeline,
     );
 }
 
-pub fn waitSemaphore(
-    semaphore: *sc.Semaphore,
-    value: u64,
+pub fn waitTimelinePoint(
+    point: sc.TimelinePoint,
 ) error{
     OutOfDeviceMemory,
     OutOfMemory,
@@ -467,12 +463,10 @@ pub fn waitSemaphore(
     Unknown,
 }!void {
     const f: *const fn (
-        semaphore: *sc.Semaphore,
-        value: u64,
-    ) callconv(@"callconv") sc.Result = @ptrCast(internal.table(semaphore)[internal.slots.wait_semaphore]);
+        point: sc.TimelinePoint,
+    ) callconv(@"callconv") sc.Result = @ptrCast(internal.table(point.timeline)[internal.slots.wait_timeline_point]);
     const result = f(
-        semaphore,
-        value,
+        point,
     );
     switch (result) {
         .ok => {},
@@ -1210,9 +1204,9 @@ const internal = struct {
         start_command_recording: usize = 0,
         submit: usize = 0,
         submit_and_signal: usize = 0,
-        create_semaphore: usize = 0,
-        destroy_semaphore: usize = 0,
-        wait_semaphore: usize = 0,
+        create_timeline: usize = 0,
+        destroy_timeline: usize = 0,
+        wait_timeline_point: usize = 0,
         create_swapchain: usize = 0,
         destroy_swapchain: usize = 0,
         acquire_back_buffer: usize = 0,
@@ -1272,9 +1266,9 @@ const internal = struct {
         slots.start_command_recording = get_slot.?(instance, "scStartCommandRecording");
         slots.submit = get_slot.?(instance, "scSubmit");
         slots.submit_and_signal = get_slot.?(instance, "scSubmitAndSignal");
-        slots.create_semaphore = get_slot.?(instance, "scCreateSemaphore");
-        slots.destroy_semaphore = get_slot.?(instance, "scDestroySemaphore");
-        slots.wait_semaphore = get_slot.?(instance, "scWaitSemaphore");
+        slots.create_timeline = get_slot.?(instance, "scCreateTimeline");
+        slots.destroy_timeline = get_slot.?(instance, "scDestroyTimeline");
+        slots.wait_timeline_point = get_slot.?(instance, "scWaitTimelinePoint");
         slots.create_swapchain = get_slot.?(instance, "scCreateSwapchain");
         slots.destroy_swapchain = get_slot.?(instance, "scDestroySwapchain");
         slots.acquire_back_buffer = get_slot.?(instance, "scAcquireBackBuffer");

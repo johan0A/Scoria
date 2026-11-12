@@ -19,7 +19,7 @@ pub const Surface = opaque {};
 pub const Adapter = opaque {};
 pub const Device = opaque {};
 pub const Queue = opaque {};
-pub const Semaphore = opaque {};
+pub const Timeline = opaque {};
 pub const Swapchain = opaque {};
 pub const CommandBuffer = opaque {};
 pub const Texture = opaque {};
@@ -421,6 +421,11 @@ pub const SwapchainDesc = extern struct {
 pub const BackBuffer = extern struct {
     texture: *Texture,
     extent: Extent2D,
+};
+
+pub const TimelinePoint = extern struct {
+    timeline: *Timeline,
+    value: u64,
 };
 
 pub const DepthAttachment = extern struct {
@@ -851,64 +856,58 @@ pub fn submitAndSignal(
     queue: *Queue,
     command_buffer_count: usize,
     command_buffers: [*]const *CommandBuffer,
-    signal_semaphore: *Semaphore,
-    signal_value: u64,
+    signal: TimelinePoint,
 ) Result {
     const f: *const fn (
         queue: *Queue,
         command_buffer_count: usize,
         command_buffers: [*]const *CommandBuffer,
-        signal_semaphore: *Semaphore,
-        signal_value: u64,
+        signal: TimelinePoint,
     ) callconv(@"callconv") Result = @ptrCast(internal.table(queue)[internal.slots.submit_and_signal]);
     return f(
         queue,
         command_buffer_count,
         command_buffers,
-        signal_semaphore,
-        signal_value,
+        signal,
     );
 }
 
-pub fn createSemaphore(
+pub fn createTimeline(
     device: *Device,
     initial_value: u64,
-    semaphore: **Semaphore,
+    timeline: **Timeline,
 ) Result {
     const f: *const fn (
         device: *Device,
         initial_value: u64,
-        semaphore: **Semaphore,
-    ) callconv(@"callconv") Result = @ptrCast(internal.table(device)[internal.slots.create_semaphore]);
+        timeline: **Timeline,
+    ) callconv(@"callconv") Result = @ptrCast(internal.table(device)[internal.slots.create_timeline]);
     return f(
         device,
         initial_value,
-        semaphore,
+        timeline,
     );
 }
 
-pub fn destroySemaphore(
-    semaphore: *Semaphore,
+pub fn destroyTimeline(
+    timeline: *Timeline,
 ) void {
     const f: *const fn (
-        semaphore: *Semaphore,
-    ) callconv(@"callconv") void = @ptrCast(internal.table(semaphore)[internal.slots.destroy_semaphore]);
+        timeline: *Timeline,
+    ) callconv(@"callconv") void = @ptrCast(internal.table(timeline)[internal.slots.destroy_timeline]);
     return f(
-        semaphore,
+        timeline,
     );
 }
 
-pub fn waitSemaphore(
-    semaphore: *Semaphore,
-    value: u64,
+pub fn waitTimelinePoint(
+    point: TimelinePoint,
 ) Result {
     const f: *const fn (
-        semaphore: *Semaphore,
-        value: u64,
-    ) callconv(@"callconv") Result = @ptrCast(internal.table(semaphore)[internal.slots.wait_semaphore]);
+        point: TimelinePoint,
+    ) callconv(@"callconv") Result = @ptrCast(internal.table(point.timeline)[internal.slots.wait_timeline_point]);
     return f(
-        semaphore,
-        value,
+        point,
     );
 }
 
@@ -1514,9 +1513,9 @@ const internal = struct {
         start_command_recording: usize = 0,
         submit: usize = 0,
         submit_and_signal: usize = 0,
-        create_semaphore: usize = 0,
-        destroy_semaphore: usize = 0,
-        wait_semaphore: usize = 0,
+        create_timeline: usize = 0,
+        destroy_timeline: usize = 0,
+        wait_timeline_point: usize = 0,
         create_swapchain: usize = 0,
         destroy_swapchain: usize = 0,
         acquire_back_buffer: usize = 0,
@@ -1576,9 +1575,9 @@ const internal = struct {
         slots.start_command_recording = get_slot.?(instance, "scStartCommandRecording");
         slots.submit = get_slot.?(instance, "scSubmit");
         slots.submit_and_signal = get_slot.?(instance, "scSubmitAndSignal");
-        slots.create_semaphore = get_slot.?(instance, "scCreateSemaphore");
-        slots.destroy_semaphore = get_slot.?(instance, "scDestroySemaphore");
-        slots.wait_semaphore = get_slot.?(instance, "scWaitSemaphore");
+        slots.create_timeline = get_slot.?(instance, "scCreateTimeline");
+        slots.destroy_timeline = get_slot.?(instance, "scDestroyTimeline");
+        slots.wait_timeline_point = get_slot.?(instance, "scWaitTimelinePoint");
         slots.create_swapchain = get_slot.?(instance, "scCreateSwapchain");
         slots.destroy_swapchain = get_slot.?(instance, "scDestroySwapchain");
         slots.acquire_back_buffer = get_slot.?(instance, "scAcquireBackBuffer");

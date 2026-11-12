@@ -10,7 +10,7 @@ const HandleTypes = struct {
     Adapter: type,
     Device: type,
     Queue: type,
-    Semaphore: type,
+    Timeline: type,
     Swapchain: type,
     CommandBuffer: type,
     Texture: type,
@@ -103,29 +103,27 @@ fn Functions(handle_types: HandleTypes) type {
             queue: *handle_types.Queue,
             command_buffer_count: usize,
             command_buffers: [*]const *handle_types.CommandBuffer,
-            signal_semaphore: *handle_types.Semaphore,
-            signal_value: u64,
+            signal: sc.TimelinePoint,
         ) error{
             OutOfDeviceMemory,
             OutOfMemory,
             DeviceLost,
             Unknown,
         }!void,
-        createSemaphore: fn (
+        createTimeline: fn (
             device: *handle_types.Device,
             initial_value: u64,
-            semaphore: **handle_types.Semaphore,
+            timeline: **handle_types.Timeline,
         ) error{
             OutOfMemory,
             OutOfDeviceMemory,
             Unknown,
         }!void,
-        destroySemaphore: fn (
-            semaphore: *handle_types.Semaphore,
+        destroyTimeline: fn (
+            timeline: *handle_types.Timeline,
         ) void,
-        waitSemaphore: fn (
-            semaphore: *handle_types.Semaphore,
-            value: u64,
+        waitTimelinePoint: fn (
+            point: sc.TimelinePoint,
         ) error{
             OutOfDeviceMemory,
             OutOfMemory,
@@ -540,45 +538,41 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
             queue: *handle_types.Queue,
             command_buffer_count: usize,
             command_buffers: [*]const *handle_types.CommandBuffer,
-            signal_semaphore: *handle_types.Semaphore,
-            signal_value: u64,
+            signal: sc.TimelinePoint,
         ) callconv(sc.@"callconv") sc.Result {
             return cResult(functions.submitAndSignal(
                 queue,
                 command_buffer_count,
                 command_buffers,
-                signal_semaphore,
-                signal_value,
+                signal,
             ));
         }
 
-        pub fn createSemaphore(
+        pub fn createTimeline(
             device: *handle_types.Device,
             initial_value: u64,
-            semaphore: **handle_types.Semaphore,
+            timeline: **handle_types.Timeline,
         ) callconv(sc.@"callconv") sc.Result {
-            return cResult(functions.createSemaphore(
+            return cResult(functions.createTimeline(
                 device,
                 initial_value,
-                semaphore,
+                timeline,
             ));
         }
 
-        pub fn destroySemaphore(
-            semaphore: *handle_types.Semaphore,
+        pub fn destroyTimeline(
+            timeline: *handle_types.Timeline,
         ) callconv(sc.@"callconv") void {
-            return functions.destroySemaphore(
-                semaphore,
+            return functions.destroyTimeline(
+                timeline,
             );
         }
 
-        pub fn waitSemaphore(
-            semaphore: *handle_types.Semaphore,
-            value: u64,
+        pub fn waitTimelinePoint(
+            point: sc.TimelinePoint,
         ) callconv(sc.@"callconv") sc.Result {
-            return cResult(functions.waitSemaphore(
-                semaphore,
-                value,
+            return cResult(functions.waitTimelinePoint(
+                point,
             ));
         }
 
@@ -994,9 +988,9 @@ pub fn map(
         .{ "scStartCommandRecording", @ptrCast(&c_functions.startCommandRecording) },
         .{ "scSubmit", @ptrCast(&c_functions.submit) },
         .{ "scSubmitAndSignal", @ptrCast(&c_functions.submitAndSignal) },
-        .{ "scCreateSemaphore", @ptrCast(&c_functions.createSemaphore) },
-        .{ "scDestroySemaphore", @ptrCast(&c_functions.destroySemaphore) },
-        .{ "scWaitSemaphore", @ptrCast(&c_functions.waitSemaphore) },
+        .{ "scCreateTimeline", @ptrCast(&c_functions.createTimeline) },
+        .{ "scDestroyTimeline", @ptrCast(&c_functions.destroyTimeline) },
+        .{ "scWaitTimelinePoint", @ptrCast(&c_functions.waitTimelinePoint) },
         .{ "scCreateSwapchain", @ptrCast(&c_functions.createSwapchain) },
         .{ "scDestroySwapchain", @ptrCast(&c_functions.destroySwapchain) },
         .{ "scAcquireBackBuffer", @ptrCast(&c_functions.acquireBackBuffer) },

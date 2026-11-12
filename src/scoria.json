@@ -26,7 +26,7 @@
     { "name": "ScAdapter", "doc": "" },
     { "name": "ScDevice", "doc": "" },
     { "name": "ScQueue", "doc": "" },
-    { "name": "ScSemaphore", "doc": "" },
+    { "name": "ScTimeline", "doc": "" },
     { "name": "ScSwapchain", "doc": "" },
     { "name": "ScCommandBuffer", "doc": "" },
     { "name": "ScTexture", "doc": "" },
@@ -209,6 +209,14 @@
       "fields": [
         { "name": "texture", "type": { "base": "ScTexture", "ptr": [{}] }, "doc": "" },
         { "name": "extent", "type": { "base": "ScExtent2D" }, "doc": "" }
+      ],
+      "doc": ""
+    },
+    {
+      "name": "ScTimelinePoint",
+      "fields": [
+        { "name": "timeline", "type": { "base": "ScTimeline", "ptr": [{}] }, "doc": "" },
+        { "name": "value", "type": { "base": "uint64_t" }, "doc": "" }
       ],
       "doc": ""
     },
@@ -1046,14 +1054,13 @@
         { "name": "queue", "type": { "base": "ScQueue", "ptr": [{}] }, "doc": "" },
         { "name": "command_buffer_count", "type": { "base": "size_t" }, "doc": "" },
         { "name": "command_buffers", "type": { "base": "ScCommandBuffer", "ptr": [{}, { "const": true, "len": "command_buffer_count" }] }, "doc": "" },
-        { "name": "signal_semaphore", "type": { "base": "ScSemaphore", "ptr": [{}] }, "doc": "" },
-        { "name": "signal_value", "type": { "base": "uint64_t" }, "doc": "" }
+        { "name": "signal", "type": { "base": "ScTimelinePoint" }, "doc": "" }
       ],
       "doc": ""
     },
     {
-      "name": "scCreateSemaphore",
-      "group": "ScSemaphore",
+      "name": "scCreateTimeline",
+      "group": "ScTimeline",
       "dispatch": "table",
       "return": { "base": "ScResult" },
       "errors": [
@@ -1064,23 +1071,23 @@
       "params": [
         { "name": "device", "type": { "base": "ScDevice", "ptr": [{}] }, "doc": "" },
         { "name": "initial_value", "type": { "base": "uint64_t" }, "doc": "" },
-        { "name": "semaphore", "type": { "base": "ScSemaphore", "ptr": [{}, {}] }, "out": true, "doc": "" }
+        { "name": "timeline", "type": { "base": "ScTimeline", "ptr": [{}, {}] }, "out": true, "doc": "" }
       ],
       "doc": ""
     },
     {
-      "name": "scDestroySemaphore",
-      "group": "ScSemaphore",
+      "name": "scDestroyTimeline",
+      "group": "ScTimeline",
       "dispatch": "table",
       "return": { "base": "void" },
       "params": [
-        { "name": "semaphore", "type": { "base": "ScSemaphore", "ptr": [{}] }, "doc": "" }
+        { "name": "timeline", "type": { "base": "ScTimeline", "ptr": [{}] }, "doc": "" }
       ],
       "doc": ""
     },
     {
-      "name": "scWaitSemaphore",
-      "group": "ScSemaphore",
+      "name": "scWaitTimelinePoint",
+      "group": "ScTimelinePoint",
       "dispatch": "table",
       "return": { "base": "ScResult" },
       "errors": [
@@ -1090,8 +1097,7 @@
         "SC_RESULT_UNKNOWN"
       ],
       "params": [
-        { "name": "semaphore", "type": { "base": "ScSemaphore", "ptr": [{}] }, "doc": "" },
-        { "name": "value", "type": { "base": "uint64_t" }, "doc": "" }
+        { "name": "point", "type": { "base": "ScTimelinePoint" }, "doc": "" }
       ],
       "doc": ""
     },

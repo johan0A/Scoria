@@ -17,7 +17,7 @@ const Renderer = struct {
     window: *c.SDL_Window,
     queue: *sc.Queue,
     swapchain: *sc.Swapchain,
-    frame_semaphore: *sc.Semaphore,
+    frame_timeline: *sc.Timeline,
     frame_index: u64,
     data: sc.Ptr(.one, Data, .{}),
     pipeline: *sc.Pipeline,
@@ -68,8 +68,8 @@ pub fn main(init: std.process.Init) !void {
     });
     defer swapchain.destroy();
 
-    const frame_semaphore = try device.createSemaphore(0);
-    defer frame_semaphore.destroy();
+    const frame_timeline = try device.createTimeline(0);
+    defer frame_timeline.destroy();
 
     const positions_map = try gpu_arena.create([vertex_count][3]f32, .upload);
     positions_map.host.* = .{
@@ -101,12 +101,12 @@ pub fn main(init: std.process.Init) !void {
         .window = window,
         .queue = queue,
         .swapchain = swapchain,
-        .frame_semaphore = frame_semaphore,
+        .frame_timeline = frame_timeline,
         .frame_index = 1,
         .data = data_map.device,
         .pipeline = pipeline,
     };
-    defer if (renderer.frame_index > 1) renderer.frame_semaphore.wait(renderer.frame_index - 1) catch {};
+    defer if (renderer.frame_index > 1) renderer.frame_timeline.wait(renderer.frame_index - 1) catch {};
 
     if (!c.SDL_AddEventWatch(drawFrameOnExpose, &renderer)) return error.SdlAddEventWatch;
     defer c.SDL_RemoveEventWatch(drawFrameOnExpose, &renderer);
@@ -127,7 +127,7 @@ fn drawFrameOnExpose(userdata: ?*anyopaque, event: [*c]c.SDL_Event) callconv(.c)
 
 fn drawFrame(renderer: *Renderer) !void {
     const frame_index = renderer.frame_index;
-    if (frame_index > frames_in_flight) try renderer.frame_semaphore.wait(frame_index - frames_in_flight);
+    if (frame_index > frames_in_flight) try renderer.frame_timeline.wait(frame_index - frames_in_flight);
 
     var width: c_int = undefined;
     var height: c_int = undefined;
@@ -145,7 +145,7 @@ fn drawFrame(renderer: *Renderer) !void {
     command_buffer.setPipeline(renderer.pipeline);
     command_buffer.draw(.as(renderer.data), .as(renderer.data), vertex_count, 1);
     command_buffer.endRenderPass();
-    try renderer.queue.submitAndSignal(&.{command_buffer}, renderer.frame_semaphore, frame_index);
+    try renderer.queue.submitAndSignal(&.{command_buffer}, .{ .timeline = renderer.frame_timeline, .value = frame_index });
     try renderer.swapchain.present();
 
     renderer.frame_index += 1;

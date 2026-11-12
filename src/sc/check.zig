@@ -109,7 +109,7 @@ fn isExposed(comptime function: anytype) bool {
     inline for (comptime std.meta.declarations(sc)) |name| {
         const decl = @field(sc, name);
         if (@TypeOf(decl) == @TypeOf(function) and &decl == &function) return true;
-        if (@TypeOf(decl) == type and @typeInfo(decl) == .@"opaque") {
+        if (@TypeOf(decl) == type and (@typeInfo(decl) == .@"opaque" or @typeInfo(decl) == .@"struct")) {
             inline for (comptime std.meta.declarations(decl)) |method_name| {
                 const method = @field(decl, method_name);
                 if (@TypeOf(method) == @TypeOf(function) and &method == &function) return true;

@@ -292,6 +292,12 @@ fn renderFunction(
             try renderFnType(w, registry, style, function.params, function.return_type);
             try w.writeAll(" = @ptrCast(internal.table(");
             try renderId(w, function.params[0].name);
+            // a struct passed by value dispatches through its first field
+            const first_type = function.params[0].type;
+            if (first_type.ptrs.len == 0 and first_type.base == .@"struct") {
+                try w.writeByte('.');
+                try renderId(w, registry.structs[@backingInt(first_type.base.@"struct")].fields[0].name);
+            }
             try w.writeAll(")[internal.slots.");
             try renderSnakeName(w, registry, function.name);
             try w.writeAll("]);\n");

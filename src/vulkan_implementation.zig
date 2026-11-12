@@ -466,7 +466,7 @@ pub const Device = struct {
     },
 
     surfaces: std.heap.MemoryPool(Object(Surface)),
-    semaphores: std.heap.MemoryPool(Object(Semaphore)),
+    timelines: std.heap.MemoryPool(Object(Timeline)),
     swapchains: std.heap.MemoryPool(Object(Swapchain)),
     command_buffers: std.heap.MemoryPool(Object(CommandBuffer)),
     textures: std.heap.MemoryPool(Object(Texture)),
@@ -625,7 +625,7 @@ pub const Device = struct {
             handle.destroyCommandPool(queue.body().command_pool, null);
         };
         for (queues[0..queue_count], queue_infos[0..queue_count]) |*queue, queue_info| {
-            const timeline = try Semaphore.createTimeline(handle, 0);
+            const timeline = try Timeline.createTimeline(handle, 0);
             errdefer handle.destroySemaphore(timeline, null);
             queue.set(table, .{
                 .handle = handle.getDeviceQueue(queue_info.queue_family_index, 0),
@@ -688,12 +688,12 @@ pub const Device = struct {
 
             .pending_texture_inits = .empty,
             .texture_init_timeline = .{
-                .semaphore = try Semaphore.createTimeline(handle, 0),
+                .semaphore = try Timeline.createTimeline(handle, 0),
                 .value = 0,
             },
 
             .surfaces = .empty,
-            .semaphores = .empty,
+            .timelines = .empty,
             .swapchains = .empty,
             .command_buffers = .empty,
             .textures = .empty,
@@ -726,9 +726,13 @@ pub const Device = struct {
         gpa.destroy(d.handle.wrapper);
 
         d.pending_texture_inits.deinit(gpa);
-        inline for (.{ "surfaces", "semaphores", "swapchains", "command_buffers", "textures", "pipelines", "depth_stencil_states" }) |pool| {
-            @field(d, pool).deinit(gpa);
-        }
+        d.surfaces.deinit(gpa);
+        d.timelines.deinit(gpa);
+        d.swapchains.deinit(gpa);
+        d.command_buffers.deinit(gpa);
+        d.textures.deinit(gpa);
+        d.pipelines.deinit(gpa);
+        d.depth_stencil_states.deinit(gpa);
         gpa.destroy(d_obj);
     }
 
@@ -895,26 +899,17 @@ pub const Queue = struct {
         queue: *Object(Queue),
         command_buffer_count: usize,
         command_buffers: [*]const *Object(CommandBuffer),
-        signal_semaphore: *Object(Semaphore),
-        signal_value: u64,
+        signal: sc.TimelinePoint,
     ) !void {
-        submitInner(
-            queue.body(),
-            command_buffers[0..command_buffer_count],
-            .{ .semaphore = signal_semaphore.body(), .value = signal_value },
-        ) catch |err| return switch (err) {
+        submitInner(queue.body(), command_buffers[0..command_buffer_count], signal) catch |err| return switch (err) {
             error.OutOfMemory, error.OutOfHostMemory => error.OutOfMemory,
             error.OutOfDeviceMemory, error.DeviceLost => |e| e,
             error.InvalidVideoStdParametersKHR, error.Unknown => error.Unknown,
         };
     }
 
-    const Signal = struct {
-        semaphore: *Semaphore,
-        value: u64,
-    };
     /// command buffers are consumed on failure
-    fn submitInner(queue: *Queue, command_buffers: []const *Object(CommandBuffer), signal: ?Signal) !void {
+    fn submitInner(queue: *Queue, command_buffers: []const *Object(CommandBuffer), signal: ?sc.TimelinePoint) !void {
         const d = queue.d;
         errdefer for (command_buffers) |command_buffer| {
             queue.releaseCommandBuffer(command_buffer.body().handle);
@@ -967,7 +962,7 @@ pub const Queue = struct {
 
         try queue.submitAfterAcquires(
             submit_infos,
-            if (signal) |s| semaphoreSubmitInfo(s.semaphore.handle, s.value) else null,
+            if (signal) |point| semaphoreSubmitInfo(Timeline.fromHandle(point.timeline).handle, point.value) else null,
         );
 
         for (command_buffers) |command_buffer| {
@@ -1045,34 +1040,40 @@ pub const Queue = struct {
     }
 };
 
-pub const Semaphore = struct {
+pub const Timeline = struct {
     handle: vk.Semaphore,
     d: *Device,
 
-    pub fn create(d: *Object(Device), initial_value: u64, semaphore: **Object(Semaphore)) !void {
-        semaphore.* = createInner(d.body(), initial_value) catch |err| return switch (err) {
+    pub fn create(d: *Object(Device), initial_value: u64, timeline: **Object(Timeline)) !void {
+        timeline.* = createInner(d.body(), initial_value) catch |err| return switch (err) {
             error.OutOfMemory, error.OutOfHostMemory => error.OutOfMemory,
             error.OutOfDeviceMemory, error.Unknown => |e| e,
         };
     }
-    fn createInner(d: *Device, initial_value: u64) !*Object(Semaphore) {
-        const semaphore = try d.semaphores.create(d.gpa);
-        errdefer d.semaphores.destroy(semaphore);
-        semaphore.set(d.table, .{ .handle = try createTimeline(d.handle, initial_value), .d = d });
-        return semaphore;
+    fn createInner(d: *Device, initial_value: u64) !*Object(Timeline) {
+        const timeline = try d.timelines.create(d.gpa);
+        errdefer d.timelines.destroy(timeline);
+        timeline.set(d.table, .{ .handle = try createTimeline(d.handle, initial_value), .d = d });
+        return timeline;
     }
 
-    pub fn destroy(semaphore_obj: *Object(Semaphore)) void {
-        const semaphore = semaphore_obj.body();
-        semaphore.d.handle.destroySemaphore(semaphore.handle, null);
-        semaphore.d.semaphores.destroy(semaphore_obj);
+    pub fn destroy(timeline_obj: *Object(Timeline)) void {
+        const timeline = timeline_obj.body();
+        timeline.d.handle.destroySemaphore(timeline.handle, null);
+        timeline.d.timelines.destroy(timeline_obj);
     }
 
-    pub fn wait(semaphore: *Object(Semaphore), value: u64) !void {
-        waitTimeline(semaphore.body().d.handle, semaphore.body().handle, value) catch |err| return switch (err) {
+    pub fn wait(point: sc.TimelinePoint) !void {
+        const timeline = fromHandle(point.timeline);
+        waitTimeline(timeline.d.handle, timeline.handle, point.value) catch |err| return switch (err) {
             error.OutOfHostMemory => error.OutOfMemory,
             error.OutOfDeviceMemory, error.Unknown, error.DeviceLost => |e| e,
         };
+    }
+
+    fn fromHandle(handle: *sc.Timeline) *Timeline {
+        const timeline_obj: *Object(Timeline) = @ptrCast(@alignCast(handle));
+        return timeline_obj.body();
     }
 
     fn createTimeline(device: vk.DeviceProxy, initial_value: u64) !vk.Semaphore {
@@ -1381,7 +1382,7 @@ pub const Swapchain = struct {
             }
 
             const acquire_semaphore = &swapchain.acquire_semaphores[swapchain.acquire_count % swapchain.acquire_semaphores.len];
-            try Semaphore.waitTimeline(d.handle, queue.timeline, acquire_semaphore.reusable_value);
+            try Timeline.waitTimeline(d.handle, queue.timeline, acquire_semaphore.reusable_value);
             const result = d.handle.acquireNextImageKHR(
                 swapchain.handle,
                 std.math.maxInt(u64),
@@ -2328,7 +2329,7 @@ pub export fn symbol(name: [*:0]const u8) callconv(sc.@"callconv") *const anyopa
         .Surface = Object(Surface),
         .Device = Object(Device),
         .Queue = Object(Queue),
-        .Semaphore = Object(Semaphore),
+        .Timeline = Object(Timeline),
         .Swapchain = Object(Swapchain),
         .CommandBuffer = Object(CommandBuffer),
         .DepthStencilState = Object(DepthStencilState),
@@ -2351,9 +2352,9 @@ pub export fn symbol(name: [*:0]const u8) callconv(sc.@"callconv") *const anyopa
         .startCommandRecording = Queue.startCommandRecording,
         .submit = Queue.submit,
         .submitAndSignal = Queue.submitAndSignal,
-        .createSemaphore = Semaphore.create,
-        .destroySemaphore = Semaphore.destroy,
-        .waitSemaphore = Semaphore.wait,
+        .createTimeline = Timeline.create,
+        .destroyTimeline = Timeline.destroy,
+        .waitTimelinePoint = Timeline.wait,
         .createSwapchain = Swapchain.create,
         .destroySwapchain = Swapchain.destroy,
         .acquireBackBuffer = Swapchain.acquire,

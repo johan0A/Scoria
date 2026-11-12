@@ -16,7 +16,7 @@ pub const Surface = opaque {};
 pub const Adapter = opaque {};
 pub const Device = opaque {};
 pub const Queue = opaque {};
-pub const Semaphore = opaque {};
+pub const Timeline = opaque {};
 pub const Swapchain = opaque {};
 pub const CommandBuffer = opaque {};
 pub const Texture = opaque {};
@@ -418,6 +418,11 @@ pub const SwapchainDesc = extern struct {
 pub const BackBuffer = extern struct {
     texture: *sc.Texture,
     extent: sc.Extent2D,
+};
+
+pub const TimelinePoint = extern struct {
+    timeline: *sc.Timeline,
+    value: u64,
 };
 
 pub const DepthAttachment = extern struct {

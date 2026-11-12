@@ -53,7 +53,7 @@ pub const Device = opaque {
     pub const descriptorSizeAndHeapAlign = functions.descriptorSizeAndHeapAlign;
     pub const storeDescriptor = functions.storeDescriptor;
     pub const getQueue = functions.getQueue;
-    pub const createSemaphore = functions.createSemaphore;
+    pub const createTimeline = functions.createTimeline;
     pub const textureSizeAlign = functions.textureSizeAlign;
     pub const createTexture = functions.createTexture;
     pub const createComputePipeline = functions.createComputePipeline;
@@ -68,10 +68,13 @@ pub const Queue = opaque {
     pub const createSwapchain = functions.createSwapchain;
 };
 
-pub const Semaphore = opaque {
-    pub const create = functions.createSemaphore;
-    pub const destroy = functions.destroySemaphore;
-    pub const wait = functions.waitSemaphore;
+pub const Timeline = opaque {
+    pub const create = functions.createTimeline;
+    pub const destroy = functions.destroyTimeline;
+
+    pub fn wait(timeline: *Timeline, value: u64) !void {
+        return functions.waitTimelinePoint(.{ .timeline = timeline, .value = value });
+    }
 };
 
 pub const Swapchain = opaque {
@@ -518,6 +521,13 @@ pub const SwapchainDesc = extern struct {
 pub const BackBuffer = extern struct {
     texture: *Texture,
     extent: Extent2D,
+};
+
+pub const TimelinePoint = extern struct {
+    timeline: *Timeline,
+    value: u64,
+
+    pub const wait = functions.waitTimelinePoint;
 };
 
 pub const DepthAttachment = extern struct {
