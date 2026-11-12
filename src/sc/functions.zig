@@ -333,20 +333,80 @@ pub fn getQueue(
     );
 }
 
-pub fn startCommandRecording(
+pub fn createCommandPool(
     queue: *sc.Queue,
+) error{
+    OutOfMemory,
+    OutOfDeviceMemory,
+    Unknown,
+}!*sc.CommandPool {
+    const f: *const fn (
+        queue: *sc.Queue,
+        command_pool: **sc.CommandPool,
+    ) callconv(@"callconv") sc.Result = @ptrCast(internal.table(queue)[internal.slots.create_command_pool]);
+    var command_pool: *sc.CommandPool = undefined;
+    const result = f(
+        queue,
+        &command_pool,
+    );
+    switch (result) {
+        .ok => {},
+        .out_of_memory => return error.OutOfMemory,
+        .out_of_device_memory => return error.OutOfDeviceMemory,
+        .unknown => return error.Unknown,
+        else => unreachable,
+    }
+    return command_pool;
+}
+
+/// Submitted command buffers of the pool must have completed.
+pub fn destroyCommandPool(
+    command_pool: *sc.CommandPool,
+) void {
+    const f: *const fn (
+        command_pool: *sc.CommandPool,
+    ) callconv(@"callconv") void = @ptrCast(internal.table(command_pool)[internal.slots.destroy_command_pool]);
+    return f(
+        command_pool,
+    );
+}
+
+/// Invalidates every command buffer of the pool and recycles their memory. Submitted command buffers of the pool must have completed.
+pub fn resetCommandPool(
+    command_pool: *sc.CommandPool,
+) error{
+    OutOfDeviceMemory,
+    Unknown,
+}!void {
+    const f: *const fn (
+        command_pool: *sc.CommandPool,
+    ) callconv(@"callconv") sc.Result = @ptrCast(internal.table(command_pool)[internal.slots.reset_command_pool]);
+    const result = f(
+        command_pool,
+    );
+    switch (result) {
+        .ok => {},
+        .out_of_device_memory => return error.OutOfDeviceMemory,
+        .unknown => return error.Unknown,
+        else => unreachable,
+    }
+}
+
+/// The command buffer stays valid until its pool is reset or destroyed, it can be submitted once to the queue of the pool.
+pub fn startCommandRecording(
+    command_pool: *sc.CommandPool,
 ) error{
     OutOfMemory,
     OutOfDeviceMemory,
     Unknown,
 }!*sc.CommandBuffer {
     const f: *const fn (
-        queue: *sc.Queue,
+        command_pool: *sc.CommandPool,
         command_buffer: **sc.CommandBuffer,
-    ) callconv(@"callconv") sc.Result = @ptrCast(internal.table(queue)[internal.slots.start_command_recording]);
+    ) callconv(@"callconv") sc.Result = @ptrCast(internal.table(command_pool)[internal.slots.start_command_recording]);
     var command_buffer: *sc.CommandBuffer = undefined;
     const result = f(
-        queue,
+        command_pool,
         &command_buffer,
     );
     switch (result) {
@@ -1229,6 +1289,9 @@ const internal = struct {
         descriptor_size_and_heap_align: usize = 0,
         store_descriptor: usize = 0,
         get_queue: usize = 0,
+        create_command_pool: usize = 0,
+        destroy_command_pool: usize = 0,
+        reset_command_pool: usize = 0,
         start_command_recording: usize = 0,
         submit: usize = 0,
         submit_and_signal: usize = 0,
@@ -1292,6 +1355,9 @@ const internal = struct {
         slots.descriptor_size_and_heap_align = get_slot.?(instance, "scDescriptorSizeAndHeapAlign");
         slots.store_descriptor = get_slot.?(instance, "scStoreDescriptor");
         slots.get_queue = get_slot.?(instance, "scGetQueue");
+        slots.create_command_pool = get_slot.?(instance, "scCreateCommandPool");
+        slots.destroy_command_pool = get_slot.?(instance, "scDestroyCommandPool");
+        slots.reset_command_pool = get_slot.?(instance, "scResetCommandPool");
         slots.start_command_recording = get_slot.?(instance, "scStartCommandRecording");
         slots.submit = get_slot.?(instance, "scSubmit");
         slots.submit_and_signal = get_slot.?(instance, "scSubmitAndSignal");

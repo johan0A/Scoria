@@ -28,6 +28,7 @@
     { "name": "ScQueue", "doc": "" },
     { "name": "ScTimeline", "doc": "" },
     { "name": "ScSwapchain", "doc": "" },
+    { "name": "ScCommandPool", "doc": "" },
     { "name": "ScCommandBuffer", "doc": "" },
     { "name": "ScTexture", "doc": "" },
     { "name": "ScPipeline", "doc": "" },
@@ -1017,8 +1018,8 @@
       "doc": ""
     },
     {
-      "name": "scStartCommandRecording",
-      "group": "ScQueue",
+      "name": "scCreateCommandPool",
+      "group": "ScCommandPool",
       "dispatch": "table",
       "return": { "base": "ScResult" },
       "errors": [
@@ -1028,9 +1029,49 @@
       ],
       "params": [
         { "name": "queue", "type": { "base": "ScQueue", "ptr": [{}] }, "doc": "" },
-        { "name": "command_buffer", "type": { "base": "ScCommandBuffer", "ptr": [{}, {}] }, "out": true, "doc": "" }
+        { "name": "command_pool", "type": { "base": "ScCommandPool", "ptr": [{}, {}] }, "out": true, "doc": "" }
       ],
       "doc": ""
+    },
+    {
+      "name": "scDestroyCommandPool",
+      "group": "ScCommandPool",
+      "dispatch": "table",
+      "return": { "base": "void" },
+      "params": [
+        { "name": "command_pool", "type": { "base": "ScCommandPool", "ptr": [{}] }, "doc": "" }
+      ],
+      "doc": "Submitted command buffers of the pool must have completed."
+    },
+    {
+      "name": "scResetCommandPool",
+      "group": "ScCommandPool",
+      "dispatch": "table",
+      "return": { "base": "ScResult" },
+      "errors": [
+        "SC_RESULT_OUT_OF_DEVICE_MEMORY",
+        "SC_RESULT_UNKNOWN"
+      ],
+      "params": [
+        { "name": "command_pool", "type": { "base": "ScCommandPool", "ptr": [{}] }, "doc": "" }
+      ],
+      "doc": "Invalidates every command buffer of the pool and recycles their memory. Submitted command buffers of the pool must have completed."
+    },
+    {
+      "name": "scStartCommandRecording",
+      "group": "ScCommandPool",
+      "dispatch": "table",
+      "return": { "base": "ScResult" },
+      "errors": [
+        "SC_RESULT_OUT_OF_MEMORY",
+        "SC_RESULT_OUT_OF_DEVICE_MEMORY",
+        "SC_RESULT_UNKNOWN"
+      ],
+      "params": [
+        { "name": "command_pool", "type": { "base": "ScCommandPool", "ptr": [{}] }, "doc": "" },
+        { "name": "command_buffer", "type": { "base": "ScCommandBuffer", "ptr": [{}, {}] }, "out": true, "doc": "" }
+      ],
+      "doc": "The command buffer stays valid until its pool is reset or destroyed, it can be submitted once to the queue of the pool."
     },
     {
       "name": "scSubmit",

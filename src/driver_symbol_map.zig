@@ -12,6 +12,7 @@ const HandleTypes = struct {
     Queue: type,
     Timeline: type,
     Swapchain: type,
+    CommandPool: type,
     CommandBuffer: type,
     Texture: type,
     Pipeline: type,
@@ -82,8 +83,25 @@ fn Functions(handle_types: HandleTypes) type {
             device: *handle_types.Device,
             queue_kind: sc.QueueKind,
         ) *handle_types.Queue,
-        startCommandRecording: fn (
+        createCommandPool: fn (
             queue: *handle_types.Queue,
+            command_pool: **handle_types.CommandPool,
+        ) error{
+            OutOfMemory,
+            OutOfDeviceMemory,
+            Unknown,
+        }!void,
+        destroyCommandPool: fn (
+            command_pool: *handle_types.CommandPool,
+        ) void,
+        resetCommandPool: fn (
+            command_pool: *handle_types.CommandPool,
+        ) error{
+            OutOfDeviceMemory,
+            Unknown,
+        }!void,
+        startCommandRecording: fn (
+            command_pool: *handle_types.CommandPool,
             command_buffer: **handle_types.CommandBuffer,
         ) error{
             OutOfMemory,
@@ -523,12 +541,38 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
             );
         }
 
-        pub fn startCommandRecording(
+        pub fn createCommandPool(
             queue: *handle_types.Queue,
+            command_pool: **handle_types.CommandPool,
+        ) callconv(sc.@"callconv") sc.Result {
+            return cResult(functions.createCommandPool(
+                queue,
+                command_pool,
+            ));
+        }
+
+        pub fn destroyCommandPool(
+            command_pool: *handle_types.CommandPool,
+        ) callconv(sc.@"callconv") void {
+            return functions.destroyCommandPool(
+                command_pool,
+            );
+        }
+
+        pub fn resetCommandPool(
+            command_pool: *handle_types.CommandPool,
+        ) callconv(sc.@"callconv") sc.Result {
+            return cResult(functions.resetCommandPool(
+                command_pool,
+            ));
+        }
+
+        pub fn startCommandRecording(
+            command_pool: *handle_types.CommandPool,
             command_buffer: **handle_types.CommandBuffer,
         ) callconv(sc.@"callconv") sc.Result {
             return cResult(functions.startCommandRecording(
-                queue,
+                command_pool,
                 command_buffer,
             ));
         }
@@ -1014,6 +1058,9 @@ pub fn map(
         .{ "scDescriptorSizeAndHeapAlign", @ptrCast(&c_functions.descriptorSizeAndHeapAlign) },
         .{ "scStoreDescriptor", @ptrCast(&c_functions.storeDescriptor) },
         .{ "scGetQueue", @ptrCast(&c_functions.getQueue) },
+        .{ "scCreateCommandPool", @ptrCast(&c_functions.createCommandPool) },
+        .{ "scDestroyCommandPool", @ptrCast(&c_functions.destroyCommandPool) },
+        .{ "scResetCommandPool", @ptrCast(&c_functions.resetCommandPool) },
         .{ "scStartCommandRecording", @ptrCast(&c_functions.startCommandRecording) },
         .{ "scSubmit", @ptrCast(&c_functions.submit) },
         .{ "scSubmitAndSignal", @ptrCast(&c_functions.submitAndSignal) },

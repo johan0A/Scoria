@@ -20,6 +20,7 @@ const Renderer = struct {
     queue: *sc.Queue,
     swapchain: *sc.Swapchain,
     frame_timeline: *sc.Timeline,
+    command_pools: [frames_in_flight]*sc.CommandPool,
     frame_index: u64,
     descriptor_heap: sc.Ptr(.many, u8, .{}),
     data: sc.Ptr(.one, Data, .{}),
@@ -73,6 +74,14 @@ pub fn main(init: std.process.Init) !void {
 
     const frame_timeline = try device.createTimeline(0);
     defer frame_timeline.destroy();
+
+    var command_pools: [frames_in_flight]*sc.CommandPool = undefined;
+    var command_pool_count: usize = 0;
+    defer for (command_pools[0..command_pool_count]) |command_pool| command_pool.destroy();
+    for (&command_pools) |*command_pool| {
+        command_pool.* = try queue.createCommandPool();
+        command_pool_count += 1;
+    }
 
     const descriptor_size_and_align = device.descriptorSizeAndHeapAlign();
     const descriptor_heap = try gpu_arena.runtimeAlignedAlloc(
@@ -130,10 +139,13 @@ pub fn main(init: std.process.Init) !void {
     for (0..@min(texture_extent.width, texture_extent.height)) |i|
         texture_upload.host()[i * texture_extent.width + i] = .{ 0, 0, 0, 255 };
 
-    const upload_command_buffer = try queue.startCommandRecording();
+    const upload_command_pool = try queue.createCommandPool();
+    defer upload_command_pool.destroy();
+    const upload_command_buffer = try upload_command_pool.startCommandRecording();
     upload_command_buffer.copyMemoryToTexture(.ptrCast(texture_upload.device()), texture, .{});
     upload_command_buffer.barrier(.{ .transfer = true }, .all, .{ .descriptors = true });
-    try queue.submit(&.{upload_command_buffer});
+    // the upload takes the first timeline value so that the wait on exit also covers it
+    try queue.submitAndSignal(&.{upload_command_buffer}, .{ .timeline = frame_timeline, .value = 1 });
 
     const pipeline = try device.createGraphicsPipeline(@embedFile("vert.scir"), @embedFile("frag.scir"), .{
         .color_target_count = 1,
@@ -146,7 +158,8 @@ pub fn main(init: std.process.Init) !void {
         .queue = queue,
         .swapchain = swapchain,
         .frame_timeline = frame_timeline,
-        .frame_index = 1,
+        .command_pools = command_pools,
+        .frame_index = 2,
         .descriptor_heap = descriptor_heap.device_ptr,
         .data = data_map.device,
         .pipeline = pipeline,
@@ -182,7 +195,9 @@ fn drawFrame(renderer: *Renderer) !void {
         else => |e| return e,
     };
 
-    const command_buffer = try renderer.queue.startCommandRecording();
+    const command_pool = renderer.command_pools[frame_index % frames_in_flight];
+    try command_pool.reset();
+    const command_buffer = try command_pool.startCommandRecording();
     command_buffer.setActiveTextureHeap(renderer.descriptor_heap);
     command_buffer.beginRenderPass(.{
         .color_attachment_count = 1,

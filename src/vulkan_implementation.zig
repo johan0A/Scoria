@@ -1,5 +1,6 @@
-const std = @import("std");
 const build_options = @import("options");
+const std = @import("std");
+const SegmentedList = @import("segmented_list.zig").SegmentedList;
 const sc = @import("sc_minimal.zig");
 const to_sc = @import("bridge.zig").to_sc;
 const to_vk = @import("bridge.zig").to_vk;
@@ -474,7 +475,7 @@ pub const Device = struct {
     surfaces: std.heap.MemoryPool(Object(Surface)),
     timelines: std.heap.MemoryPool(Object(Timeline)),
     swapchains: std.heap.MemoryPool(Object(Swapchain)),
-    command_buffers: std.heap.MemoryPool(Object(CommandBuffer)),
+    command_pools: std.heap.MemoryPool(Object(CommandPool)),
     textures: std.heap.MemoryPool(Object(Texture)),
     pipelines: std.heap.MemoryPool(Object(Pipeline)),
     depth_stencil_states: std.heap.MemoryPool(Object(DepthStencilState)),
@@ -639,11 +640,10 @@ pub const Device = struct {
                 .timeline = timeline,
                 .last_submitted = 0,
                 .command_pool = try handle.createCommandPool(&.{
-                    .flags = .{ .transient = true, .reset_command_buffer = true },
+                    .flags = .{ .transient = true },
                     .queue_family_index = queue_info.queue_family_index,
                 }, null),
                 .pending_command_buffers = .empty,
-                .free_command_buffers = .empty,
                 .pending_acquires = .empty,
                 .d = d_obj.body(),
             });
@@ -701,7 +701,7 @@ pub const Device = struct {
             .surfaces = .empty,
             .timelines = .empty,
             .swapchains = .empty,
-            .command_buffers = .empty,
+            .command_pools = .empty,
             .textures = .empty,
             .pipelines = .empty,
             .depth_stencil_states = .empty,
@@ -722,7 +722,6 @@ pub const Device = struct {
             const queue = queue_obj.body();
             d.handle.destroySemaphore(queue.timeline, null);
             d.handle.destroyCommandPool(queue.command_pool, null);
-            queue.free_command_buffers.deinit(gpa);
             queue.pending_command_buffers.deinit(gpa);
             queue.pending_acquires.deinit(gpa);
         }
@@ -735,7 +734,7 @@ pub const Device = struct {
         d.surfaces.deinit(gpa);
         d.timelines.deinit(gpa);
         d.swapchains.deinit(gpa);
-        d.command_buffers.deinit(gpa);
+        d.command_pools.deinit(gpa);
         d.textures.deinit(gpa);
         d.pipelines.deinit(gpa);
         d.depth_stencil_states.deinit(gpa);
@@ -854,14 +853,14 @@ pub const Queue = struct {
     timeline: vk.Semaphore,
     last_submitted: u64,
     command_pool: vk.CommandPool,
+    /// driver recorded command buffers
     pending_command_buffers: std.ArrayList(PendingCommandBuffer),
-    free_command_buffers: std.ArrayList(vk.CommandBuffer),
     /// swapchains whose back buffer acquire is waited on by the next submission
     pending_acquires: std.ArrayList(*Swapchain),
     d: *Device,
 
     const PendingCommandBuffer = struct {
-        /// `Queue.timeline` value after which the command buffer can be reused.
+        /// `Queue.timeline` value after which the command buffer can be freed.
         value: u64,
         command_buffer: vk.CommandBuffer,
     };
@@ -869,24 +868,6 @@ pub const Queue = struct {
     pub fn getQueue(d_obj: *Object(Device), queue_kind: sc.QueueKind) *Object(Queue) {
         const d = d_obj.body();
         return &d.queues[d.queue_index_from_kind.get(queue_kind)];
-    }
-
-    pub fn startCommandRecording(queue: *Object(Queue), command_buffer: **Object(CommandBuffer)) !void {
-        command_buffer.* = startCommandRecordingInner(queue.body()) catch |err| return switch (err) {
-            error.OutOfMemory, error.OutOfHostMemory => error.OutOfMemory,
-            error.OutOfDeviceMemory, error.Unknown => |e| e,
-        };
-    }
-    fn startCommandRecordingInner(queue: *Queue) !*Object(CommandBuffer) {
-        const d = queue.d;
-        const command_buffer = try d.command_buffers.create(d.gpa);
-        errdefer d.command_buffers.destroy(command_buffer);
-        command_buffer.set(d.table, .{
-            .handle = try queue.beginCommandBuffer(.{ .one_time_submit = true }),
-            .queue = queue,
-            .d = d,
-        });
-        return command_buffer;
     }
 
     pub fn submit(
@@ -914,14 +895,8 @@ pub const Queue = struct {
         };
     }
 
-    /// command buffers are consumed on failure
     fn submitInner(queue: *Queue, command_buffers: []const *Object(CommandBuffer), signal: ?sc.TimelinePoint) !void {
         const d = queue.d;
-        errdefer for (command_buffers) |command_buffer| {
-            queue.releaseCommandBuffer(command_buffer.body().handle);
-            d.command_buffers.destroy(command_buffer);
-        };
-
         const submit_infos = try d.gpa.alloc(vk.CommandBufferSubmitInfo, command_buffers.len);
         defer d.gpa.free(submit_infos);
         for (command_buffers, submit_infos) |command_buffer, *submit_info| {
@@ -929,7 +904,6 @@ pub const Queue = struct {
             try d.handle.endCommandBuffer(command_buffer.body().handle);
             submit_info.* = .{ .command_buffer = command_buffer.body().handle, .device_mask = 0 };
         }
-        try queue.pending_command_buffers.ensureUnusedCapacity(d.gpa, command_buffers.len + 1);
 
         if (d.pending_texture_inits.count() != 0) {
             const barriers = try d.gpa.alloc(vk.ImageMemoryBarrier2, d.pending_texture_inits.count());
@@ -938,8 +912,9 @@ pub const Queue = struct {
                 barrier.* = layoutTransition(image, desc, .undefined, .general);
             }
 
+            try queue.pending_command_buffers.ensureUnusedCapacity(d.gpa, 1);
             const init_command_buffer = try queue.beginCommandBuffer(.{ .one_time_submit = true });
-            errdefer queue.releaseCommandBuffer(init_command_buffer);
+            errdefer d.handle.freeCommandBuffers(queue.command_pool, &.{init_command_buffer});
             d.handle.cmdPipelineBarrier2(init_command_buffer, &.{
                 .image_memory_barrier_count = @intCast(barriers.len),
                 .p_image_memory_barriers = barriers.ptr,
@@ -970,14 +945,6 @@ pub const Queue = struct {
             submit_infos,
             if (signal) |point| semaphoreSubmitInfo(Timeline.fromHandle(point.timeline).handle, point.value) else null,
         );
-
-        for (command_buffers) |command_buffer| {
-            queue.pending_command_buffers.appendAssumeCapacity(.{
-                .value = queue.last_submitted,
-                .command_buffer = command_buffer.body().handle,
-            });
-            d.command_buffers.destroy(command_buffer);
-        }
     }
 
     /// submits after the pending swapchain acquires and texture initializations, signals `timeline`
@@ -1014,35 +981,26 @@ pub const Queue = struct {
 
     fn beginCommandBuffer(queue: *Queue, flags: vk.CommandBufferUsageFlags) !vk.CommandBuffer {
         const d = queue.d;
-        queue.reclaimCommandBuffers();
-        const command_buffer = queue.free_command_buffers.pop() orelse allocate: {
-            var command_buffer: vk.CommandBuffer = undefined;
-            try d.handle.allocateCommandBuffers(&.{
-                .command_pool = queue.command_pool,
-                .level = .primary,
-                .command_buffer_count = 1,
-            }, (&command_buffer)[0..1]);
-            break :allocate command_buffer;
-        };
-        errdefer queue.releaseCommandBuffer(command_buffer);
+        queue.freeCompletedCommandBuffers();
+        var command_buffer: vk.CommandBuffer = undefined;
+        try d.handle.allocateCommandBuffers(&.{
+            .command_pool = queue.command_pool,
+            .level = .primary,
+            .command_buffer_count = 1,
+        }, (&command_buffer)[0..1]);
+        errdefer d.handle.freeCommandBuffers(queue.command_pool, &.{command_buffer});
         try d.handle.beginCommandBuffer(command_buffer, &.{ .flags = flags });
         return command_buffer;
     }
-    fn reclaimCommandBuffers(queue: *Queue) void {
+    fn freeCompletedCommandBuffers(queue: *Queue) void {
         const pending = &queue.pending_command_buffers;
         if (pending.items.len == 0) return;
         const completed = queue.d.handle.getSemaphoreCounterValue(queue.timeline) catch return;
-        const reclaimable_count = for (pending.items, 0..) |item, i| {
+        const completed_count = for (pending.items, 0..) |item, i| {
             if (item.value > completed) break i;
         } else pending.items.len;
-        for (pending.items[0..reclaimable_count]) |item| queue.releaseCommandBuffer(item.command_buffer);
-        pending.replaceRangeAssumeCapacity(0, reclaimable_count, &.{});
-    }
-
-    fn releaseCommandBuffer(queue: *Queue, command_buffer: vk.CommandBuffer) void {
-        queue.free_command_buffers.append(queue.d.gpa, command_buffer) catch {
-            queue.d.handle.freeCommandBuffers(queue.command_pool, &.{command_buffer});
-        };
+        for (pending.items[0..completed_count]) |item| queue.d.handle.freeCommandBuffers(queue.command_pool, &.{item.command_buffer});
+        pending.replaceRangeAssumeCapacity(0, completed_count, &.{});
     }
 };
 
@@ -1348,7 +1306,7 @@ pub const Swapchain = struct {
                     acquire_barrier.src_stage_mask = swapchain.acquire_stage;
                     acquire_barrier.dst_stage_mask = swapchain.acquire_stage;
                     const acquire_command_buffer = try recordBarrier(queue, acquire_barrier);
-                    errdefer queue.releaseCommandBuffer(acquire_command_buffer);
+                    errdefer d.handle.freeCommandBuffers(queue.command_pool, &.{acquire_command_buffer});
                     image.* = .{
                         .texture = undefined,
                         .acquire_command_buffer = acquire_command_buffer,
@@ -1412,7 +1370,7 @@ pub const Swapchain = struct {
     }
     fn recordBarrier(queue: *Queue, barrier: vk.ImageMemoryBarrier2) !vk.CommandBuffer {
         const command_buffer = try queue.beginCommandBuffer(.{ .simultaneous_use = true });
-        errdefer queue.releaseCommandBuffer(command_buffer);
+        errdefer queue.d.handle.freeCommandBuffers(queue.command_pool, &.{command_buffer});
         queue.d.handle.cmdPipelineBarrier2(command_buffer, &.{
             .image_memory_barrier_count = 1,
             .p_image_memory_barriers = &.{barrier},
@@ -1475,11 +1433,82 @@ pub const Swapchain = struct {
         for (images) |*image| {
             if (image.present_fence != .null) _ = d.handle.waitForFences(&.{image.present_fence}, .true, std.math.maxInt(u64)) catch {};
             image.texture.body().deinit(false);
-            queue.releaseCommandBuffer(image.acquire_command_buffer);
-            queue.releaseCommandBuffer(image.present_command_buffer);
+            d.handle.freeCommandBuffers(queue.command_pool, &.{ image.acquire_command_buffer, image.present_command_buffer });
             d.handle.destroySemaphore(image.present_semaphore, null);
             d.handle.destroyFence(image.present_fence, null);
         }
+    }
+};
+
+pub const CommandPool = struct {
+    handle: vk.CommandPool,
+    queue: *Queue,
+    command_buffers: SegmentedList(Object(CommandBuffer)),
+    used_count: usize,
+    d: *Device,
+
+    pub fn create(queue: *Object(Queue), pool: **Object(CommandPool)) !void {
+        pool.* = createInner(queue.body()) catch |err| return switch (err) {
+            error.OutOfMemory, error.OutOfHostMemory => error.OutOfMemory,
+            error.OutOfDeviceMemory, error.Unknown => |e| e,
+        };
+    }
+    fn createInner(queue: *Queue) !*Object(CommandPool) {
+        const d = queue.d;
+        const pool = try d.command_pools.create(d.gpa);
+        errdefer d.command_pools.destroy(pool);
+        pool.set(d.table, .{
+            .handle = try d.handle.createCommandPool(&.{
+                .flags = .{ .transient = true },
+                .queue_family_index = queue.family,
+            }, null),
+            .queue = queue,
+            .command_buffers = .empty,
+            .used_count = 0,
+            .d = d,
+        });
+        return pool;
+    }
+
+    pub fn destroy(pool_obj: *Object(CommandPool)) void {
+        const pool = pool_obj.body();
+        const d = pool.d;
+        d.handle.destroyCommandPool(pool.handle, null);
+        pool.command_buffers.deinit(d.gpa);
+        d.command_pools.destroy(pool_obj);
+    }
+
+    pub fn reset(pool_obj: *Object(CommandPool)) !void {
+        const pool = pool_obj.body();
+        try pool.d.handle.resetCommandPool(pool.handle, .{});
+        pool.used_count = 0;
+    }
+
+    pub fn startCommandRecording(pool: *Object(CommandPool), command_buffer: **Object(CommandBuffer)) !void {
+        command_buffer.* = startCommandRecordingInner(pool.body()) catch |err| return switch (err) {
+            error.OutOfMemory, error.OutOfHostMemory => error.OutOfMemory,
+            error.OutOfDeviceMemory, error.Unknown => |e| e,
+        };
+    }
+    fn startCommandRecordingInner(pool: *CommandPool) !*Object(CommandBuffer) {
+        const d = pool.d;
+        if (pool.used_count == pool.command_buffers.len) {
+            const command_buffer = try pool.command_buffers.addOne(d.gpa);
+            errdefer _ = pool.command_buffers.pop();
+            var handle: vk.CommandBuffer = undefined;
+            try d.handle.allocateCommandBuffers(&.{
+                .command_pool = pool.handle,
+                .level = .primary,
+                .command_buffer_count = 1,
+            }, (&handle)[0..1]);
+            command_buffer.set(d.table, .{ .handle = handle, .queue = pool.queue, .d = d });
+        }
+        const command_buffer = pool.command_buffers.at(pool.used_count);
+        const cb = command_buffer.body();
+        cb.* = .{ .handle = cb.handle, .queue = pool.queue, .d = d };
+        try d.handle.beginCommandBuffer(cb.handle, &.{ .flags = .{ .one_time_submit = true } });
+        pool.used_count += 1;
+        return command_buffer;
     }
 };
 
@@ -2364,6 +2393,7 @@ pub export fn symbol(name: [*:0]const u8) callconv(sc.@"callconv") *const anyopa
         .Queue = Object(Queue),
         .Timeline = Object(Timeline),
         .Swapchain = Object(Swapchain),
+        .CommandPool = Object(CommandPool),
         .CommandBuffer = Object(CommandBuffer),
         .DepthStencilState = Object(DepthStencilState),
         .Texture = Object(Texture),
@@ -2382,7 +2412,10 @@ pub export fn symbol(name: [*:0]const u8) callconv(sc.@"callconv") *const anyopa
         .descriptorSizeAndHeapAlign = Texture.Descriptor.sizeAndHeapAlign,
         .storeDescriptor = Texture.Descriptor.storeDescriptor,
         .getQueue = Queue.getQueue,
-        .startCommandRecording = Queue.startCommandRecording,
+        .createCommandPool = CommandPool.create,
+        .destroyCommandPool = CommandPool.destroy,
+        .resetCommandPool = CommandPool.reset,
+        .startCommandRecording = CommandPool.startCommandRecording,
         .submit = Queue.submit,
         .submitAndSignal = Queue.submitAndSignal,
         .createTimeline = Timeline.create,

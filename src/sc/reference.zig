@@ -19,6 +19,7 @@ pub const Device = opaque {};
 pub const Queue = opaque {};
 pub const Timeline = opaque {};
 pub const Swapchain = opaque {};
+pub const CommandPool = opaque {};
 pub const CommandBuffer = opaque {};
 pub const Texture = opaque {};
 pub const Pipeline = opaque {};

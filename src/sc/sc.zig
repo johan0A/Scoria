@@ -62,7 +62,7 @@ pub const Device = opaque {
 };
 
 pub const Queue = opaque {
-    pub const startCommandRecording = functions.startCommandRecording;
+    pub const createCommandPool = functions.createCommandPool;
     pub const submit = functions.submit;
     pub const submitAndSignal = functions.submitAndSignal;
     pub const createSwapchain = functions.createSwapchain;
@@ -82,6 +82,13 @@ pub const Swapchain = opaque {
     pub const destroy = functions.destroySwapchain;
     pub const acquireBackBuffer = functions.acquireBackBuffer;
     pub const present = functions.present;
+};
+
+pub const CommandPool = opaque {
+    pub const create = functions.createCommandPool;
+    pub const destroy = functions.destroyCommandPool;
+    pub const reset = functions.resetCommandPool;
+    pub const startCommandRecording = functions.startCommandRecording;
 };
 
 pub const CommandBuffer = opaque {

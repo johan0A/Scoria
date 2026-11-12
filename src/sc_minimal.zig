@@ -21,6 +21,7 @@ pub const Device = opaque {};
 pub const Queue = opaque {};
 pub const Timeline = opaque {};
 pub const Swapchain = opaque {};
+pub const CommandPool = opaque {};
 pub const CommandBuffer = opaque {};
 pub const Texture = opaque {};
 pub const Pipeline = opaque {};
@@ -833,16 +834,55 @@ pub fn getQueue(
     );
 }
 
-pub fn startCommandRecording(
+pub fn createCommandPool(
     queue: *Queue,
-    command_buffer: **CommandBuffer,
+    command_pool: **CommandPool,
 ) Result {
     const f: *const fn (
         queue: *Queue,
-        command_buffer: **CommandBuffer,
-    ) callconv(@"callconv") Result = @ptrCast(internal.table(queue)[internal.slots.start_command_recording]);
+        command_pool: **CommandPool,
+    ) callconv(@"callconv") Result = @ptrCast(internal.table(queue)[internal.slots.create_command_pool]);
     return f(
         queue,
+        command_pool,
+    );
+}
+
+/// Submitted command buffers of the pool must have completed.
+pub fn destroyCommandPool(
+    command_pool: *CommandPool,
+) void {
+    const f: *const fn (
+        command_pool: *CommandPool,
+    ) callconv(@"callconv") void = @ptrCast(internal.table(command_pool)[internal.slots.destroy_command_pool]);
+    return f(
+        command_pool,
+    );
+}
+
+/// Invalidates every command buffer of the pool and recycles their memory. Submitted command buffers of the pool must have completed.
+pub fn resetCommandPool(
+    command_pool: *CommandPool,
+) Result {
+    const f: *const fn (
+        command_pool: *CommandPool,
+    ) callconv(@"callconv") Result = @ptrCast(internal.table(command_pool)[internal.slots.reset_command_pool]);
+    return f(
+        command_pool,
+    );
+}
+
+/// The command buffer stays valid until its pool is reset or destroyed, it can be submitted once to the queue of the pool.
+pub fn startCommandRecording(
+    command_pool: *CommandPool,
+    command_buffer: **CommandBuffer,
+) Result {
+    const f: *const fn (
+        command_pool: *CommandPool,
+        command_buffer: **CommandBuffer,
+    ) callconv(@"callconv") Result = @ptrCast(internal.table(command_pool)[internal.slots.start_command_recording]);
+    return f(
+        command_pool,
         command_buffer,
     );
 }
@@ -1548,6 +1588,9 @@ const internal = struct {
         descriptor_size_and_heap_align: usize = 0,
         store_descriptor: usize = 0,
         get_queue: usize = 0,
+        create_command_pool: usize = 0,
+        destroy_command_pool: usize = 0,
+        reset_command_pool: usize = 0,
         start_command_recording: usize = 0,
         submit: usize = 0,
         submit_and_signal: usize = 0,
@@ -1611,6 +1654,9 @@ const internal = struct {
         slots.descriptor_size_and_heap_align = get_slot.?(instance, "scDescriptorSizeAndHeapAlign");
         slots.store_descriptor = get_slot.?(instance, "scStoreDescriptor");
         slots.get_queue = get_slot.?(instance, "scGetQueue");
+        slots.create_command_pool = get_slot.?(instance, "scCreateCommandPool");
+        slots.destroy_command_pool = get_slot.?(instance, "scDestroyCommandPool");
+        slots.reset_command_pool = get_slot.?(instance, "scResetCommandPool");
         slots.start_command_recording = get_slot.?(instance, "scStartCommandRecording");
         slots.submit = get_slot.?(instance, "scSubmit");
         slots.submit_and_signal = get_slot.?(instance, "scSubmitAndSignal");

@@ -18,6 +18,7 @@ const Renderer = struct {
     queue: *sc.Queue,
     swapchain: *sc.Swapchain,
     frame_timeline: *sc.Timeline,
+    command_pools: [frames_in_flight]*sc.CommandPool,
     frame_index: u64,
     data: sc.Ptr(.one, Data, .{}),
     pipeline: *sc.Pipeline,
@@ -71,6 +72,14 @@ pub fn main(init: std.process.Init) !void {
     const frame_timeline = try device.createTimeline(0);
     defer frame_timeline.destroy();
 
+    var command_pools: [frames_in_flight]*sc.CommandPool = undefined;
+    var command_pool_count: usize = 0;
+    defer for (command_pools[0..command_pool_count]) |command_pool| command_pool.destroy();
+    for (&command_pools) |*command_pool| {
+        command_pool.* = try queue.createCommandPool();
+        command_pool_count += 1;
+    }
+
     const positions_map = try gpu_arena.create([vertex_count][3]f32, .upload);
     positions_map.host.* = .{
         .{ -1, 1, 0 },
@@ -102,6 +111,7 @@ pub fn main(init: std.process.Init) !void {
         .queue = queue,
         .swapchain = swapchain,
         .frame_timeline = frame_timeline,
+        .command_pools = command_pools,
         .frame_index = 1,
         .data = data_map.device,
         .pipeline = pipeline,
@@ -137,7 +147,9 @@ fn drawFrame(renderer: *Renderer) !void {
         else => |e| return e,
     };
 
-    const command_buffer = try renderer.queue.startCommandRecording();
+    const command_pool = renderer.command_pools[frame_index % frames_in_flight];
+    try command_pool.reset();
+    const command_buffer = try command_pool.startCommandRecording();
     command_buffer.beginRenderPass(.{
         .color_attachment_count = 1,
         .color_attachments = &.{.{ .texture = back_buffer.texture, .load_op = .clear }},
