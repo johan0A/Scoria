@@ -95,8 +95,8 @@ pub const IndexType = enum(u32) {
 
 pub const TextureDimension = enum(u32) {
     @"2d" = 0,
-    @"1d" = 1,
-    @"3d" = 2,
+    @"3d" = 1,
+    @"1d" = 2,
 };
 
 pub const Topology = enum(u32) {
@@ -107,9 +107,9 @@ pub const Topology = enum(u32) {
 
 pub const Cull = enum(u32) {
     none = 0,
-    ccw = 1,
-    cw = 2,
-    all = 3,
+    all = 1,
+    ccw = 2,
+    cw = 3,
 };
 
 pub const BlendOp = enum(u32) {

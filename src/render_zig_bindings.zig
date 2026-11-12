@@ -3,7 +3,8 @@ const Registry = @import("registry.zig").Registry;
 
 const Command = enum {
     bindings_minimal,
-    bindings,
+    functions,
+    reference,
     driver_symbol_map,
     loader_symbol_map,
 };
@@ -24,8 +25,9 @@ pub fn main(init: std.process.Init) !void {
     var output: std.Io.Writer.Allocating = .init(arena);
     const w = &output.writer;
     switch (command) {
-        .bindings_minimal => try renderBindings(w, arena, registry, .minimal),
-        .bindings => try renderBindings(w, arena, registry, .normal),
+        .bindings_minimal => try renderMinimal(w, registry),
+        .functions => try renderFunctions(w, registry),
+        .reference => try renderReference(w, registry),
         .driver_symbol_map => try renderSymbolMap(w, arena, registry, .table),
         .loader_symbol_map => try renderSymbolMap(w, arena, registry, .symbol),
     }
@@ -53,12 +55,7 @@ const BindingStyle = enum {
     normal,
 };
 
-fn renderBindings(
-    w: *std.Io.Writer,
-    arena: std.mem.Allocator,
-    registry: Registry,
-    style: BindingStyle,
-) !void {
+fn renderMinimal(w: *std.Io.Writer, registry: Registry) !void {
     try renderHeader(w, registry);
     try w.writeAll(
         \\const std = @import("std");
@@ -69,19 +66,40 @@ fn renderBindings(
         \\    else => .c,
         \\};
     ++ "\n\n");
-
-    if (style == .normal) {
-        try w.writeAll(
-            \\pub const heap = @import("heap.zig");
-            \\pub const PointerAttributes = heap.PointerAttributes;
-            \\pub const PointerInfo = heap.PointerInfo;
-            \\pub const Ptr = heap.Ptr;
-            \\pub const SliceInfo = heap.SliceInfo;
-            \\pub const Slice = heap.Slice;
-            \\pub const DeviceAllocator = heap.DeviceAllocator;
-        ++ "\n\n");
+    try renderTypes(w, registry, .minimal);
+    for (registry.functions) |function| {
+        if (function.role == .get_slot) continue;
+        try renderFunction(w, registry, function, .minimal);
     }
+    try renderInternal(w, registry, .minimal);
+}
 
+/// Files living next to the hand written sc.zig refer to its declarations.
+const sc_imports =
+    \\const std = @import("std");
+    \\const sc = @import("sc.zig");
+    \\const Ptr = sc.Ptr;
+    \\const @"callconv" = sc.@"callconv";
+++ "\n\n";
+
+fn renderFunctions(w: *std.Io.Writer, registry: Registry) !void {
+    try renderHeader(w, registry);
+    try w.writeAll(sc_imports);
+    for (registry.functions) |function| {
+        if (function.role == .get_slot) continue;
+        try renderFunction(w, registry, function, .normal);
+        if (function.enumerate) try renderEnumerateAlloc(w, registry, function);
+    }
+    try renderInternal(w, registry, .normal);
+}
+
+fn renderReference(w: *std.Io.Writer, registry: Registry) !void {
+    try renderHeader(w, registry);
+    try w.writeAll(sc_imports);
+    try renderTypes(w, registry, .normal);
+}
+
+fn renderTypes(w: *std.Io.Writer, registry: Registry, style: BindingStyle) !void {
     for (registry.constants) |constant| {
         try renderDoc(w, constant.doc);
         try w.writeAll("pub const ");
@@ -97,42 +115,11 @@ fn renderBindings(
         try w.writeAll(";\n");
     }
     try w.writeByte('\n');
-
-    for (registry.opaques, 0..) |@"opaque", index| {
+    for (registry.opaques) |@"opaque"| {
         try renderDeclStart(w, registry, @"opaque".doc, @"opaque".name);
-        try w.writeAll("opaque {\n");
-        if (style == .normal) {
-            const type_name = stripPrefix(@"opaque".name, registry.type_prefix);
-
-            for (registry.functions) |function| {
-                if (function.role == .get_slot) continue;
-
-                const is_create = std.mem.startsWith(u8, stripPrefix(function.name, registry.fn_prefix), "Create");
-                const produces_handle = blk: {
-                    if (isHandle(function.return_type, index)) break :blk true;
-                    for (function.params) |param| {
-                        if (param.out and isHandle(param.type, index)) break :blk true;
-                    }
-                    break :blk false;
-                };
-
-                const creates_handle = is_create and produces_handle;
-                const takes_handle_first = function.params.len != 0 and isHandle(function.params[0].type, index);
-
-                if (!creates_handle and !takes_handle_first) continue;
-                if (creates_handle and takes_handle_first) continue;
-
-                const method_c_name = try std.mem.replaceOwned(u8, arena, function.name, type_name, "");
-
-                try renderFunction(w, registry, function, method_c_name, .normal);
-                if (function.enumerate) try renderEnumerateAlloc(w, registry, style, function, method_c_name);
-            }
-        }
-        try w.writeAll("};\n");
-        if (style == .normal) try w.writeByte('\n');
+        try w.writeAll("opaque {};\n");
     }
     try w.writeByte('\n');
-
     for (registry.enums) |@"enum"| {
         try renderDeclStart(w, registry, @"enum".doc, @"enum".name);
         try w.writeAll("enum(");
@@ -145,24 +132,18 @@ fn renderBindings(
         }
         try w.writeAll("};\n\n");
     }
-    for (registry.flags) |flags| try renderFlags(w, registry, flags);
+    for (registry.flags) |flags| try renderFlags(w, registry, style, flags);
     for (registry.function_pointers) |function_pointer| {
         try renderDeclStart(w, registry, function_pointer.doc, function_pointer.name);
         try renderFnType(w, registry, style, function_pointer.params, function_pointer.return_type);
         try w.writeAll(";\n\n");
     }
     for (registry.structs) |@"struct"| {
-        const is_sc_size_and_align = style == .normal and std.mem.eql(u8, @"struct".name, "ScSizeAlign");
-
         try renderDeclStart(w, registry, @"struct".doc, @"struct".name);
         try w.writeAll("extern struct {\n");
         for (@"struct".fields) |field| {
             try renderDoc(w, field.doc);
-            if (is_sc_size_and_align and std.mem.eql(u8, field.name, "alignment")) {
-                try renderId(w, "alignment_byte_units");
-            } else {
-                try renderId(w, field.name);
-            }
+            try renderId(w, field.name);
             try w.writeAll(": ");
             try renderType(w, registry, style, field.type);
             if (field.default) |default| {
@@ -171,37 +152,12 @@ fn renderBindings(
             }
             try w.writeAll(",\n");
         }
-        if (is_sc_size_and_align) {
-            try w.writeAll("\n" ++
-                \\pub fn alignment(size_and_align: SizeAlign) std.mem.Alignment {
-                \\    return .fromByteUnits(size_and_align.alignment_byte_units);
-                \\}
-            );
-        }
         try w.writeAll("};\n\n");
     }
-
-    if (style == .minimal) {
-        for (registry.functions) |function| {
-            if (function.role == .get_slot) continue;
-            try renderFunction(w, registry, function, function.name, .minimal);
-        }
-    }
-
-    try renderInternal(w, registry, style);
 }
 
-fn isHandle(@"type": Registry.Type, opaque_index: usize) bool {
-    return @"type".base == .@"opaque" and opaque_index == @backingInt(@"type".base.@"opaque");
-}
-
-fn renderEnumerateAlloc(
-    w: *std.Io.Writer,
-    registry: Registry,
-    style: BindingStyle,
-    function: Registry.Function,
-    c_name: []const u8,
-) !void {
+fn renderEnumerateAlloc(w: *std.Io.Writer, registry: Registry, function: Registry.Function) !void {
+    const style: BindingStyle = .normal;
     const out_param_index = try outParamIndex(function) orelse return error.UnsupportedRegistry;
     const count_param = function.params[out_param_index];
 
@@ -215,7 +171,7 @@ fn renderEnumerateAlloc(
     if (!buffer_param.out or buffer_param.type.ptrs[buffer_param.type.ptrs.len - 1].@"const") return error.UnsupportedRegistry;
 
     var name_buffer: [256]u8 = undefined;
-    const alloc_c_name = try std.fmt.bufPrint(&name_buffer, "{s}Alloc", .{c_name});
+    const alloc_c_name = try std.fmt.bufPrint(&name_buffer, "{s}Alloc", .{function.name});
 
     try w.writeAll("pub fn ");
     try renderFnName(w, registry, alloc_c_name);
@@ -246,7 +202,7 @@ fn renderEnumerateAlloc(
     try renderId(w, count_param.name);
     try w.writeAll(" = ");
     if (function.errors.len != 0) try w.writeAll("try ");
-    try renderFnName(w, registry, c_name);
+    try renderFnName(w, registry, function.name);
     try w.writeByte('(');
     for (function.params, 0..) |param, param_index| {
         switch (paramRole(function, param_index, out_param_index)) {
@@ -276,7 +232,6 @@ fn renderFunction(
     w: *std.Io.Writer,
     registry: Registry,
     function: Registry.Function,
-    c_name: []const u8,
     style: BindingStyle,
 ) !void {
     const normal = style == .normal;
@@ -286,7 +241,7 @@ fn renderFunction(
 
     try renderDoc(w, function.doc);
     try w.writeAll("pub fn ");
-    try renderFnName(w, registry, c_name);
+    try renderFnName(w, registry, function.name);
     try w.writeByte('(');
     for (function.params, 0..) |param, param_index| {
         const role: ParamRole = if (normal) paramRole(function, param_index, out_param_index) else .plain;
@@ -706,6 +661,7 @@ fn renderDeclStart(
 fn renderFlags(
     w: *std.Io.Writer,
     registry: Registry,
+    style: BindingStyle,
     flags: Registry.Flags,
 ) !void {
     try renderDeclStart(w, registry, flags.doc, flags.name);
@@ -743,6 +699,7 @@ fn renderFlags(
         try w.writeAll("pub const ");
         try renderMemberName(w, registry, flags.name, combination.name);
         try w.writeAll(": ");
+        try w.writeAll(qualifierFromStyle(style).decl);
         try renderTypeName(w, registry, flags.name);
         try w.writeAll(" = .{");
         for (combination.bits) |bit_index| {
@@ -817,7 +774,14 @@ const TypeQualifier = struct {
 };
 
 fn renderType(w: *std.Io.Writer, registry: Registry, style: BindingStyle, @"type": Registry.Type) !void {
-    try renderQualifiedType(w, registry, style, @"type", .{});
+    try renderQualifiedType(w, registry, style, @"type", qualifierFromStyle(style));
+}
+
+fn qualifierFromStyle(style: BindingStyle) TypeQualifier {
+    return switch (style) {
+        .minimal => .{},
+        .normal => .{ .decl = "sc.", .handle = "sc." },
+    };
 }
 
 fn renderQualifiedType(
@@ -831,6 +795,7 @@ fn renderQualifiedType(
         .int => |length| try w.print("[{d}]", .{length}),
         .constant => |constant_index| {
             try w.writeByte('[');
+            try w.writeAll(qualifier.decl);
             try renderConstName(w, registry, registry.constants[@backingInt(constant_index)].name);
             try w.writeByte(']');
         },
@@ -931,7 +896,7 @@ fn renderFnType(
     return_type: Registry.Type,
 ) !void {
     try w.writeAll("*const fn (");
-    try renderParams(w, registry, style, params, .{});
+    try renderParams(w, registry, style, params, qualifierFromStyle(style));
     try w.writeAll(") callconv(@\"callconv\") ");
     try renderType(w, registry, style, return_type);
 }

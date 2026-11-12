@@ -22,7 +22,7 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(lib);
 
     const root_module = b.addModule("scoria", .{
-        .root_source_file = b.path("src/sc.zig"),
+        .root_source_file = b.path("src/sc/sc.zig"),
         .optimize = optimize,
         .target = target,
     });
@@ -55,10 +55,15 @@ pub fn build(b: *std.Build) void {
         generate_bindings_minimal.addFileArg(b.path("src/scoria.json"));
         const bindings_minimal = generate_bindings_minimal.addOutputFileArg("sc_minimal.zig");
 
-        const generate_bindings = b.addRunArtifact(generate_sc_bindings_exe);
-        generate_bindings.addArg("--bindings");
-        generate_bindings.addFileArg(b.path("src/scoria.json"));
-        const bindings = generate_bindings.addOutputFileArg("sc.zig");
+        const generate_functions = b.addRunArtifact(generate_sc_bindings_exe);
+        generate_functions.addArg("--functions");
+        generate_functions.addFileArg(b.path("src/scoria.json"));
+        const functions = generate_functions.addOutputFileArg("functions.zig");
+
+        const generate_reference = b.addRunArtifact(generate_sc_bindings_exe);
+        generate_reference.addArg("--reference");
+        generate_reference.addFileArg(b.path("src/scoria.json"));
+        const reference = generate_reference.addOutputFileArg("reference.zig");
 
         const generate_driver_symbol_map = b.addRunArtifact(generate_sc_bindings_exe);
         generate_driver_symbol_map.addArg("--driver_symbol_map");
@@ -72,7 +77,8 @@ pub fn build(b: *std.Build) void {
 
         const update_source_files = b.addUpdateSourceFiles();
         update_source_files.addCopyFileToSource(bindings_minimal, "src/sc_minimal.zig");
-        update_source_files.addCopyFileToSource(bindings, "src/sc.zig");
+        update_source_files.addCopyFileToSource(functions, "src/sc/functions.zig");
+        update_source_files.addCopyFileToSource(reference, "src/sc/reference.zig");
         update_source_files.addCopyFileToSource(driver_symbol_map, "src/driver_symbol_map.zig");
         update_source_files.addCopyFileToSource(loader_symbol_map, "src/loader_symbol_map.zig");
         generate_sc_bindings.dependOn(&update_source_files.step);
