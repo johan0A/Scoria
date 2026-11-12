@@ -62,7 +62,7 @@ pub fn main(init: std.process.Init) !void {
     defer surface.destroy();
 
     if (!surface.supportedUsage().storage) return error.SurfaceStorageUnsupported;
-    const swapchain_format = for (try surface.supportedFormatsAlloc(arena)) |format| {
+    const swapchain_format = for (try surface.supportedFormatsAlloc(.srgb_nonlinear, arena)) |format| {
         if (format == .rgba8_unorm or format == .bgra8_unorm) break format;
     } else return error.NoSupportedSurfaceFormat;
 

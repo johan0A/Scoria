@@ -198,6 +198,7 @@
       "name": "ScSwapchainDesc",
       "fields": [
         { "name": "format", "type": { "base": "ScFormat" }, "doc": "" },
+        { "name": "color_space", "type": { "base": "ScColorSpace" }, "default": "SC_COLOR_SPACE_SRGB_NONLINEAR", "doc": "format must be supported by the surface for this color space." },
         { "name": "present_mode", "type": { "base": "ScPresentMode" }, "doc": "" },
         { "name": "usage", "type": { "base": "ScTextureUsage" }, "doc": "" },
         { "name": "frame_latency_max", "type": { "base": "uint32_t" }, "default": 0, "doc": "Acquiring a back buffer blocks until the present from this many frames ago is displayed. 1 gives the lowest latency, 0 disables the wait. Ignored when the platform cannot report presentation." }
@@ -444,6 +445,15 @@
         { "name": "SC_PRESENT_MODE_MAILBOX", "value": 1, "doc": "" },
         { "name": "SC_PRESENT_MODE_FIFO", "value": 2, "doc": "" },
         { "name": "SC_PRESENT_MODE_FIFO_RELAXED", "value": 3, "doc": "" }
+      ],
+      "doc": ""
+    },
+    {
+      "name": "ScColorSpace",
+      "backing_type": "uint32_t",
+      "values": [
+        { "name": "SC_COLOR_SPACE_SRGB_NONLINEAR", "value": 0, "doc": "sRGB primaries, sRGB transfer function. 1.0 is SDR white." },
+        { "name": "SC_COLOR_SPACE_SCRGB_LINEAR", "value": 1, "doc": "HDR. sRGB primaries, linear. 1.0 is 80 nits, values outside [0, 1] reach wider gamut and higher luminance." }
       ],
       "doc": ""
     },
@@ -911,6 +921,7 @@
       "return": { "base": "void" },
       "params": [
         { "name": "surface", "type": { "base": "ScSurface", "ptr": [{}] }, "doc": "" },
+        { "name": "color_space", "type": { "base": "ScColorSpace" }, "doc": "" },
         { "name": "formats_capacity", "type": { "base": "size_t" }, "doc": "" },
         { "name": "formats", "type": { "base": "ScFormat", "ptr": [{ "optional": true, "len": "formats_capacity" }] }, "out": true, "doc": "" },
         { "name": "format_count", "type": { "base": "size_t", "ptr": [{}] }, "out": true, "doc": "" }

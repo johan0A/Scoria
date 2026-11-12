@@ -125,6 +125,14 @@ pub const to_sc = struct {
         };
     }
 
+    pub fn colorSpace(color_space: vk.ColorSpaceKHR) ?sc.ColorSpace {
+        return switch (color_space) {
+            .srgb_nonlinear_khr => .srgb_nonlinear,
+            .extended_srgb_linear_ext => .scrgb_linear,
+            else => null,
+        };
+    }
+
     pub fn adapterKind(device_type: vk.PhysicalDeviceType) sc.AdapterKind {
         return switch (device_type) {
             inline else => |t| @field(sc.AdapterKind, @tagName(t)),
@@ -309,6 +317,13 @@ pub const to_vk = struct {
             .mailbox => .mailbox_khr,
             .fifo => .fifo_khr,
             .fifo_relaxed => .fifo_relaxed_khr,
+        };
+    }
+
+    pub fn colorSpace(color_space: sc.ColorSpace) vk.ColorSpaceKHR {
+        return switch (color_space) {
+            .srgb_nonlinear => .srgb_nonlinear_khr,
+            .scrgb_linear => .extended_srgb_linear_ext,
         };
     }
 

@@ -40,6 +40,7 @@ fn Functions(handle_types: HandleTypes) type {
         ) sc.TextureUsage,
         surfaceSupportedFormats: fn (
             surface: *handle_types.Surface,
+            color_space: sc.ColorSpace,
             formats_capacity: usize,
             formats: ?[*]sc.Format,
             format_count: *usize,
@@ -426,12 +427,14 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
 
         pub fn surfaceSupportedFormats(
             surface: *handle_types.Surface,
+            color_space: sc.ColorSpace,
             formats_capacity: usize,
             formats: ?[*]sc.Format,
             format_count: *usize,
         ) callconv(sc.@"callconv") void {
             return functions.surfaceSupportedFormats(
                 surface,
+                color_space,
                 formats_capacity,
                 formats,
                 format_count,

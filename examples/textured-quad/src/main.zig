@@ -59,7 +59,7 @@ pub fn main(init: std.process.Init) !void {
     defer surface.destroy();
 
     if (!surface.supportedUsage().color_attachment) return error.SurfaceColorAttachmentUnsupported;
-    const swapchain_format = for (try surface.supportedFormatsAlloc(arena)) |format| {
+    const swapchain_format = for (try surface.supportedFormatsAlloc(.srgb_nonlinear, arena)) |format| {
         if (format == .rgba8_unorm_srgb or format == .bgra8_unorm_srgb) break format;
     } else return error.NoSupportedSurfaceFormat;
 

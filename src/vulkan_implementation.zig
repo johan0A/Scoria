@@ -22,6 +22,7 @@ pub const Instance = struct {
         xlib: bool = false,
         capabilities_2: bool = false,
         maintenance_1: bool = false,
+        color_space: bool = false,
     };
 
     pub fn create(host_allocator: ?*sc.HostAllocator) *Object(Instance) {
@@ -58,6 +59,7 @@ pub const Instance = struct {
             .xlib = vk.instance_extensions.khr_xlib_surface,
             .capabilities_2 = vk.instance_extensions.khr_get_surface_capabilities_2,
             .maintenance_1 = vk.instance_extensions.khr_surface_maintenance_1,
+            .color_space = vk.instance_extensions.ext_swapchain_colorspace,
         };
         for (try base_dispatch.enumerateInstanceExtensionPropertiesAlloc(null, arena)) |available_extension| {
             const name = std.mem.sliceTo(&available_extension.extension_name, 0);
@@ -163,7 +165,7 @@ pub const Instance = struct {
 pub const Surface = struct {
     handle: vk.SurfaceKHR,
     supported_usage: sc.TextureUsage,
-    formats: []sc.Format,
+    formats: std.EnumArray(sc.ColorSpace, []sc.Format),
     present_modes: []sc.PresentMode,
     d: *Device,
 
@@ -210,13 +212,18 @@ pub const Surface = struct {
         const capabilities = try instance.handle.getPhysicalDeviceSurfaceCapabilitiesKHR(d.physical_device, handle);
 
         const vk_formats = try instance.handle.getPhysicalDeviceSurfaceFormatsAllocKHR(d.physical_device, handle, arena);
-        var formats: std.ArrayList(sc.Format) = try .initCapacity(d.gpa, vk_formats.len);
-        errdefer formats.deinit(d.gpa);
+        var formats: std.EnumArray(sc.ColorSpace, []sc.Format) = .initFill(&.{});
+        errdefer for (formats.values) |color_space_formats| d.gpa.free(color_space_formats);
+        for (&formats.values) |*color_space_formats| color_space_formats.* = try d.gpa.alloc(sc.Format, vk_formats.len);
+        var format_counts: std.EnumArray(sc.ColorSpace, usize) = .initFill(0);
         for (vk_formats) |vk_format| {
-            if (vk_format.color_space != .srgb_nonlinear_khr) continue;
+            const color_space = to_sc.colorSpace(vk_format.color_space) orelse continue;
             const format = to_sc.format(vk_format.format) orelse continue;
-            if (format != .none) formats.appendAssumeCapacity(format);
+            if (format == .none) continue;
+            formats.get(color_space)[format_counts.get(color_space)] = format;
+            format_counts.getPtr(color_space).* += 1;
         }
+        for (&formats.values, format_counts.values) |*color_space_formats, count| color_space_formats.* = try d.gpa.realloc(color_space_formats.*, count);
 
         const vk_present_modes = try instance.handle.getPhysicalDeviceSurfacePresentModesAllocKHR(d.physical_device, handle, arena);
         var present_modes: std.ArrayList(sc.PresentMode) = try .initCapacity(d.gpa, vk_present_modes.len);
@@ -225,12 +232,10 @@ pub const Surface = struct {
             present_modes.appendAssumeCapacity(to_sc.presentMode(vk_present_mode) orelse continue);
         }
 
-        const formats_slice = try formats.toOwnedSlice(d.gpa);
-        errdefer d.gpa.free(formats_slice);
         surface.set(d.table, .{
             .handle = handle,
             .supported_usage = to_sc.usageFlags(capabilities.supported_usage_flags),
-            .formats = formats_slice,
+            .formats = formats,
             .present_modes = try present_modes.toOwnedSlice(d.gpa),
             .d = d,
         });
@@ -241,7 +246,7 @@ pub const Surface = struct {
         const surface = surface_obj.body();
         const d = surface.d;
         d.instance.handle.destroySurfaceKHR(surface.handle, null);
-        d.gpa.free(surface.formats);
+        for (surface.formats.values) |formats| d.gpa.free(formats);
         d.gpa.free(surface.present_modes);
         d.surfaces.destroy(surface_obj);
     }
@@ -252,11 +257,12 @@ pub const Surface = struct {
 
     pub fn supportedFormats(
         surface: *Object(Surface),
+        color_space: sc.ColorSpace,
         formats_capacity: usize,
         formats: ?[*]sc.Format,
         format_count: *usize,
     ) void {
-        writeEnumeration(sc.Format, surface.body().formats, formats_capacity, formats, format_count);
+        writeEnumeration(sc.Format, surface.body().formats.get(color_space), formats_capacity, formats, format_count);
     }
 
     pub fn presentModes(
@@ -1295,7 +1301,7 @@ pub const Swapchain = struct {
                     .surface = swapchain.surface,
                     .min_image_count = min_image_count,
                     .image_format = to_vk.format(swapchain.desc.format),
-                    .image_color_space = .srgb_nonlinear_khr,
+                    .image_color_space = to_vk.colorSpace(swapchain.desc.color_space),
                     .image_extent = image_extent,
                     .image_array_layers = 1,
                     .image_usage = to_vk.usageFlags(swapchain.desc.usage),

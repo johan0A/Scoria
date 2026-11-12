@@ -58,6 +58,13 @@ pub const PresentMode = enum(u32) {
     fifo_relaxed = 3,
 };
 
+pub const ColorSpace = enum(u32) {
+    /// sRGB primaries, sRGB transfer function. 1.0 is SDR white.
+    srgb_nonlinear = 0,
+    /// HDR. sRGB primaries, linear. 1.0 is 80 nits, values outside [0, 1] reach wider gamut and higher luminance.
+    scrgb_linear = 1,
+};
+
 pub const CompareOp = enum(u32) {
     always = 0,
     never = 1,
@@ -410,6 +417,8 @@ pub const HostDeviceAddress = extern struct {
 
 pub const SwapchainDesc = extern struct {
     format: sc.Format,
+    /// format must be supported by the surface for this color space.
+    color_space: sc.ColorSpace = .srgb_nonlinear,
     present_mode: sc.PresentMode,
     usage: sc.TextureUsage,
     /// Acquiring a back buffer blocks until the present from this many frames ago is displayed. 1 gives the lowest latency, 0 disables the wait. Ignored when the platform cannot report presentation.

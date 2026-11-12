@@ -148,10 +148,12 @@ pub fn surfaceSupportedUsage(
 
 pub fn surfaceSupportedFormats(
     surface: *sc.Surface,
+    color_space: sc.ColorSpace,
     formats: ?[]sc.Format,
 ) usize {
     const f: *const fn (
         surface: *sc.Surface,
+        color_space: sc.ColorSpace,
         formats_capacity: usize,
         formats: ?[*]sc.Format,
         format_count: *usize,
@@ -159,6 +161,7 @@ pub fn surfaceSupportedFormats(
     var format_count: usize = undefined;
     f(
         surface,
+        color_space,
         @intCast((if (formats) |unwrapped| unwrapped.len else 0)),
         (if (formats) |unwrapped| unwrapped.ptr else null),
         &format_count,
@@ -168,6 +171,7 @@ pub fn surfaceSupportedFormats(
 
 pub fn surfaceSupportedFormatsAlloc(
     surface: *sc.Surface,
+    color_space: sc.ColorSpace,
     gpa: std.mem.Allocator,
 ) error{
     OutOfMemory,
@@ -177,6 +181,7 @@ pub fn surfaceSupportedFormatsAlloc(
     while (true) {
         const format_count = surfaceSupportedFormats(
             surface,
+            color_space,
             formats,
         );
         if (format_count <= formats.len) return gpa.realloc(formats, format_count);
