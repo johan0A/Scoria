@@ -360,12 +360,12 @@ pub const to_vk = struct {
         const blend: sc.BlendDesc = if (blend_state) |b| b.* else .{};
         return .{
             .blend_enable = .fromBool(blend_state != null),
-            .src_color_blend_factor = blendFactor(blend.src_color_factor),
-            .dst_color_blend_factor = blendFactor(blend.dst_color_factor),
-            .color_blend_op = blendOp(blend.color_op),
-            .src_alpha_blend_factor = blendFactor(blend.src_alpha_factor),
-            .dst_alpha_blend_factor = blendFactor(blend.dst_alpha_factor),
-            .alpha_blend_op = blendOp(blend.alpha_op),
+            .src_color_blend_factor = blendFactor(blend.color.src_factor),
+            .dst_color_blend_factor = blendFactor(blend.color.dst_factor),
+            .color_blend_op = blendOp(blend.color.op),
+            .src_alpha_blend_factor = blendFactor(blend.alpha.src_factor),
+            .dst_alpha_blend_factor = blendFactor(blend.alpha.dst_factor),
+            .alpha_blend_op = blendOp(blend.alpha.op),
             .color_write_mask = writeMask(write_mask),
         };
     }

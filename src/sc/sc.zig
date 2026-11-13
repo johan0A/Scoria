@@ -45,21 +45,14 @@ pub const Adapter = opaque {};
 pub const Device = opaque {
     pub const create = functions.createDevice;
     pub const destroy = functions.destroyDevice;
-    pub const createSurfaceWin32 = functions.createSurfaceWin32;
-    pub const createSurfaceXlib = functions.createSurfaceXlib;
     pub const hostFromPointer = functions.hostFromDevicePointer;
     pub const alloc = functions.alloc;
     pub const free = functions.free;
     pub const descriptorSizeAndHeapAlign = functions.descriptorSizeAndHeapAlign;
     pub const storeDescriptor = functions.storeDescriptor;
     pub const getQueue = functions.getQueue;
-    pub const createTimeline = functions.createTimeline;
     pub const textureSizeAlign = functions.textureSizeAlign;
     pub const textureSampleCountMax = functions.textureSampleCountMax;
-    pub const createTexture = functions.createTexture;
-    pub const createComputePipeline = functions.createComputePipeline;
-    pub const createGraphicsPipeline = functions.createGraphicsPipeline;
-    pub const createDepthStencilState = functions.createDepthStencilState;
 };
 
 pub const Queue = opaque {
@@ -679,13 +672,15 @@ pub const Descriptor = extern struct {
     data: [descriptor_size_max]u8,
 };
 
+pub const BlendComponent = extern struct {
+    op: BlendOp = .add,
+    src_factor: BlendFactor = .one,
+    dst_factor: BlendFactor = .zero,
+};
+
 pub const BlendDesc = extern struct {
-    color_op: BlendOp = .add,
-    src_color_factor: BlendFactor = .one,
-    dst_color_factor: BlendFactor = .zero,
-    alpha_op: BlendOp = .add,
-    src_alpha_factor: BlendFactor = .one,
-    dst_alpha_factor: BlendFactor = .zero,
+    color: BlendComponent = .{},
+    alpha: BlendComponent = .{},
 };
 
 pub const ColorTarget = extern struct {

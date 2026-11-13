@@ -557,13 +557,15 @@ pub const Descriptor = extern struct {
     data: [descriptor_size_max]u8,
 };
 
+pub const BlendComponent = extern struct {
+    op: BlendOp = .add,
+    src_factor: BlendFactor = .one,
+    dst_factor: BlendFactor = .zero,
+};
+
 pub const BlendDesc = extern struct {
-    color_op: BlendOp = .add,
-    src_color_factor: BlendFactor = .one,
-    dst_color_factor: BlendFactor = .zero,
-    alpha_op: BlendOp = .add,
-    src_alpha_factor: BlendFactor = .one,
-    dst_alpha_factor: BlendFactor = .zero,
+    color: BlendComponent = .{},
+    alpha: BlendComponent = .{},
 };
 
 pub const ColorTarget = extern struct {

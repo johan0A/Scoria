@@ -356,14 +356,19 @@
       "doc": ""
     },
     {
+      "name": "ScBlendComponent",
+      "fields": [
+        { "name": "op", "type": { "base": "ScBlendOp" }, "default": "SC_BLEND_OP_ADD", "doc": "" },
+        { "name": "src_factor", "type": { "base": "ScBlendFactor" }, "default": "SC_BLEND_FACTOR_ONE", "doc": "" },
+        { "name": "dst_factor", "type": { "base": "ScBlendFactor" }, "default": "SC_BLEND_FACTOR_ZERO", "doc": "" }
+      ],
+      "doc": ""
+    },
+    {
       "name": "ScBlendDesc",
       "fields": [
-        { "name": "color_op", "type": { "base": "ScBlendOp" }, "default": "SC_BLEND_OP_ADD", "doc": "" },
-        { "name": "src_color_factor", "type": { "base": "ScBlendFactor" }, "default": "SC_BLEND_FACTOR_ONE", "doc": "" },
-        { "name": "dst_color_factor", "type": { "base": "ScBlendFactor" }, "default": "SC_BLEND_FACTOR_ZERO", "doc": "" },
-        { "name": "alpha_op", "type": { "base": "ScBlendOp" }, "default": "SC_BLEND_OP_ADD", "doc": "" },
-        { "name": "src_alpha_factor", "type": { "base": "ScBlendFactor" }, "default": "SC_BLEND_FACTOR_ONE", "doc": "" },
-        { "name": "dst_alpha_factor", "type": { "base": "ScBlendFactor" }, "default": "SC_BLEND_FACTOR_ZERO", "doc": "" }
+        { "name": "color", "type": { "base": "ScBlendComponent" }, "default": {}, "doc": "" },
+        { "name": "alpha", "type": { "base": "ScBlendComponent" }, "default": {}, "doc": "" }
       ],
       "doc": ""
     },
