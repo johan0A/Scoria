@@ -512,9 +512,9 @@ pub const TextureCopyDesc = extern struct {
     base_layer: u32 = 0,
     /// 0 selects all layers from base_layer.
     layer_count: u32 = 0,
-    /// Must not be negative. Must be a multiple of the format's block extent.
+    /// Must not be negative. Must be a multiple of the format's block extent times the queue's texture copy granularity.
     offset: Offset3D = .{},
-    /// Zero components select the rest of the mip. Must be a multiple of the format's block extent unless it reaches the edge of the mip.
+    /// Zero components select the rest of the mip. Must be a multiple of the format's block extent times the queue's texture copy granularity unless it reaches the edge of the mip.
     extent: Extent3D = .{ .width = 0, .height = 0, .depth = 0 },
     /// Distance between rows of blocks in memory, 0 is tightly packed. Must be a multiple of the format's block size.
     row_pitch_bytes: usize = 0,
@@ -831,6 +831,18 @@ pub fn getQueue(
     return f(
         device,
         queue_kind,
+    );
+}
+
+/// Texture copies recorded for this queue must have an offset that is a multiple of the granularity times the format's block extent, and an extent that is a multiple of it unless it reaches the edge of the mip. Never 0, and always (1, 1, 1) for graphics and compute queues.
+pub fn textureCopyGranularity(
+    queue: *Queue,
+) Extent3D {
+    const f: *const fn (
+        queue: *Queue,
+    ) callconv(@"callconv") Extent3D = @ptrCast(internal.table(queue)[internal.slots.texture_copy_granularity]);
+    return f(
+        queue,
     );
 }
 
@@ -1600,6 +1612,7 @@ const internal = struct {
         descriptor_size_and_heap_align: usize = 0,
         store_descriptor: usize = 0,
         get_queue: usize = 0,
+        texture_copy_granularity: usize = 0,
         create_command_pool: usize = 0,
         destroy_command_pool: usize = 0,
         reset_command_pool: usize = 0,
@@ -1666,6 +1679,7 @@ const internal = struct {
         slots.descriptor_size_and_heap_align = get_slot.?(instance, "scDescriptorSizeAndHeapAlign");
         slots.store_descriptor = get_slot.?(instance, "scStoreDescriptor");
         slots.get_queue = get_slot.?(instance, "scGetQueue");
+        slots.texture_copy_granularity = get_slot.?(instance, "scTextureCopyGranularity");
         slots.create_command_pool = get_slot.?(instance, "scCreateCommandPool");
         slots.destroy_command_pool = get_slot.?(instance, "scDestroyCommandPool");
         slots.reset_command_pool = get_slot.?(instance, "scResetCommandPool");

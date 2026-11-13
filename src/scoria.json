@@ -321,8 +321,8 @@
         { "name": "mip", "type": { "base": "uint32_t" }, "default": 0, "doc": "" },
         { "name": "base_layer", "type": { "base": "uint32_t" }, "default": 0, "doc": "" },
         { "name": "layer_count", "type": { "base": "uint32_t" }, "default": 0, "doc": "0 selects all layers from base_layer." },
-        { "name": "offset", "type": { "base": "ScOffset3D" }, "default": {}, "doc": "Must not be negative. Must be a multiple of the format's block extent." },
-        { "name": "extent", "type": { "base": "ScExtent3D" }, "default": { "width": 0, "height": 0, "depth": 0 }, "doc": "Zero components select the rest of the mip. Must be a multiple of the format's block extent unless it reaches the edge of the mip." },
+        { "name": "offset", "type": { "base": "ScOffset3D" }, "default": {}, "doc": "Must not be negative. Must be a multiple of the format's block extent times the queue's texture copy granularity." },
+        { "name": "extent", "type": { "base": "ScExtent3D" }, "default": { "width": 0, "height": 0, "depth": 0 }, "doc": "Zero components select the rest of the mip. Must be a multiple of the format's block extent times the queue's texture copy granularity unless it reaches the edge of the mip." },
         { "name": "row_pitch_bytes", "type": { "base": "size_t" }, "default": 0, "doc": "Distance between rows of blocks in memory, 0 is tightly packed. Must be a multiple of the format's block size." },
         { "name": "slice_pitch_bytes", "type": { "base": "size_t" }, "default": 0, "doc": "Distance between depth slices or layers in memory, 0 is tightly packed. Must be a multiple of the row pitch." }
       ],
@@ -1016,6 +1016,16 @@
         { "name": "queue_kind", "type": { "base": "ScQueueKind" }, "doc": "" }
       ],
       "doc": ""
+    },
+    {
+      "name": "scTextureCopyGranularity",
+      "group": "ScQueue",
+      "dispatch": "table",
+      "return": { "base": "ScExtent3D" },
+      "params": [
+        { "name": "queue", "type": { "base": "ScQueue", "ptr": [{}] }, "doc": "" }
+      ],
+      "doc": "Texture copies recorded for this queue must have an offset that is a multiple of the granularity times the format's block extent, and an extent that is a multiple of it unless it reaches the edge of the mip. Never 0, and always (1, 1, 1) for graphics and compute queues."
     },
     {
       "name": "scCreateCommandPool",

@@ -333,6 +333,18 @@ pub fn getQueue(
     );
 }
 
+/// Texture copies recorded for this queue must have an offset that is a multiple of the granularity times the format's block extent, and an extent that is a multiple of it unless it reaches the edge of the mip. Never 0, and always (1, 1, 1) for graphics and compute queues.
+pub fn textureCopyGranularity(
+    queue: *sc.Queue,
+) sc.Extent3D {
+    const f: *const fn (
+        queue: *sc.Queue,
+    ) callconv(@"callconv") sc.Extent3D = @ptrCast(internal.table(queue)[internal.slots.texture_copy_granularity]);
+    return f(
+        queue,
+    );
+}
+
 pub fn createCommandPool(
     queue: *sc.Queue,
 ) error{
@@ -1299,6 +1311,7 @@ const internal = struct {
         descriptor_size_and_heap_align: usize = 0,
         store_descriptor: usize = 0,
         get_queue: usize = 0,
+        texture_copy_granularity: usize = 0,
         create_command_pool: usize = 0,
         destroy_command_pool: usize = 0,
         reset_command_pool: usize = 0,
@@ -1365,6 +1378,7 @@ const internal = struct {
         slots.descriptor_size_and_heap_align = get_slot.?(instance, "scDescriptorSizeAndHeapAlign");
         slots.store_descriptor = get_slot.?(instance, "scStoreDescriptor");
         slots.get_queue = get_slot.?(instance, "scGetQueue");
+        slots.texture_copy_granularity = get_slot.?(instance, "scTextureCopyGranularity");
         slots.create_command_pool = get_slot.?(instance, "scCreateCommandPool");
         slots.destroy_command_pool = get_slot.?(instance, "scDestroyCommandPool");
         slots.reset_command_pool = get_slot.?(instance, "scResetCommandPool");

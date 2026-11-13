@@ -83,6 +83,9 @@ fn Functions(handle_types: HandleTypes) type {
             device: *handle_types.Device,
             queue_kind: sc.QueueKind,
         ) *handle_types.Queue,
+        textureCopyGranularity: fn (
+            queue: *handle_types.Queue,
+        ) sc.Extent3D,
         createCommandPool: fn (
             queue: *handle_types.Queue,
             command_pool: **handle_types.CommandPool,
@@ -542,6 +545,14 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
             return functions.getQueue(
                 device,
                 queue_kind,
+            );
+        }
+
+        pub fn textureCopyGranularity(
+            queue: *handle_types.Queue,
+        ) callconv(sc.@"callconv") sc.Extent3D {
+            return functions.textureCopyGranularity(
+                queue,
             );
         }
 
@@ -1070,6 +1081,7 @@ pub fn map(
         .{ "scDescriptorSizeAndHeapAlign", @ptrCast(&c_functions.descriptorSizeAndHeapAlign) },
         .{ "scStoreDescriptor", @ptrCast(&c_functions.storeDescriptor) },
         .{ "scGetQueue", @ptrCast(&c_functions.getQueue) },
+        .{ "scTextureCopyGranularity", @ptrCast(&c_functions.textureCopyGranularity) },
         .{ "scCreateCommandPool", @ptrCast(&c_functions.createCommandPool) },
         .{ "scDestroyCommandPool", @ptrCast(&c_functions.destroyCommandPool) },
         .{ "scResetCommandPool", @ptrCast(&c_functions.resetCommandPool) },

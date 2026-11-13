@@ -542,7 +542,8 @@ pub const Device = struct {
             if (family.queue_flags.compute and !family.queue_flags.graphics) break @intCast(i);
         } else graphics_family;
         const transfer_family: u32 = for (family_properties, 0..) |family, i| {
-            if (family.queue_flags.transfer and !family.queue_flags.graphics and !family.queue_flags.compute) break @intCast(i);
+            if (family.queue_flags.transfer and !family.queue_flags.graphics and !family.queue_flags.compute and
+                family.min_image_transfer_granularity.width != 0) break @intCast(i);
         } else compute_family;
         const family_from_kind: std.EnumArray(sc.QueueKind, u32) = .init(.{
             .graphics = graphics_family,
@@ -637,6 +638,7 @@ pub const Device = struct {
             queue.set(table, .{
                 .handle = handle.getDeviceQueue(queue_info.queue_family_index, 0),
                 .family = queue_info.queue_family_index,
+                .texture_copy_granularity = family_properties[queue_info.queue_family_index].min_image_transfer_granularity,
                 .timeline = timeline,
                 .last_submitted = 0,
                 .command_pool = try handle.createCommandPool(&.{
@@ -849,6 +851,7 @@ pub const Device = struct {
 pub const Queue = struct {
     handle: vk.Queue,
     family: u32,
+    texture_copy_granularity: vk.Extent3D,
     /// signaled by every submission, with `last_submitted` as the latest value
     timeline: vk.Semaphore,
     last_submitted: u64,
@@ -868,6 +871,11 @@ pub const Queue = struct {
     pub fn getQueue(d_obj: *Object(Device), queue_kind: sc.QueueKind) *Object(Queue) {
         const d = d_obj.body();
         return &d.queues[d.queue_index_from_kind.get(queue_kind)];
+    }
+
+    pub fn textureCopyGranularity(queue: *Object(Queue)) sc.Extent3D {
+        const granularity = queue.body().texture_copy_granularity;
+        return .{ .width = granularity.width, .height = granularity.height, .depth = granularity.depth };
     }
 
     pub fn submit(
@@ -1659,7 +1667,7 @@ pub const CommandBuffer = struct {
     ) void {
         const cb = cb_obj.body();
         const source_texture = source_texture_obj.body();
-        const buffer, const region = bufferImageCopy(cb.d, source_texture, destination, size, desc);
+        const buffer, const region = bufferImageCopy(cb, source_texture, destination, size, desc);
         cb.d.handle.cmdCopyImageToBuffer2(cb.handle, &.{
             .src_image = source_texture.image,
             .src_image_layout = .general,
@@ -1678,7 +1686,7 @@ pub const CommandBuffer = struct {
     ) void {
         const cb = cb_obj.body();
         const destination_texture = destination_texture_obj.body();
-        const buffer, const region = bufferImageCopy(cb.d, destination_texture, source, size, desc);
+        const buffer, const region = bufferImageCopy(cb, destination_texture, source, size, desc);
         cb.d.handle.cmdCopyBufferToImage2(cb.handle, &.{
             .src_buffer = buffer,
             .dst_image = destination_texture.image,
@@ -1689,23 +1697,28 @@ pub const CommandBuffer = struct {
     }
 
     fn bufferImageCopy(
-        d: *Device,
+        cb: *const CommandBuffer,
         texture: *const Texture,
         address: sc.DeviceAddress,
         size: usize,
         desc: sc.TextureCopyDesc,
     ) struct { vk.Buffer, vk.BufferImageCopy2 } {
-        const entry, const offset = d.heap.entryAndOffsetFromAddr(address);
+        const entry, const offset = cb.d.heap.entryAndOffsetFromAddr(address);
         std.debug.assert(offset + size <= entry.size);
 
+        const block = to_vk.blockForFormat(texture.desc.format);
+        const queue_granularity = cb.queue.texture_copy_granularity;
+        const granularity: [3]u32 = .{ queue_granularity.width * block.width, queue_granularity.height * block.height, queue_granularity.depth };
         const texture_extent: [3]u32 = .{ texture.desc.extent.width, texture.desc.extent.height, texture.desc.extent.depth };
         const texel_offset: [3]u32 = .{ @intCast(desc.offset.x), @intCast(desc.offset.y), @intCast(desc.offset.z) };
         var extent: [3]u32 = .{ desc.extent.width, desc.extent.height, desc.extent.depth };
-        for (&extent, texel_offset, texture_extent) |*extent_size, start, texture_size| {
-            if (extent_size.* == 0) extent_size.* = @max(texture_size >> @intCast(desc.mip), 1) - start;
+        for (&extent, texel_offset, texture_extent, granularity) |*extent_size, start, texture_size, step| {
+            const mip_size = @max(texture_size >> @intCast(desc.mip), 1);
+            if (extent_size.* == 0) extent_size.* = mip_size - start;
+            std.debug.assert(start % step == 0);
+            std.debug.assert(start + extent_size.* == mip_size or extent_size.* % step == 0);
         }
 
-        const block = to_vk.blockForFormat(texture.desc.format);
         const row_bytes = (extent[0] + block.width - 1) / block.width * block.size;
         const row_pitch_bytes = if (desc.row_pitch_bytes != 0) desc.row_pitch_bytes else row_bytes;
         const layer_count = if (desc.layer_count == 0) texture.desc.layer_count - desc.base_layer else desc.layer_count;
@@ -2427,6 +2440,7 @@ pub export fn symbol(name: [*:0]const u8) callconv(sc.@"callconv") *const anyopa
         .descriptorSizeAndHeapAlign = Texture.Descriptor.sizeAndHeapAlign,
         .storeDescriptor = Texture.Descriptor.storeDescriptor,
         .getQueue = Queue.getQueue,
+        .textureCopyGranularity = Queue.textureCopyGranularity,
         .createCommandPool = CommandPool.create,
         .destroyCommandPool = CommandPool.destroy,
         .resetCommandPool = CommandPool.reset,
