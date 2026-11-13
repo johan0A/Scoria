@@ -300,6 +300,10 @@ fn Functions(handle_types: HandleTypes) type {
             device: *handle_types.Device,
             desc: sc.TextureDesc,
         ) sc.SizeAlign,
+        textureSampleCountMax: fn (
+            device: *handle_types.Device,
+            desc: sc.TextureDesc,
+        ) u32,
         createTexture: fn (
             device: *handle_types.Device,
             desc: sc.TextureDesc,
@@ -952,6 +956,16 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
             );
         }
 
+        pub fn textureSampleCountMax(
+            device: *handle_types.Device,
+            desc: sc.TextureDesc,
+        ) callconv(sc.@"callconv") u32 {
+            return functions.textureSampleCountMax(
+                device,
+                desc,
+            );
+        }
+
         pub fn createTexture(
             device: *handle_types.Device,
             desc: sc.TextureDesc,
@@ -1114,6 +1128,7 @@ pub fn map(
         .{ "scDrawIndexedInstancedIndirect", @ptrCast(&c_functions.drawIndexedInstancedIndirect) },
         .{ "scDrawIndirect", @ptrCast(&c_functions.drawIndirect) },
         .{ "scTextureSizeAlign", @ptrCast(&c_functions.textureSizeAlign) },
+        .{ "scTextureSampleCountMax", @ptrCast(&c_functions.textureSampleCountMax) },
         .{ "scCreateTexture", @ptrCast(&c_functions.createTexture) },
         .{ "scDestroyTexture", @ptrCast(&c_functions.destroyTexture) },
         .{ "scTextureStorageDescriptor", @ptrCast(&c_functions.textureStorageDescriptor) },

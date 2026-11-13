@@ -55,6 +55,7 @@ pub const Device = opaque {
     pub const getQueue = functions.getQueue;
     pub const createTimeline = functions.createTimeline;
     pub const textureSizeAlign = functions.textureSizeAlign;
+    pub const textureSampleCountMax = functions.textureSampleCountMax;
     pub const createTexture = functions.createTexture;
     pub const createComputePipeline = functions.createComputePipeline;
     pub const createGraphicsPipeline = functions.createGraphicsPipeline;
@@ -570,6 +571,8 @@ pub const ColorAttachment = extern struct {
     load_op: LoadOp = .load,
     store_op: StoreOp = .store,
     clear_color: [4]f32 = .{ 0, 0, 0, 1 },
+    /// Single-sampled texture of the same format and extent that the samples of texture are resolved into when the render pass ends. Samples are averaged, integer formats take the first sample.
+    resolve_texture: ?*Texture = null,
 };
 
 pub const ColorAttachments = extern struct {
@@ -622,6 +625,8 @@ pub const TextureDesc = extern struct {
     extent: Extent3D,
     mip_count: u32 = 1,
     layer_count: u32 = 1,
+    /// 1, 2, 4 or 8. Multisampled textures must be 2D with a single mip, can't have storage usage and can't be copied.
+    sample_count: u32 = 1,
     format: Format,
     usage: TextureUsage = .{},
     /// Additional formats this texture may be viewed as (must be format-compatible).
@@ -688,6 +693,7 @@ pub const GraphicsPipelineDesc = extern struct {
     topology: Topology = .triangle_list,
     cull: Cull = .none,
     alpha_to_coverage: bool = false,
+    /// Must match the sample count of every attachment of the render pass.
     sample_count: u32 = 1,
     /// `.none` for no depth attachment.
     depth_format: Format = .none,

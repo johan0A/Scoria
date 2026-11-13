@@ -399,7 +399,7 @@ pub const to_vk = struct {
             .extent = extent3D(desc.extent),
             .mip_levels = desc.mip_count,
             .array_layers = desc.layer_count,
-            .samples = .{ .@"1" = true },
+            .samples = sampleCount(@intCast(desc.sample_count)),
             .tiling = .optimal,
             .usage = usageFlags(desc.usage),
             .sharing_mode = .exclusive,
@@ -493,6 +493,12 @@ pub const to_vk = struct {
         return switch (op) {
             .dont_care => .dont_care,
             .store => .store,
+        };
+    }
+
+    pub fn isIntegerFormat(fmt: sc.Format) bool {
+        return switch (fmt) {
+            inline else => |f| comptime std.mem.endsWith(u8, @tagName(f), "int"),
         };
     }
 

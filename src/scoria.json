@@ -248,7 +248,8 @@
         { "name": "texture", "type": { "base": "ScTexture", "ptr": [{}] }, "doc": "" },
         { "name": "load_op", "type": { "base": "ScLoadOp" }, "default": "SC_LOAD_OP_LOAD", "doc": "" },
         { "name": "store_op", "type": { "base": "ScStoreOp" }, "default": "SC_STORE_OP_STORE", "doc": "" },
-        { "name": "clear_color", "type": { "base": "float", "array": 4 }, "default": [0, 0, 0, 1], "doc": "" }
+        { "name": "clear_color", "type": { "base": "float", "array": 4 }, "default": [0, 0, 0, 1], "doc": "" },
+        { "name": "resolve_texture", "type": { "base": "ScTexture", "ptr": [{ "optional": true }] }, "default": null, "doc": "Single-sampled texture of the same format and extent that the samples of texture are resolved into when the render pass ends. Samples are averaged, integer formats take the first sample." }
       ],
       "doc": ""
     },
@@ -314,6 +315,7 @@
         { "name": "extent", "type": { "base": "ScExtent3D" }, "doc": "" },
         { "name": "mip_count", "type": { "base": "uint32_t" }, "default": 1, "doc": "" },
         { "name": "layer_count", "type": { "base": "uint32_t" }, "default": 1, "doc": "" },
+        { "name": "sample_count", "type": { "base": "uint32_t" }, "default": 1, "doc": "1, 2, 4 or 8. Multisampled textures must be 2D with a single mip, can't have storage usage and can't be copied." },
         { "name": "format", "type": { "base": "ScFormat" }, "doc": "" },
         { "name": "usage", "type": { "base": "ScTextureUsage" }, "default": 0, "doc": "" },
         { "name": "view_formats", "type": { "base": "ScFormats" }, "default": {}, "doc": "Additional formats this texture may be viewed as (must be format-compatible).\nlisting formats can disable lossless compression.\nOnly read during creation." }
@@ -386,7 +388,7 @@
         { "name": "topology", "type": { "base": "ScTopology" }, "default": "SC_TOPOLOGY_TRIANGLE_LIST", "doc": "" },
         { "name": "cull", "type": { "base": "ScCull" }, "default": "SC_CULL_NONE", "doc": "" },
         { "name": "alpha_to_coverage", "type": { "base": "bool" }, "default": false, "doc": "" },
-        { "name": "sample_count", "type": { "base": "uint32_t" }, "default": 1, "doc": "" },
+        { "name": "sample_count", "type": { "base": "uint32_t" }, "default": 1, "doc": "Must match the sample count of every attachment of the render pass." },
         { "name": "depth_format", "type": { "base": "ScFormat" }, "default": "SC_FORMAT_NONE", "doc": "SC_FORMAT_NONE for no depth attachment." },
         { "name": "stencil_format", "type": { "base": "ScFormat" }, "default": "SC_FORMAT_NONE", "doc": "SC_FORMAT_NONE for no stencil attachment." },
         { "name": "color_targets", "type": { "base": "ScColorTargets" }, "default": {}, "doc": "" }
@@ -1497,6 +1499,17 @@
         { "name": "desc", "type": { "base": "ScTextureDesc" }, "doc": "" }
       ],
       "doc": ""
+    },
+    {
+      "name": "scTextureSampleCountMax",
+      "group": "ScTexture",
+      "dispatch": "table",
+      "return": { "base": "uint32_t" },
+      "params": [
+        { "name": "device", "type": { "base": "ScDevice", "ptr": [{}] }, "doc": "" },
+        { "name": "desc", "type": { "base": "ScTextureDesc" }, "doc": "sample_count is ignored." }
+      ],
+      "doc": "Highest sample count the texture can be created with, every power of two below it is supported too. At most 8, and 0 when the texture can't be created at all. At least 4 for attachments with a non-integer format."
     },
     {
       "name": "scCreateTexture",

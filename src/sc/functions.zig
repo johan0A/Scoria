@@ -1038,6 +1038,21 @@ pub fn textureSizeAlign(
     );
 }
 
+/// Highest sample count the texture can be created with, every power of two below it is supported too. At most 8, and 0 when the texture can't be created at all. At least 4 for attachments with a non-integer format.
+pub fn textureSampleCountMax(
+    device: *sc.Device,
+    desc: sc.TextureDesc,
+) u32 {
+    const f: *const fn (
+        device: *sc.Device,
+        desc: sc.TextureDesc,
+    ) callconv(@"callconv") u32 = @ptrCast(internal.table(device)[internal.slots.texture_sample_count_max]);
+    return f(
+        device,
+        desc,
+    );
+}
+
 pub fn createTexture(
     device: *sc.Device,
     desc: sc.TextureDesc,
@@ -1344,6 +1359,7 @@ const internal = struct {
         draw_indexed_instanced_indirect: usize = 0,
         draw_indirect: usize = 0,
         texture_size_align: usize = 0,
+        texture_sample_count_max: usize = 0,
         create_texture: usize = 0,
         destroy_texture: usize = 0,
         texture_storage_descriptor: usize = 0,
@@ -1411,6 +1427,7 @@ const internal = struct {
         slots.draw_indexed_instanced_indirect = get_slot.?(instance, "scDrawIndexedInstancedIndirect");
         slots.draw_indirect = get_slot.?(instance, "scDrawIndirect");
         slots.texture_size_align = get_slot.?(instance, "scTextureSizeAlign");
+        slots.texture_sample_count_max = get_slot.?(instance, "scTextureSampleCountMax");
         slots.create_texture = get_slot.?(instance, "scCreateTexture");
         slots.destroy_texture = get_slot.?(instance, "scDestroyTexture");
         slots.texture_storage_descriptor = get_slot.?(instance, "scTextureStorageDescriptor");

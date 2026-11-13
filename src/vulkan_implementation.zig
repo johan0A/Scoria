@@ -1704,6 +1704,7 @@ pub const CommandBuffer = struct {
     ) struct { vk.Buffer, vk.BufferImageCopy2 } {
         const entry, const offset = cb.d.heap.entryAndOffsetFromAddr(address);
         std.debug.assert(offset + size <= entry.size);
+        std.debug.assert(texture.desc.sample_count == 1);
 
         const block = to_vk.blockForFormat(texture.desc.format);
         const queue_granularity = cb.queue.texture_copy_granularity;
@@ -1771,6 +1772,14 @@ pub const CommandBuffer = struct {
             attachment.* = renderingAttachment(target.texture, target.load_op, target.store_op, .{
                 .color = .{ .float_32 = target.clear_color },
             });
+            const resolve_texture = textureFromHandle(target.resolve_texture orelse continue);
+            const texture_desc = textureFromHandle(target.texture).desc;
+            std.debug.assert(texture_desc.sample_count > 1 and resolve_texture.desc.sample_count == 1);
+            std.debug.assert(texture_desc.format == resolve_texture.desc.format);
+            const is_integer = to_vk.isIntegerFormat(texture_desc.format);
+            attachment.resolve_mode = .{ .average = !is_integer, .sample_zero = is_integer };
+            attachment.resolve_image_view = resolve_texture.default_view;
+            attachment.resolve_image_layout = .general;
         }
         const depth = desc.depth_attachment;
         const depth_attachment = if (depth.texture) |texture| renderingAttachment(texture, depth.load_op, depth.store_op, .{
@@ -2001,6 +2010,26 @@ pub const Texture = struct {
         return requirements.memory_requirements;
     }
 
+    pub fn sampleCountMax(d_obj: *Object(Device), desc: Desc) u32 {
+        const d = d_obj.body();
+        var format_list: vk.ImageFormatListCreateInfo = undefined;
+        var view_formats: [to_vk.view_format_count_max]vk.Format = undefined;
+        const create_info = to_vk.imageCreateInfo(desc, &format_list, &view_formats);
+        var properties: vk.ImageFormatProperties2 = .{ .image_format_properties = undefined };
+        d.instance.handle.getPhysicalDeviceImageFormatProperties2(d.physical_device, &.{
+            .p_next = create_info.p_next,
+            .format = create_info.format,
+            .type = create_info.image_type,
+            .tiling = create_info.tiling,
+            .usage = create_info.usage,
+            .flags = create_info.flags,
+        }, &properties) catch return 0;
+        const supported = properties.image_format_properties.sample_counts.toInt();
+        var count: u32 = 1;
+        while (count < 8 and supported & (count << 1) != 0) count <<= 1;
+        return count;
+    }
+
     pub fn create(d: *Object(Device), desc: Desc, texture_data: sc.DeviceAddress, texture: **Object(Texture)) !void {
         texture.* = createInner(d.body(), desc, texture_data) catch |err| return switch (err) {
             error.OutOfHostMemory, error.OutOfMemory => error.OutOfMemory,
@@ -2010,6 +2039,8 @@ pub const Texture = struct {
     }
     fn createInner(d: *Device, create_desc: Desc, texture_data: sc.DeviceAddress) !*Object(Texture) {
         std.debug.assert(create_desc.format != .none);
+        std.debug.assert(create_desc.sample_count == 1 or
+            (create_desc.type == .@"2d" and create_desc.mip_count == 1 and !create_desc.usage.storage));
         const texture = try d.textures.create(d.gpa);
         errdefer d.textures.destroy(texture);
 
@@ -2479,6 +2510,7 @@ pub export fn symbol(name: [*:0]const u8) callconv(sc.@"callconv") *const anyopa
         .drawIndexedInstancedIndirect = CommandBuffer.drawIndexedInstancedIndirect,
         .drawIndirect = CommandBuffer.drawIndirect,
         .textureSizeAlign = Texture.sizeAlign,
+        .textureSampleCountMax = Texture.sampleCountMax,
         .createTexture = Texture.create,
         .destroyTexture = Texture.destroy,
         .textureStorageDescriptor = Texture.storageDescriptor,

@@ -455,6 +455,8 @@ pub const ColorAttachment = extern struct {
     load_op: sc.LoadOp = .load,
     store_op: sc.StoreOp = .store,
     clear_color: [4]f32 = .{ 0, 0, 0, 1 },
+    /// Single-sampled texture of the same format and extent that the samples of texture are resolved into when the render pass ends. Samples are averaged, integer formats take the first sample.
+    resolve_texture: ?*sc.Texture = null,
 };
 
 pub const ColorAttachments = extern struct {
@@ -499,6 +501,8 @@ pub const TextureDesc = extern struct {
     extent: sc.Extent3D,
     mip_count: u32 = 1,
     layer_count: u32 = 1,
+    /// 1, 2, 4 or 8. Multisampled textures must be 2D with a single mip, can't have storage usage and can't be copied.
+    sample_count: u32 = 1,
     format: sc.Format,
     usage: sc.TextureUsage = .{},
     /// Additional formats this texture may be viewed as (must be format-compatible).
@@ -561,6 +565,7 @@ pub const GraphicsPipelineDesc = extern struct {
     topology: sc.Topology = .triangle_list,
     cull: sc.Cull = .none,
     alpha_to_coverage: bool = false,
+    /// Must match the sample count of every attachment of the render pass.
     sample_count: u32 = 1,
     /// SC_FORMAT_NONE for no depth attachment.
     depth_format: sc.Format = .none,

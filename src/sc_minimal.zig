@@ -457,6 +457,8 @@ pub const ColorAttachment = extern struct {
     load_op: LoadOp = .load,
     store_op: StoreOp = .store,
     clear_color: [4]f32 = .{ 0, 0, 0, 1 },
+    /// Single-sampled texture of the same format and extent that the samples of texture are resolved into when the render pass ends. Samples are averaged, integer formats take the first sample.
+    resolve_texture: ?*Texture = null,
 };
 
 pub const ColorAttachments = extern struct {
@@ -501,6 +503,8 @@ pub const TextureDesc = extern struct {
     extent: Extent3D,
     mip_count: u32 = 1,
     layer_count: u32 = 1,
+    /// 1, 2, 4 or 8. Multisampled textures must be 2D with a single mip, can't have storage usage and can't be copied.
+    sample_count: u32 = 1,
     format: Format,
     usage: TextureUsage = .{},
     /// Additional formats this texture may be viewed as (must be format-compatible).
@@ -563,6 +567,7 @@ pub const GraphicsPipelineDesc = extern struct {
     topology: Topology = .triangle_list,
     cull: Cull = .none,
     alpha_to_coverage: bool = false,
+    /// Must match the sample count of every attachment of the render pass.
     sample_count: u32 = 1,
     /// SC_FORMAT_NONE for no depth attachment.
     depth_format: Format = .none,
@@ -1433,6 +1438,21 @@ pub fn textureSizeAlign(
     );
 }
 
+/// Highest sample count the texture can be created with, every power of two below it is supported too. At most 8, and 0 when the texture can't be created at all. At least 4 for attachments with a non-integer format.
+pub fn textureSampleCountMax(
+    device: *Device,
+    desc: TextureDesc,
+) u32 {
+    const f: *const fn (
+        device: *Device,
+        desc: TextureDesc,
+    ) callconv(@"callconv") u32 = @ptrCast(internal.table(device)[internal.slots.texture_sample_count_max]);
+    return f(
+        device,
+        desc,
+    );
+}
+
 pub fn createTexture(
     device: *Device,
     desc: TextureDesc,
@@ -1662,6 +1682,7 @@ const internal = struct {
         draw_indexed_instanced_indirect: usize = 0,
         draw_indirect: usize = 0,
         texture_size_align: usize = 0,
+        texture_sample_count_max: usize = 0,
         create_texture: usize = 0,
         destroy_texture: usize = 0,
         texture_storage_descriptor: usize = 0,
@@ -1729,6 +1750,7 @@ const internal = struct {
         slots.draw_indexed_instanced_indirect = get_slot.?(instance, "scDrawIndexedInstancedIndirect");
         slots.draw_indirect = get_slot.?(instance, "scDrawIndirect");
         slots.texture_size_align = get_slot.?(instance, "scTextureSizeAlign");
+        slots.texture_sample_count_max = get_slot.?(instance, "scTextureSampleCountMax");
         slots.create_texture = get_slot.?(instance, "scCreateTexture");
         slots.destroy_texture = get_slot.?(instance, "scDestroyTexture");
         slots.texture_storage_descriptor = get_slot.?(instance, "scTextureStorageDescriptor");
