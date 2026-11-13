@@ -515,6 +515,7 @@ pub const TextureDesc = extern struct {
 
 pub const TextureViewDesc = extern struct {
     /// SC_FORMAT_NONE selects the format of the texture. Otherwise must be the format of the texture or one of its view formats.
+    /// Depth-stencil textures are viewed through their depth aspect, unless the format is SC_FORMAT_STENCIL8 which selects the stencil aspect (doesn't need to be listed in view formats).
     format: Format = .none,
     base_mip: u32 = 0,
     /// 0 selects all mips from base_mip.

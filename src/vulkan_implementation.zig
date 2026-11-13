@@ -2101,7 +2101,7 @@ pub const Texture = struct {
 
     fn descriptorInner(texture: *Texture, view_desc: sc.TextureViewDesc, comptime descriptor_type: vk.DescriptorType) !sc.Descriptor {
         const d = texture.d;
-        const aspect_mask = to_vk.singleAspectForFormat(texture.desc.format);
+        const aspect_mask = to_vk.singleAspectForFormat(if (view_desc.format == .none) texture.desc.format else view_desc.format);
         const is_default_view = std.meta.eql(view_desc, sc.TextureViewDesc{}) and
             aspect_mask.toInt() == to_vk.aspectsForFormat(texture.desc.format).toInt();
         const view = if (is_default_view) texture.default_view else view: {
@@ -2140,7 +2140,8 @@ pub const Texture = struct {
         return d.handle.createImageView(&.{
             .image = image,
             .view_type = to_vk.viewType(texture_desc.type, layer_count),
-            .format = to_vk.format(if (view_desc.format == .none) texture_desc.format else view_desc.format),
+            // Depth/stencil view formats only select the aspect.
+            .format = to_vk.format(if (view_desc.format == .none or !aspect_mask.color) texture_desc.format else view_desc.format),
             .subresource_range = .{
                 .aspect_mask = aspect_mask,
                 .base_mip_level = view_desc.base_mip,

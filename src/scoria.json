@@ -325,7 +325,7 @@
     {
       "name": "ScTextureViewDesc",
       "fields": [
-        { "name": "format", "type": { "base": "ScFormat" }, "default": "SC_FORMAT_NONE", "doc": "SC_FORMAT_NONE selects the format of the texture. Otherwise must be the format of the texture or one of its view formats." },
+        { "name": "format", "type": { "base": "ScFormat" }, "default": "SC_FORMAT_NONE", "doc": "SC_FORMAT_NONE selects the format of the texture. Otherwise must be the format of the texture or one of its view formats.\nDepth-stencil textures are viewed through their depth aspect, unless the format is SC_FORMAT_STENCIL8 which selects the stencil aspect (it doesn't need to be listed in view formats)." },
         { "name": "base_mip", "type": { "base": "uint32_t" }, "default": 0, "doc": "" },
         { "name": "mip_count", "type": { "base": "uint32_t" }, "default": 0, "doc": "0 selects all mips from base_mip." },
         { "name": "base_layer", "type": { "base": "uint32_t" }, "default": 0, "doc": "" },
