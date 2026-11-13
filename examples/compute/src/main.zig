@@ -165,7 +165,7 @@ fn drawFrame(renderer: *Renderer) !void {
         (back_buffer.extent.height + workgroup_size - 1) / workgroup_size,
         1,
     );
-    try renderer.queue.submitAndSignal(&.{command_buffer}, .{ .timeline = renderer.frame_timeline, .value = frame_index });
+    try renderer.queue.submitAndSignal(&.{command_buffer}, &.{}, .{ .timeline = renderer.frame_timeline, .value = frame_index });
     try renderer.swapchain.present();
 
     renderer.frame_index += 1;

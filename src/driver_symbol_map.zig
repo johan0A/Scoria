@@ -112,6 +112,8 @@ fn Functions(handle_types: HandleTypes) type {
             queue: *handle_types.Queue,
             command_buffer_count: usize,
             command_buffers: [*]const *handle_types.CommandBuffer,
+            wait_count: usize,
+            waits: [*]const sc.TimelinePoint,
         ) error{
             OutOfDeviceMemory,
             OutOfMemory,
@@ -122,6 +124,8 @@ fn Functions(handle_types: HandleTypes) type {
             queue: *handle_types.Queue,
             command_buffer_count: usize,
             command_buffers: [*]const *handle_types.CommandBuffer,
+            wait_count: usize,
+            waits: [*]const sc.TimelinePoint,
             signal: sc.TimelinePoint,
         ) error{
             OutOfDeviceMemory,
@@ -581,11 +585,15 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
             queue: *handle_types.Queue,
             command_buffer_count: usize,
             command_buffers: [*]const *handle_types.CommandBuffer,
+            wait_count: usize,
+            waits: [*]const sc.TimelinePoint,
         ) callconv(sc.@"callconv") sc.Result {
             return cResult(functions.submit(
                 queue,
                 command_buffer_count,
                 command_buffers,
+                wait_count,
+                waits,
             ));
         }
 
@@ -593,12 +601,16 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
             queue: *handle_types.Queue,
             command_buffer_count: usize,
             command_buffers: [*]const *handle_types.CommandBuffer,
+            wait_count: usize,
+            waits: [*]const sc.TimelinePoint,
             signal: sc.TimelinePoint,
         ) callconv(sc.@"callconv") sc.Result {
             return cResult(functions.submitAndSignal(
                 queue,
                 command_buffer_count,
                 command_buffers,
+                wait_count,
+                waits,
                 signal,
             ));
         }

@@ -422,6 +422,7 @@ pub fn startCommandRecording(
 pub fn submit(
     queue: *sc.Queue,
     command_buffers: []const *sc.CommandBuffer,
+    waits: []const sc.TimelinePoint,
 ) error{
     OutOfDeviceMemory,
     OutOfMemory,
@@ -432,11 +433,15 @@ pub fn submit(
         queue: *sc.Queue,
         command_buffer_count: usize,
         command_buffers: [*]const *sc.CommandBuffer,
+        wait_count: usize,
+        waits: [*]const sc.TimelinePoint,
     ) callconv(@"callconv") sc.Result = @ptrCast(internal.table(queue)[internal.slots.submit]);
     const result = f(
         queue,
         @intCast(command_buffers.len),
         command_buffers.ptr,
+        @intCast(waits.len),
+        waits.ptr,
     );
     switch (result) {
         .ok => {},
@@ -451,6 +456,7 @@ pub fn submit(
 pub fn submitAndSignal(
     queue: *sc.Queue,
     command_buffers: []const *sc.CommandBuffer,
+    waits: []const sc.TimelinePoint,
     signal: sc.TimelinePoint,
 ) error{
     OutOfDeviceMemory,
@@ -462,12 +468,16 @@ pub fn submitAndSignal(
         queue: *sc.Queue,
         command_buffer_count: usize,
         command_buffers: [*]const *sc.CommandBuffer,
+        wait_count: usize,
+        waits: [*]const sc.TimelinePoint,
         signal: sc.TimelinePoint,
     ) callconv(@"callconv") sc.Result = @ptrCast(internal.table(queue)[internal.slots.submit_and_signal]);
     const result = f(
         queue,
         @intCast(command_buffers.len),
         command_buffers.ptr,
+        @intCast(waits.len),
+        waits.ptr,
         signal,
     );
     switch (result) {

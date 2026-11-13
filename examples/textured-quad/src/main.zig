@@ -145,7 +145,7 @@ pub fn main(init: std.process.Init) !void {
     upload_command_buffer.copyMemoryToTexture(.ptrCast(texture_upload.device()), texture, .{});
     upload_command_buffer.barrier(.{ .transfer = true }, .all, .{ .descriptors = true });
     // the upload takes the first timeline value so that the wait on exit also covers it
-    try queue.submitAndSignal(&.{upload_command_buffer}, .{ .timeline = frame_timeline, .value = 1 });
+    try queue.submitAndSignal(&.{upload_command_buffer}, &.{}, .{ .timeline = frame_timeline, .value = 1 });
 
     const pipeline = try device.createGraphicsPipeline(@embedFile("vert.scir"), @embedFile("frag.scir"), .{
         .color_target_count = 1,
@@ -211,7 +211,7 @@ fn drawFrame(renderer: *Renderer) !void {
     command_buffer.setPipeline(renderer.pipeline);
     command_buffer.draw(.as(renderer.data), .as(renderer.data), vertex_count, 1);
     command_buffer.endRenderPass();
-    try renderer.queue.submitAndSignal(&.{command_buffer}, .{ .timeline = renderer.frame_timeline, .value = frame_index });
+    try renderer.queue.submitAndSignal(&.{command_buffer}, &.{}, .{ .timeline = renderer.frame_timeline, .value = frame_index });
     try renderer.swapchain.present();
 
     renderer.frame_index += 1;

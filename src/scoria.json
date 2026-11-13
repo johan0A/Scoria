@@ -1087,7 +1087,9 @@
       "params": [
         { "name": "queue", "type": { "base": "ScQueue", "ptr": [{}] }, "doc": "" },
         { "name": "command_buffer_count", "type": { "base": "size_t" }, "doc": "" },
-        { "name": "command_buffers", "type": { "base": "ScCommandBuffer", "ptr": [{}, { "const": true, "len": "command_buffer_count" }] }, "doc": "" }
+        { "name": "command_buffers", "type": { "base": "ScCommandBuffer", "ptr": [{}, { "const": true, "len": "command_buffer_count" }] }, "doc": "" },
+        { "name": "wait_count", "type": { "base": "size_t" }, "doc": "" },
+        { "name": "waits", "type": { "base": "ScTimelinePoint", "ptr": [{ "const": true, "len": "wait_count" }] }, "doc": "The command buffers start executing once every point is reached." }
       ],
       "doc": ""
     },
@@ -1106,6 +1108,8 @@
         { "name": "queue", "type": { "base": "ScQueue", "ptr": [{}] }, "doc": "" },
         { "name": "command_buffer_count", "type": { "base": "size_t" }, "doc": "" },
         { "name": "command_buffers", "type": { "base": "ScCommandBuffer", "ptr": [{}, { "const": true, "len": "command_buffer_count" }] }, "doc": "" },
+        { "name": "wait_count", "type": { "base": "size_t" }, "doc": "" },
+        { "name": "waits", "type": { "base": "ScTimelinePoint", "ptr": [{ "const": true, "len": "wait_count" }] }, "doc": "The command buffers start executing once every point is reached." },
         { "name": "signal", "type": { "base": "ScTimelinePoint" }, "doc": "" }
       ],
       "doc": ""

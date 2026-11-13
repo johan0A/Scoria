@@ -157,7 +157,7 @@ fn drawFrame(renderer: *Renderer) !void {
     command_buffer.setPipeline(renderer.pipeline);
     command_buffer.draw(.as(renderer.data), .as(renderer.data), vertex_count, 1);
     command_buffer.endRenderPass();
-    try renderer.queue.submitAndSignal(&.{command_buffer}, .{ .timeline = renderer.frame_timeline, .value = frame_index });
+    try renderer.queue.submitAndSignal(&.{command_buffer}, &.{}, .{ .timeline = renderer.frame_timeline, .value = frame_index });
     try renderer.swapchain.present();
 
     renderer.frame_index += 1;

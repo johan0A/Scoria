@@ -891,16 +891,22 @@ pub fn submit(
     queue: *Queue,
     command_buffer_count: usize,
     command_buffers: [*]const *CommandBuffer,
+    wait_count: usize,
+    waits: [*]const TimelinePoint,
 ) Result {
     const f: *const fn (
         queue: *Queue,
         command_buffer_count: usize,
         command_buffers: [*]const *CommandBuffer,
+        wait_count: usize,
+        waits: [*]const TimelinePoint,
     ) callconv(@"callconv") Result = @ptrCast(internal.table(queue)[internal.slots.submit]);
     return f(
         queue,
         command_buffer_count,
         command_buffers,
+        wait_count,
+        waits,
     );
 }
 
@@ -908,18 +914,24 @@ pub fn submitAndSignal(
     queue: *Queue,
     command_buffer_count: usize,
     command_buffers: [*]const *CommandBuffer,
+    wait_count: usize,
+    waits: [*]const TimelinePoint,
     signal: TimelinePoint,
 ) Result {
     const f: *const fn (
         queue: *Queue,
         command_buffer_count: usize,
         command_buffers: [*]const *CommandBuffer,
+        wait_count: usize,
+        waits: [*]const TimelinePoint,
         signal: TimelinePoint,
     ) callconv(@"callconv") Result = @ptrCast(internal.table(queue)[internal.slots.submit_and_signal]);
     return f(
         queue,
         command_buffer_count,
         command_buffers,
+        wait_count,
+        waits,
         signal,
     );
 }

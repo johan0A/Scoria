@@ -874,8 +874,10 @@ pub const Queue = struct {
         queue: *Object(Queue),
         command_buffer_count: usize,
         command_buffers: [*]const *Object(CommandBuffer),
+        wait_count: usize,
+        waits: [*]const sc.TimelinePoint,
     ) !void {
-        submitInner(queue.body(), command_buffers[0..command_buffer_count], null) catch |err| return switch (err) {
+        submitInner(queue.body(), command_buffers[0..command_buffer_count], waits[0..wait_count], null) catch |err| return switch (err) {
             error.OutOfMemory, error.OutOfHostMemory => error.OutOfMemory,
             error.OutOfDeviceMemory, error.DeviceLost => |e| e,
             error.InvalidVideoStdParametersKHR, error.Unknown => error.Unknown,
@@ -886,16 +888,18 @@ pub const Queue = struct {
         queue: *Object(Queue),
         command_buffer_count: usize,
         command_buffers: [*]const *Object(CommandBuffer),
+        wait_count: usize,
+        waits: [*]const sc.TimelinePoint,
         signal: sc.TimelinePoint,
     ) !void {
-        submitInner(queue.body(), command_buffers[0..command_buffer_count], signal) catch |err| return switch (err) {
+        submitInner(queue.body(), command_buffers[0..command_buffer_count], waits[0..wait_count], signal) catch |err| return switch (err) {
             error.OutOfMemory, error.OutOfHostMemory => error.OutOfMemory,
             error.OutOfDeviceMemory, error.DeviceLost => |e| e,
             error.InvalidVideoStdParametersKHR, error.Unknown => error.Unknown,
         };
     }
 
-    fn submitInner(queue: *Queue, command_buffers: []const *Object(CommandBuffer), signal: ?sc.TimelinePoint) !void {
+    fn submitInner(queue: *Queue, command_buffers: []const *Object(CommandBuffer), waits: []const sc.TimelinePoint, signal: ?sc.TimelinePoint) !void {
         const d = queue.d;
         const submit_infos = try d.gpa.alloc(vk.CommandBufferSubmitInfo, command_buffers.len);
         defer d.gpa.free(submit_infos);
@@ -943,31 +947,41 @@ pub const Queue = struct {
 
         try queue.submitAfterAcquires(
             submit_infos,
+            waits,
             if (signal) |point| semaphoreSubmitInfo(Timeline.fromHandle(point.timeline).handle, point.value) else null,
         );
     }
 
-    /// submits after the pending swapchain acquires and texture initializations, signals `timeline`
-    fn submitAfterAcquires(queue: *Queue, command_buffers: []const vk.CommandBufferSubmitInfo, signal: ?vk.SemaphoreSubmitInfo) !void {
+    /// submits after `waits`, the pending swapchain acquires and texture initializations
+    /// signals `Queue.timeline`
+    fn submitAfterAcquires(
+        queue: *Queue,
+        command_buffers: []const vk.CommandBufferSubmitInfo,
+        waits: []const sc.TimelinePoint,
+        signal: ?vk.SemaphoreSubmitInfo,
+    ) !void {
         const d = queue.d;
         const acquires = queue.pending_acquires.items;
         const submit_infos = try d.gpa.alloc(vk.CommandBufferSubmitInfo, acquires.len + command_buffers.len);
         defer d.gpa.free(submit_infos);
-        const waits = try d.gpa.alloc(vk.SemaphoreSubmitInfo, acquires.len + 1);
-        defer d.gpa.free(waits);
+        const wait_infos = try d.gpa.alloc(vk.SemaphoreSubmitInfo, acquires.len + 1 + waits.len);
+        defer d.gpa.free(wait_infos);
 
         // waiting at the stages that can access the back buffer
-        for (acquires, submit_infos[0..acquires.len], waits[0..acquires.len]) |swapchain, *submit_info, *wait| {
+        for (acquires, submit_infos[0..acquires.len], wait_infos[0..acquires.len]) |swapchain, *submit_info, *wait_info| {
             submit_info.* = .{ .command_buffer = swapchain.images[swapchain.current].acquire_command_buffer, .device_mask = 0 };
-            wait.* = .{ .semaphore = swapchain.acquire_semaphore.?.handle, .value = 0, .stage_mask = swapchain.acquire_stage, .device_index = 0 };
+            wait_info.* = .{ .semaphore = swapchain.acquire_semaphore.?.handle, .value = 0, .stage_mask = swapchain.acquire_stage, .device_index = 0 };
         }
         @memcpy(submit_infos[acquires.len..], command_buffers);
-        waits[acquires.len] = semaphoreSubmitInfo(d.texture_init_timeline.semaphore, d.texture_init_timeline.value);
+        wait_infos[acquires.len] = semaphoreSubmitInfo(d.texture_init_timeline.semaphore, d.texture_init_timeline.value);
+        for (waits, wait_infos[acquires.len + 1 ..]) |point, *wait_info| {
+            wait_info.* = semaphoreSubmitInfo(Timeline.fromHandle(point.timeline).handle, point.value);
+        }
 
         const signals = [2]vk.SemaphoreSubmitInfo{ semaphoreSubmitInfo(queue.timeline, queue.last_submitted + 1), signal orelse undefined };
         try d.handle.queueSubmit2(queue.handle, &.{.{
-            .wait_semaphore_info_count = @intCast(waits.len),
-            .p_wait_semaphore_infos = waits.ptr,
+            .wait_semaphore_info_count = @intCast(wait_infos.len),
+            .p_wait_semaphore_infos = wait_infos.ptr,
             .command_buffer_info_count = @intCast(submit_infos.len),
             .p_command_buffer_infos = submit_infos.ptr,
             .signal_semaphore_info_count = if (signal == null) 1 else 2,
@@ -1398,6 +1412,7 @@ pub const Swapchain = struct {
         // also consumes the acquire when nothing was submitted since
         try queue.submitAfterAcquires(
             &.{.{ .command_buffer = image.present_command_buffer, .device_mask = 0 }},
+            &.{},
             semaphoreSubmitInfo(image.present_semaphore, 0),
         );
         swapchain.acquire_semaphore = null;
