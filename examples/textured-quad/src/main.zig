@@ -148,8 +148,7 @@ pub fn main(init: std.process.Init) !void {
     try queue.submitAndSignal(&.{upload_command_buffer}, &.{}, .{ .timeline = frame_timeline, .value = 1 });
 
     const pipeline = try device.createGraphicsPipeline(@embedFile("vert.scir"), @embedFile("frag.scir"), .{
-        .color_target_count = 1,
-        .color_targets = &.{.{ .format = swapchain_format }},
+        .color_targets = .fromSlice(&.{.{ .format = swapchain_format }}),
     });
     defer pipeline.destroy();
 
@@ -200,13 +199,12 @@ fn drawFrame(renderer: *Renderer) !void {
     const command_buffer = try command_pool.startCommandRecording();
     command_buffer.setActiveTextureHeap(renderer.descriptor_heap);
     command_buffer.beginRenderPass(.{
-        .color_attachment_count = 1,
-        .color_attachments = &.{.{
+        .color_attachments = .fromSlice(&.{.{
             .texture = back_buffer.texture,
             .load_op = .clear,
             .store_op = .store,
             .clear_color = .{ 0, 0, 0, 1 },
-        }},
+        }}),
     });
     command_buffer.setPipeline(renderer.pipeline);
     command_buffer.draw(.as(renderer.data), .as(renderer.data), vertex_count, 1);

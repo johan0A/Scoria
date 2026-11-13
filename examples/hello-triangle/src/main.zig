@@ -101,8 +101,7 @@ pub fn main(init: std.process.Init) !void {
     };
 
     const pipeline = try device.createGraphicsPipeline(@embedFile("vert.scir"), @embedFile("frag.scir"), .{
-        .color_target_count = 1,
-        .color_targets = &.{.{ .format = swapchain_format }},
+        .color_targets = .fromSlice(&.{.{ .format = swapchain_format }}),
     });
     defer pipeline.destroy();
 
@@ -151,8 +150,7 @@ fn drawFrame(renderer: *Renderer) !void {
     try command_pool.reset();
     const command_buffer = try command_pool.startCommandRecording();
     command_buffer.beginRenderPass(.{
-        .color_attachment_count = 1,
-        .color_attachments = &.{.{ .texture = back_buffer.texture, .load_op = .clear }},
+        .color_attachments = .fromSlice(&.{.{ .texture = back_buffer.texture, .load_op = .clear }}),
     });
     command_buffer.setPipeline(renderer.pipeline);
     command_buffer.draw(.as(renderer.data), .as(renderer.data), vertex_count, 1);

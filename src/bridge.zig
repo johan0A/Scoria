@@ -380,8 +380,20 @@ pub const to_vk = struct {
         return .{ .width = extent.width, .height = extent.height, .depth = extent.depth };
     }
 
-    pub fn imageCreateInfo(desc: sc.TextureDesc) vk.ImageCreateInfo {
+    pub const view_format_count_max = @typeInfo(sc.Format).@"enum".field_names.len;
+
+    pub fn imageCreateInfo(
+        desc: sc.TextureDesc,
+        format_list: *vk.ImageFormatListCreateInfo,
+        view_formats: *[view_format_count_max]vk.Format,
+    ) vk.ImageCreateInfo {
+        const extra_formats = if (desc.view_formats.ptr) |ptr| ptr[0..desc.view_formats.count] else &.{};
+        view_formats[0] = format(desc.format);
+        for (extra_formats, view_formats[1..][0..extra_formats.len]) |extra_format, *view_format| view_format.* = format(extra_format);
+        format_list.* = .{ .view_format_count = @intCast(extra_formats.len + 1), .p_view_formats = view_formats };
         return .{
+            .p_next = if (extra_formats.len != 0) format_list else null,
+            .flags = .{ .mutable_format = extra_formats.len != 0 },
             .image_type = textureDimension(desc.type),
             .format = format(desc.format),
             .extent = extent3D(desc.extent),

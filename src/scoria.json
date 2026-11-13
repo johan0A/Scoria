@@ -253,12 +253,19 @@
       "doc": ""
     },
     {
+      "name": "ScColorAttachments",
+      "fields": [
+        { "name": "count", "type": { "base": "uint32_t" }, "default": 0, "doc": "" },
+        { "name": "ptr", "type": { "base": "ScColorAttachment", "ptr": [{ "const": true, "optional": true, "len": "count" }] }, "default": null, "doc": "" }
+      ],
+      "doc": ""
+    },
+    {
       "name": "ScRenderPassDesc",
       "fields": [
         { "name": "depth_attachment", "type": { "base": "ScDepthAttachment" }, "default": {}, "doc": "" },
         { "name": "stencil_attachment", "type": { "base": "ScStencilAttachment" }, "default": {}, "doc": "" },
-        { "name": "color_attachment_count", "type": { "base": "uint32_t" }, "default": 0, "doc": "" },
-        { "name": "color_attachments", "type": { "base": "ScColorAttachment", "ptr": [{ "const": true, "optional": true, "len": "color_attachment_count" }] }, "default": null, "doc": "" }
+        { "name": "color_attachments", "type": { "base": "ScColorAttachments" }, "default": {}, "doc": "" }
       ],
       "doc": ""
     },
@@ -293,6 +300,14 @@
       "doc": ""
     },
     {
+      "name": "ScFormats",
+      "fields": [
+        { "name": "count", "type": { "base": "uint32_t" }, "default": 0, "doc": "" },
+        { "name": "ptr", "type": { "base": "ScFormat", "ptr": [{ "const": true, "optional": true, "len": "count" }] }, "default": null, "doc": "" }
+      ],
+      "doc": ""
+    },
+    {
       "name": "ScTextureDesc",
       "fields": [
         { "name": "type", "type": { "base": "ScTextureDimension" }, "default": "SC_TEXTURE_DIMENSION_2D", "doc": "" },
@@ -300,14 +315,15 @@
         { "name": "mip_count", "type": { "base": "uint32_t" }, "default": 1, "doc": "" },
         { "name": "layer_count", "type": { "base": "uint32_t" }, "default": 1, "doc": "" },
         { "name": "format", "type": { "base": "ScFormat" }, "doc": "" },
-        { "name": "usage", "type": { "base": "ScTextureUsage" }, "default": 0, "doc": "" }
+        { "name": "usage", "type": { "base": "ScTextureUsage" }, "default": 0, "doc": "" },
+        { "name": "view_formats", "type": { "base": "ScFormats" }, "default": {}, "doc": "Additional formats this texture may be viewed as (must be format-compatible).\nlisting formats can disable lossless compression.\nOnly read during creation." }
       ],
       "doc": ""
     },
     {
       "name": "ScTextureViewDesc",
       "fields": [
-        { "name": "format", "type": { "base": "ScFormat" }, "default": "SC_FORMAT_NONE", "doc": "SC_FORMAT_NONE selects the format of the texture." },
+        { "name": "format", "type": { "base": "ScFormat" }, "default": "SC_FORMAT_NONE", "doc": "SC_FORMAT_NONE selects the format of the texture. Otherwise must be the format of the texture or one of its view formats." },
         { "name": "base_mip", "type": { "base": "uint32_t" }, "default": 0, "doc": "" },
         { "name": "mip_count", "type": { "base": "uint32_t" }, "default": 0, "doc": "0 selects all mips from base_mip." },
         { "name": "base_layer", "type": { "base": "uint32_t" }, "default": 0, "doc": "" },
@@ -357,6 +373,14 @@
       "doc": ""
     },
     {
+      "name": "ScColorTargets",
+      "fields": [
+        { "name": "count", "type": { "base": "uint32_t" }, "default": 0, "doc": "" },
+        { "name": "ptr", "type": { "base": "ScColorTarget", "ptr": [{ "const": true, "optional": true, "len": "count" }] }, "default": null, "doc": "" }
+      ],
+      "doc": ""
+    },
+    {
       "name": "ScGraphicsPipelineDesc",
       "fields": [
         { "name": "topology", "type": { "base": "ScTopology" }, "default": "SC_TOPOLOGY_TRIANGLE_LIST", "doc": "" },
@@ -365,8 +389,7 @@
         { "name": "sample_count", "type": { "base": "uint32_t" }, "default": 1, "doc": "" },
         { "name": "depth_format", "type": { "base": "ScFormat" }, "default": "SC_FORMAT_NONE", "doc": "SC_FORMAT_NONE for no depth attachment." },
         { "name": "stencil_format", "type": { "base": "ScFormat" }, "default": "SC_FORMAT_NONE", "doc": "SC_FORMAT_NONE for no stencil attachment." },
-        { "name": "color_target_count", "type": { "base": "uint32_t" }, "default": 0, "doc": "" },
-        { "name": "color_targets", "type": { "base": "ScColorTarget", "ptr": [{ "const": true, "optional": true, "len": "color_target_count" }] }, "default": null, "doc": "" }
+        { "name": "color_targets", "type": { "base": "ScColorTargets" }, "default": {}, "doc": "" }
       ],
       "doc": ""
     },

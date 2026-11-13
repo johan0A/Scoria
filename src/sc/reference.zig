@@ -457,11 +457,15 @@ pub const ColorAttachment = extern struct {
     clear_color: [4]f32 = .{ 0, 0, 0, 1 },
 };
 
+pub const ColorAttachments = extern struct {
+    count: u32 = 0,
+    ptr: ?[*]const sc.ColorAttachment = null,
+};
+
 pub const RenderPassDesc = extern struct {
     depth_attachment: sc.DepthAttachment = .{},
     stencil_attachment: sc.StencilAttachment = .{},
-    color_attachment_count: u32 = 0,
-    color_attachments: ?[*]const sc.ColorAttachment = null,
+    color_attachments: sc.ColorAttachments = .{},
 };
 
 pub const DrawIndexedArguments = extern struct {
@@ -485,6 +489,11 @@ pub const DispatchArguments = extern struct {
     z: u32 = 1,
 };
 
+pub const Formats = extern struct {
+    count: u32 = 0,
+    ptr: ?[*]const sc.Format = null,
+};
+
 pub const TextureDesc = extern struct {
     type: sc.TextureDimension = .@"2d",
     extent: sc.Extent3D,
@@ -492,10 +501,14 @@ pub const TextureDesc = extern struct {
     layer_count: u32 = 1,
     format: sc.Format,
     usage: sc.TextureUsage = .{},
+    /// Additional formats this texture may be viewed as (must be format-compatible).
+    /// listing formats can disable lossless compression.
+    /// Only read during creation.
+    view_formats: sc.Formats = .{},
 };
 
 pub const TextureViewDesc = extern struct {
-    /// SC_FORMAT_NONE selects the format of the texture.
+    /// SC_FORMAT_NONE selects the format of the texture. Otherwise must be the format of the texture or one of its view formats.
     format: sc.Format = .none,
     base_mip: u32 = 0,
     /// 0 selects all mips from base_mip.
@@ -539,6 +552,11 @@ pub const ColorTarget = extern struct {
     blend: ?*const sc.BlendDesc = null,
 };
 
+pub const ColorTargets = extern struct {
+    count: u32 = 0,
+    ptr: ?[*]const sc.ColorTarget = null,
+};
+
 pub const GraphicsPipelineDesc = extern struct {
     topology: sc.Topology = .triangle_list,
     cull: sc.Cull = .none,
@@ -548,8 +566,7 @@ pub const GraphicsPipelineDesc = extern struct {
     depth_format: sc.Format = .none,
     /// SC_FORMAT_NONE for no stencil attachment.
     stencil_format: sc.Format = .none,
-    color_target_count: u32 = 0,
-    color_targets: ?[*]const sc.ColorTarget = null,
+    color_targets: sc.ColorTargets = .{},
 };
 
 pub const StencilDesc = extern struct {

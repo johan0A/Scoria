@@ -785,7 +785,6 @@ pub const Device = struct {
             .p_queue_family_indices = &families,
         };
 
-        // buffers are only aligned to their own requirement, a bigger alignment is reached by padding the buffer
         var unpadded_requirements: vk.MemoryRequirements2 = .{ .memory_requirements = undefined };
         d.handle.getDeviceBufferMemoryRequirements(&.{ .p_create_info = &buffer_info }, &unpadded_requirements);
         const buffer_alignment = unpadded_requirements.memory_requirements.alignment;
@@ -1764,7 +1763,7 @@ pub const CommandBuffer = struct {
 
     pub fn beginRenderPass(cb_obj: *Object(CommandBuffer), desc: sc.RenderPassDesc) void {
         const cb = cb_obj.body();
-        const color_targets = if (desc.color_attachments) |color_attachments| color_attachments[0..desc.color_attachment_count] else &.{};
+        const color_targets = if (desc.color_attachments.ptr) |color_attachments| color_attachments[0..desc.color_attachments.count] else &.{};
         std.debug.assert(color_targets.len <= 8);
 
         var color_attachments: [8]vk.RenderingAttachmentInfo = undefined;
@@ -1994,8 +1993,11 @@ pub const Texture = struct {
     }
 
     fn memoryRequirements(device: vk.DeviceProxy, desc: Desc) vk.MemoryRequirements {
+        var format_list: vk.ImageFormatListCreateInfo = undefined;
+        var view_formats: [to_vk.view_format_count_max]vk.Format = undefined;
+        const create_info = to_vk.imageCreateInfo(desc, &format_list, &view_formats);
         var requirements: vk.MemoryRequirements2 = .{ .memory_requirements = undefined };
-        device.getDeviceImageMemoryRequirements(&.{ .p_create_info = &to_vk.imageCreateInfo(desc), .plane_aspect = .{} }, &requirements);
+        device.getDeviceImageMemoryRequirements(&.{ .p_create_info = &create_info, .plane_aspect = .{} }, &requirements);
         return requirements.memory_requirements;
     }
 
@@ -2006,12 +2008,16 @@ pub const Texture = struct {
             error.OutOfDeviceMemory, error.CompressionExhaustedEXT => error.OutOfDeviceMemory,
         };
     }
-    fn createInner(d: *Device, desc: Desc, texture_data: sc.DeviceAddress) !*Object(Texture) {
-        std.debug.assert(desc.format != .none);
+    fn createInner(d: *Device, create_desc: Desc, texture_data: sc.DeviceAddress) !*Object(Texture) {
+        std.debug.assert(create_desc.format != .none);
         const texture = try d.textures.create(d.gpa);
         errdefer d.textures.destroy(texture);
 
-        const image = try d.handle.createImage(&to_vk.imageCreateInfo(desc), null);
+        var format_list: vk.ImageFormatListCreateInfo = undefined;
+        var view_formats: [to_vk.view_format_count_max]vk.Format = undefined;
+        const image = try d.handle.createImage(&to_vk.imageCreateInfo(create_desc, &format_list, &view_formats), null);
+        var desc = create_desc;
+        desc.view_formats = .{};
         errdefer d.handle.destroyImage(image, null);
         const entry, const offset = d.heap.entryAndOffsetFromAddr(texture_data);
         try d.handle.bindImageMemory(image, entry.memory, offset);
@@ -2188,7 +2194,7 @@ pub const Pipeline = struct {
         pixel_ir: []const u8,
         desc: sc.GraphicsPipelineDesc,
     ) !*Object(Pipeline) {
-        const color_targets = if (desc.color_targets) |color_targets| color_targets[0..desc.color_target_count] else &.{};
+        const color_targets = if (desc.color_targets.ptr) |color_targets| color_targets[0..desc.color_targets.count] else &.{};
         std.debug.assert(color_targets.len <= 8);
         const shaders = [_]scir.Shader{ try scir.parse(vertex_ir), try scir.parse(pixel_ir) };
 
