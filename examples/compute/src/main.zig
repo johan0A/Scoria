@@ -23,7 +23,7 @@ const Renderer = struct {
     frame_timeline: *sc.Timeline,
     command_pools: [frames_in_flight]*sc.CommandPool,
     frame_index: u64,
-    descriptor_heap: sc.heap.Allocation(u8, null),
+    descriptor_heap: sc.DescriptorHeap,
     data_maps: [frames_in_flight]sc.heap.AllocationOne(Data, null),
     pipeline: *sc.Pipeline,
     start: std.Io.Timestamp,
@@ -86,8 +86,6 @@ pub fn main(init: std.process.Init) !void {
         command_pool_count += 1;
     }
 
-    const descriptor_size_and_align = device.descriptorSizeAndHeapAlign();
-
     const pipeline: *sc.Pipeline = try .createCompute(device, @embedFile("generate_texture.scir"));
     defer pipeline.destroy();
 
@@ -100,12 +98,7 @@ pub fn main(init: std.process.Init) !void {
         .frame_timeline = frame_timeline,
         .command_pools = command_pools,
         .frame_index = 1,
-        .descriptor_heap = try gpu_arena.runtimeAlignedAlloc(
-            u8,
-            descriptor_size_and_align.alignment(),
-            descriptor_size_and_align.size * descriptor_count_max,
-            .upload,
-        ),
+        .descriptor_heap = try .init(device, gpu_arena, descriptor_count_max),
         .data_maps = undefined,
         .pipeline = pipeline,
         .start = .now(io, .awake),
@@ -152,12 +145,12 @@ fn drawFrame(renderer: *Renderer) !void {
     };
 
     const descriptor = try back_buffer.texture.storageDescriptor(.{});
-    renderer.device.storeDescriptor(&descriptor, renderer.descriptor_heap.host_ptr, slot);
+    renderer.descriptor_heap.store(&descriptor, slot);
 
     const command_pool = renderer.command_pools[slot];
     try command_pool.reset();
     const command_buffer = try command_pool.startCommandRecording();
-    command_buffer.setActiveTextureHeap(renderer.descriptor_heap.device_ptr);
+    command_buffer.setActiveTextureHeap(renderer.descriptor_heap.memory.device_ptr);
     command_buffer.setPipeline(renderer.pipeline);
     command_buffer.dispatch(
         .as(data_map.device),

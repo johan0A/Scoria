@@ -1023,19 +1023,6 @@
       "doc": ""
     },
     {
-      "name": "scStoreDescriptor",
-      "group": "ScDescriptor",
-      "dispatch": "table",
-      "return": { "base": "void" },
-      "params": [
-        { "name": "device", "type": { "base": "ScDevice", "ptr": [{}] }, "doc": "" },
-        { "name": "descriptor", "type": { "base": "ScDescriptor", "ptr": [{ "const": true }] }, "doc": "" },
-        { "name": "descriptor_heap", "type": { "base": "uint8_t", "ptr": [{ "len": "none" }] }, "doc": "" },
-        { "name": "index", "type": { "base": "size_t" }, "doc": "" }
-      ],
-      "doc": ""
-    },
-    {
       "name": "scGetQueue",
       "group": "ScQueue",
       "dispatch": "table",

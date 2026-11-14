@@ -838,26 +838,6 @@ pub fn descriptorSizeAndHeapAlign(
     );
 }
 
-pub fn storeDescriptor(
-    device: *Device,
-    descriptor: *const Descriptor,
-    descriptor_heap: [*]u8,
-    index: usize,
-) void {
-    const f: *const fn (
-        device: *Device,
-        descriptor: *const Descriptor,
-        descriptor_heap: [*]u8,
-        index: usize,
-    ) callconv(@"callconv") void = @ptrCast(internal.table(device)[internal.slots.store_descriptor]);
-    return f(
-        device,
-        descriptor,
-        descriptor_heap,
-        index,
-    );
-}
-
 pub fn getQueue(
     device: *Device,
     queue_kind: QueueKind,
@@ -1663,7 +1643,6 @@ const internal = struct {
         alloc: usize = 0,
         free: usize = 0,
         descriptor_size_and_heap_align: usize = 0,
-        store_descriptor: usize = 0,
         get_queue: usize = 0,
         texture_copy_granularity: usize = 0,
         create_command_pool: usize = 0,
@@ -1731,7 +1710,6 @@ const internal = struct {
         slots.alloc = get_slot.?(instance, "scAlloc");
         slots.free = get_slot.?(instance, "scFree");
         slots.descriptor_size_and_heap_align = get_slot.?(instance, "scDescriptorSizeAndHeapAlign");
-        slots.store_descriptor = get_slot.?(instance, "scStoreDescriptor");
         slots.get_queue = get_slot.?(instance, "scGetQueue");
         slots.texture_copy_granularity = get_slot.?(instance, "scTextureCopyGranularity");
         slots.create_command_pool = get_slot.?(instance, "scCreateCommandPool");

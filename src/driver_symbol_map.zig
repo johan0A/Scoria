@@ -73,12 +73,6 @@ fn Functions(handle_types: HandleTypes) type {
         descriptorSizeAndHeapAlign: fn (
             device: *handle_types.Device,
         ) sc.SizeAlign,
-        storeDescriptor: fn (
-            device: *handle_types.Device,
-            descriptor: *const sc.Descriptor,
-            descriptor_heap: [*]u8,
-            index: usize,
-        ) void,
         getQueue: fn (
             device: *handle_types.Device,
             queue_kind: sc.QueueKind,
@@ -525,20 +519,6 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
         ) callconv(sc.@"callconv") sc.SizeAlign {
             return functions.descriptorSizeAndHeapAlign(
                 device,
-            );
-        }
-
-        pub fn storeDescriptor(
-            device: *handle_types.Device,
-            descriptor: *const sc.Descriptor,
-            descriptor_heap: [*]u8,
-            index: usize,
-        ) callconv(sc.@"callconv") void {
-            return functions.storeDescriptor(
-                device,
-                descriptor,
-                descriptor_heap,
-                index,
             );
         }
 
@@ -1093,7 +1073,6 @@ pub fn map(
         .{ "scAlloc", @ptrCast(&c_functions.alloc) },
         .{ "scFree", @ptrCast(&c_functions.free) },
         .{ "scDescriptorSizeAndHeapAlign", @ptrCast(&c_functions.descriptorSizeAndHeapAlign) },
-        .{ "scStoreDescriptor", @ptrCast(&c_functions.storeDescriptor) },
         .{ "scGetQueue", @ptrCast(&c_functions.getQueue) },
         .{ "scTextureCopyGranularity", @ptrCast(&c_functions.textureCopyGranularity) },
         .{ "scCreateCommandPool", @ptrCast(&c_functions.createCommandPool) },

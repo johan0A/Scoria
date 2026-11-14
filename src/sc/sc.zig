@@ -9,6 +9,8 @@ pub const Ptr = heap.Ptr;
 pub const SliceInfo = heap.SliceInfo;
 pub const Slice = heap.Slice;
 pub const DeviceAllocator = heap.DeviceAllocator;
+pub const DescriptorHeap = @import("DescriptorHeap.zig");
+pub const DescriptorAllocator = @import("DescriptorAllocator.zig");
 
 pub const @"callconv": std.lang.CallingConvention = switch (target.os.tag) {
     .windows => if (target.cpu.arch == .x86) .{ .x86_stdcall = .{} } else .c,
@@ -49,7 +51,6 @@ pub const Device = opaque {
     pub const alloc = functions.alloc;
     pub const free = functions.free;
     pub const descriptorSizeAndHeapAlign = functions.descriptorSizeAndHeapAlign;
-    pub const storeDescriptor = functions.storeDescriptor;
     pub const getQueue = functions.getQueue;
     pub const textureSizeAlign = functions.textureSizeAlign;
     pub const textureSampleCountMax = functions.textureSampleCountMax;

@@ -83,13 +83,7 @@ pub fn main(init: std.process.Init) !void {
         command_pool_count += 1;
     }
 
-    const descriptor_size_and_align = device.descriptorSizeAndHeapAlign();
-    const descriptor_heap = try gpu_arena.runtimeAlignedAlloc(
-        u8,
-        descriptor_size_and_align.alignment(),
-        descriptor_size_and_align.size * descriptor_count_max,
-        .upload,
-    );
+    const descriptor_heap: sc.DescriptorHeap = try .init(device, gpu_arena, descriptor_count_max);
 
     const positions_map = try gpu_arena.create([vertex_count][3]f32, .upload);
     positions_map.host.* = .{
@@ -130,7 +124,7 @@ pub fn main(init: std.process.Init) !void {
     defer texture.destroy();
 
     const texture_descriptor = try texture.viewDescriptor(.{ .format = .rgba8_unorm });
-    device.storeDescriptor(&texture_descriptor, descriptor_heap.host_ptr, 0);
+    descriptor_heap.store(&texture_descriptor, 0);
 
     // white with a black diagonal
     const texel_count = texture_extent.width * texture_extent.height;
@@ -159,7 +153,7 @@ pub fn main(init: std.process.Init) !void {
         .frame_timeline = frame_timeline,
         .command_pools = command_pools,
         .frame_index = 2,
-        .descriptor_heap = descriptor_heap.device_ptr,
+        .descriptor_heap = descriptor_heap.memory.device_ptr,
         .data = data_map.device,
         .pipeline = pipeline,
     };

@@ -2088,11 +2088,6 @@ pub const Texture = struct {
                 .alignment = properties.descriptor_buffer_offset_alignment,
             };
         }
-
-        pub fn storeDescriptor(d: *Object(Device), descriptor: *const sc.Descriptor, heap_ptr: [*]u8, index: usize) void {
-            const size = sizeAndHeapAlign(d).size;
-            @memcpy(heap_ptr[size * index ..][0..size], descriptor.data[0..size]);
-        }
     };
 
     pub fn sizeAlign(d: *Object(Device), desc: Desc) sc.SizeAlign {
@@ -2577,7 +2572,6 @@ pub export fn symbol(name: [*:0]const u8) callconv(sc.@"callconv") *const anyopa
         .alloc = Device.alloc,
         .free = Device.free,
         .descriptorSizeAndHeapAlign = Texture.Descriptor.sizeAndHeapAlign,
-        .storeDescriptor = Texture.Descriptor.storeDescriptor,
         .getQueue = Queue.getQueue,
         .textureCopyGranularity = Queue.textureCopyGranularity,
         .createCommandPool = CommandPool.create,
