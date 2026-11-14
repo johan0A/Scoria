@@ -75,20 +75,20 @@ pub fn main(init: std.process.Init) !void {
     });
     defer swapchain.destroy();
 
-    const frame_timeline = try device.createTimeline(0);
+    const frame_timeline: *sc.Timeline = try .create(device, 0);
     defer frame_timeline.destroy();
 
     var command_pools: [frames_in_flight]*sc.CommandPool = undefined;
     var command_pool_count: usize = 0;
     defer for (command_pools[0..command_pool_count]) |command_pool| command_pool.destroy();
     for (&command_pools) |*command_pool| {
-        command_pool.* = try queue.createCommandPool();
+        command_pool.* = try .create(queue);
         command_pool_count += 1;
     }
 
     const descriptor_size_and_align = device.descriptorSizeAndHeapAlign();
 
-    const pipeline = try device.createComputePipeline(@embedFile("generate_texture.scir"));
+    const pipeline: *sc.Pipeline = try .createCompute(device, @embedFile("generate_texture.scir"));
     defer pipeline.destroy();
 
     var renderer: Renderer = .{

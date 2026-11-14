@@ -72,14 +72,14 @@ pub fn main(init: std.process.Init) !void {
     });
     defer swapchain.destroy();
 
-    const frame_timeline = try device.createTimeline(0);
+    const frame_timeline: *sc.Timeline = try .create(device, 0);
     defer frame_timeline.destroy();
 
     var command_pools: [frames_in_flight]*sc.CommandPool = undefined;
     var command_pool_count: usize = 0;
     defer for (command_pools[0..command_pool_count]) |command_pool| command_pool.destroy();
     for (&command_pools) |*command_pool| {
-        command_pool.* = try queue.createCommandPool();
+        command_pool.* = try .create(queue);
         command_pool_count += 1;
     }
 
@@ -126,7 +126,7 @@ pub fn main(init: std.process.Init) !void {
     };
     const texture_size_and_align = device.textureSizeAlign(texture_desc);
     const texture_map = try gpu_arena.runtimeAlignedAlloc(u8, texture_size_and_align.alignment(), texture_size_and_align.size, .device_local);
-    const texture = try device.createTexture(texture_desc, texture_map.device_ptr);
+    const texture: *sc.Texture = try .create(device, texture_desc, texture_map.device_ptr);
     defer texture.destroy();
 
     const texture_descriptor = try texture.viewDescriptor(.{ .format = .rgba8_unorm });
@@ -139,7 +139,7 @@ pub fn main(init: std.process.Init) !void {
     for (0..@min(texture_extent.width, texture_extent.height)) |i|
         texture_upload.host()[i * texture_extent.width + i] = .{ 0, 0, 0, 255 };
 
-    const upload_command_pool = try queue.createCommandPool();
+    const upload_command_pool: *sc.CommandPool = try .create(queue);
     defer upload_command_pool.destroy();
     const upload_command_buffer = try upload_command_pool.startCommandRecording();
     upload_command_buffer.copyMemoryToTexture(.ptrCast(texture_upload.device()), texture, .{});
@@ -147,7 +147,7 @@ pub fn main(init: std.process.Init) !void {
     // the upload takes the first timeline value so that the wait on exit also covers it
     try queue.submitAndSignal(&.{upload_command_buffer}, &.{}, .{ .timeline = frame_timeline, .value = 1 });
 
-    const pipeline = try device.createGraphicsPipeline(@embedFile("vert.scir"), @embedFile("frag.scir"), .{
+    const pipeline: *sc.Pipeline = try .createGraphics(device, @embedFile("vert.scir"), @embedFile("frag.scir"), .{
         .color_targets = .fromSlice(&.{.{ .format = swapchain_format }}),
     });
     defer pipeline.destroy();

@@ -269,6 +269,10 @@ pub const to_vk = struct {
         return .{ .width = extent.width, .height = extent.height, .depth = extent.depth };
     }
 
+    pub fn extent2DFrom3d(extent: sc.Extent3D) vk.Extent2D {
+        return .{ .width = extent.width, .height = extent.height };
+    }
+
     pub const view_format_count_max = @typeInfo(sc.Format).@"enum".field_names.len;
 
     pub fn imageCreateInfo(

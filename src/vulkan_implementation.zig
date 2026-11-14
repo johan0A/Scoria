@@ -166,6 +166,7 @@ pub const Instance = struct {
 
 pub const Surface = struct {
     handle: vk.SurfaceKHR,
+    arena: std.heap.ArenaAllocator,
     supported_usage: sc.TextureUsage,
     formats: std.EnumArray(sc.ColorSpace, []sc.Format),
     present_modes: []sc.PresentMode,
@@ -185,60 +186,63 @@ pub const Surface = struct {
     };
     fn createInner(d: *Device, desc: Desc) !*Object(Surface) {
         const instance = d.instance;
+
+        var scratch_impl: std.heap.ArenaAllocator = .init(d.gpa);
+        defer scratch_impl.deinit();
+        const scratch = scratch_impl.allocator();
+
         var arena_impl: std.heap.ArenaAllocator = .init(d.gpa);
-        defer arena_impl.deinit();
+        errdefer arena_impl.deinit();
         const arena = arena_impl.allocator();
 
         const surface = try d.surfaces.create(d.gpa);
         errdefer d.surfaces.destroy(surface);
 
         const handle = switch (desc) {
-            .win32 => |win32| if (!instance.surface_support.win32)
-                return error.ExtensionNotPresent
-            else
-                try instance.handle.createWin32SurfaceKHR(&.{
+            .win32 => |win32| blk: {
+                if (!instance.surface_support.win32) return error.ExtensionNotPresent;
+                break :blk try instance.handle.createWin32SurfaceKHR(&.{
                     .hinstance = @ptrCast(win32.hinstance),
                     .hwnd = @ptrCast(win32.hwnd),
-                }, null),
-
-            .xlib => |xlib| if (!instance.surface_support.xlib)
-                return error.ExtensionNotPresent
-            else
-                try instance.handle.createXlibSurfaceKHR(&.{
+                }, null);
+            },
+            .xlib => |xlib| blk: {
+                if (!instance.surface_support.xlib) return error.ExtensionNotPresent;
+                break :blk try instance.handle.createXlibSurfaceKHR(&.{
                     .dpy = @ptrCast(xlib.display),
                     .window = @intCast(xlib.window),
-                }, null),
+                }, null);
+            },
         };
         errdefer instance.handle.destroySurfaceKHR(handle, null);
 
-        const capabilities = try instance.handle.getPhysicalDeviceSurfaceCapabilitiesKHR(d.physical_device, handle);
+        const vk_capabilities = try instance.handle.getPhysicalDeviceSurfaceCapabilitiesKHR(d.physical_device, handle);
 
-        const vk_formats = try instance.handle.getPhysicalDeviceSurfaceFormatsAllocKHR(d.physical_device, handle, arena);
+        const vk_formats = try instance.handle.getPhysicalDeviceSurfaceFormatsAllocKHR(d.physical_device, handle, scratch);
         var formats: std.EnumArray(sc.ColorSpace, []sc.Format) = .initFill(&.{});
-        errdefer for (formats.values) |color_space_formats| d.gpa.free(color_space_formats);
-        for (&formats.values) |*color_space_formats| color_space_formats.* = try d.gpa.alloc(sc.Format, vk_formats.len);
-        var format_counts: std.EnumArray(sc.ColorSpace, usize) = .initFill(0);
+        for (&formats.values) |*color_space_formats| color_space_formats.ptr = (try arena.alloc(sc.Format, vk_formats.len)).ptr;
         for (vk_formats) |vk_format| {
             const color_space = to_sc.colorSpace(vk_format.color_space) orelse continue;
             const format = to_sc.format(vk_format.format) orelse continue;
             if (format == .none) continue;
-            formats.get(color_space)[format_counts.get(color_space)] = format;
-            format_counts.getPtr(color_space).* += 1;
-        }
-        for (&formats.values, format_counts.values) |*color_space_formats, count| color_space_formats.* = try d.gpa.realloc(color_space_formats.*, count);
 
-        const vk_present_modes = try instance.handle.getPhysicalDeviceSurfacePresentModesAllocKHR(d.physical_device, handle, arena);
-        var present_modes: std.ArrayList(sc.PresentMode) = try .initCapacity(d.gpa, vk_present_modes.len);
-        errdefer present_modes.deinit(d.gpa);
+            const slice = formats.getPtr(color_space);
+            slice.ptr[slice.len] = format;
+            slice.len += 1;
+        }
+
+        const vk_present_modes = try instance.handle.getPhysicalDeviceSurfacePresentModesAllocKHR(d.physical_device, handle, scratch);
+        var present_modes: std.ArrayList(sc.PresentMode) = try .initCapacity(arena, vk_present_modes.len);
         for (vk_present_modes) |vk_present_mode| {
             present_modes.appendAssumeCapacity(to_sc.presentMode(vk_present_mode) orelse continue);
         }
 
         surface.set(d.table, .{
             .handle = handle,
-            .supported_usage = to_sc.usageFlags(capabilities.supported_usage_flags),
+            .arena = arena_impl,
+            .supported_usage = to_sc.usageFlags(vk_capabilities.supported_usage_flags),
             .formats = formats,
-            .present_modes = try present_modes.toOwnedSlice(d.gpa),
+            .present_modes = present_modes.items,
             .d = d,
         });
         return surface;
@@ -246,11 +250,8 @@ pub const Surface = struct {
 
     pub fn destroy(surface_obj: *Object(Surface)) void {
         const surface = surface_obj.body();
-        const d = surface.d;
-        d.instance.handle.destroySurfaceKHR(surface.handle, null);
-        for (surface.formats.values) |formats| d.gpa.free(formats);
-        d.gpa.free(surface.present_modes);
-        d.surfaces.destroy(surface_obj);
+        surface.d.instance.handle.destroySurfaceKHR(surface.handle, null);
+        surface.d.surfaces.destroy(surface_obj);
     }
 
     pub fn supportedUsage(surface: *Object(Surface)) sc.TextureUsage {
@@ -368,8 +369,8 @@ pub const Adapter = opaque {
             return isSubsetInner(this, other);
         }
         fn isSubsetInner(this: anytype, other: @TypeOf(this)) bool {
-            inline for (comptime std.meta.fieldNames(@TypeOf(this))) |field_name| {
-                const FieldType = @FieldType(@TypeOf(this), field_name);
+            const this_info = @typeInfo(@TypeOf(this)).@"struct";
+            inline for (this_info.field_names, this_info.field_types) |field_name, FieldType| {
                 const wanted_field = @field(this, field_name);
                 const supported_field = @field(other, field_name);
                 if (FieldType == vk.Bool32) {
@@ -408,8 +409,7 @@ pub const Adapter = opaque {
 
             var optional: Features.Optional = undefined;
             inline for (comptime std.meta.fieldNames(Features.Optional)) |field_name| {
-                @field(optional, field_name) = @field(available, field_name) and
-                    @field(@field(supported, field_name), field_name) == .true;
+                @field(optional, field_name) = @field(available, field_name) and @field(@field(supported, field_name), field_name) == .true;
             }
 
             const queue_families = try instance.handle.getPhysicalDeviceQueueFamilyPropertiesAlloc(physical_device, arena);
@@ -423,40 +423,8 @@ pub const Adapter = opaque {
             optional.swapchain_maintenance_1 = optional.swapchain_maintenance_1 and swapchain and instance.surface_support.maintenance_1;
 
             const format_features = formatFeatures(instance, physical_device);
-            const has_formats = (format_features.bc or format_features.astc) and for (std.enums.values(sc.Format)[1..]) |format| {
-                const classes = [_]struct { last: sc.Format, features: vk.FormatFeatureFlags2, available: bool = true }{
-                    .{ .last = .rg11b10_ufloat, .features = .{ .sampled_image = true, .sampled_image_filter_linear = true, .color_attachment = true, .color_attachment_blend = true, .storage_image = true } },
-                    .{ .last = .bgra8_unorm_srgb, .features = .{ .sampled_image = true, .sampled_image_filter_linear = true, .color_attachment = true, .color_attachment_blend = true } },
-                    .{ .last = .rgba16_snorm, .features = .{ .sampled_image = true, .sampled_image_filter_linear = true, .storage_image = true } },
-                    .{ .last = .rgb9e5_ufloat, .features = .{ .sampled_image = true, .sampled_image_filter_linear = true } },
-                    .{ .last = .rgba32_float, .features = .{ .sampled_image = true, .color_attachment = true, .storage_image = true } },
-                    .{ .last = .rgb10a2_uint, .features = .{ .sampled_image = true, .color_attachment = true, .storage_image = true } },
-                    .{ .last = .stencil8, .features = .{ .sampled_image = true, .depth_stencil_attachment = true } },
-                    .{ .last = .bc7_unorm_srgb, .features = .{ .sampled_image = true, .sampled_image_filter_linear = true }, .available = format_features.bc },
-                    .{ .last = .astc_12x12_unorm_srgb, .features = .{ .sampled_image = true, .sampled_image_filter_linear = true }, .available = format_features.astc },
-                };
-                const class = for (classes) |class| {
-                    if (@backingInt(format) <= @backingInt(class.last)) break class;
-                } else unreachable;
-                if (!class.available) continue;
-                var required = class.features;
-                required.sampled_image_depth_comparison = to_vk.aspectsForFormat(format).depth;
-
-                const vk_format = to_vk.format(format);
-                var properties_3: vk.FormatProperties3 = .{};
-                var format_properties: vk.FormatProperties2 = .{ .p_next = &properties_3, .format_properties = .{} };
-                instance.handle.getPhysicalDeviceFormatProperties2(physical_device, vk_format, &format_properties);
-                var multisampled = true;
-                if (required.color_attachment or required.depth_stencil_attachment) {
-                    const usage: vk.ImageUsageFlags = .{ .color_attachment = required.color_attachment, .depth_stencil_attachment = required.depth_stencil_attachment };
-                    const image_properties = instance.handle.getPhysicalDeviceImageFormatProperties(physical_device, vk_format, .@"2d", .optimal, usage, .{}) catch null;
-                    multisampled = image_properties != null and image_properties.?.sample_counts.@"4";
-                }
-                if (!properties_3.optimal_tiling_features.contains(required) or !multisampled) {
-                    std.log.info("vulkan adapter {s} lacks the guarantees of format {t}", .{ std.mem.sliceTo(&properties.device_name, 0), format });
-                    break false;
-                }
-            } else true;
+            const has_required_formats = hasRequiredFormats(instance, physical_device, format_features, std.mem.sliceTo(&properties.device_name, 0));
+            const has_formats = (format_features.bc or format_features.astc) and has_required_formats;
 
             return .{
                 .compatible = has_graphics_queue and has_formats and Features.isSubset(Features.required, supported),
@@ -471,6 +439,66 @@ pub const Adapter = opaque {
             } else false;
         }
     };
+
+    fn hasRequiredFormats(
+        instance: *const Instance,
+        physical_device: vk.PhysicalDevice,
+        format_features: sc.FormatFeatures,
+        device_name: []const u8,
+    ) bool {
+        const FeatureFlags = vk.FormatFeatureFlags2;
+        const sampled: FeatureFlags = .{ .sampled_image = true };
+        const filtered: FeatureFlags = .{ .sampled_image = true, .sampled_image_filter_linear = true };
+        const color: FeatureFlags = .{ .color_attachment = true };
+        const blended: FeatureFlags = .{ .color_attachment = true, .color_attachment_blend = true };
+        const storage: FeatureFlags = .{ .storage_image = true };
+        const depth_stencil: FeatureFlags = .{ .depth_stencil_attachment = true };
+
+        const Class = struct { last: sc.Format, features: FeatureFlags, available: bool = true };
+        const classes = [_]Class{
+            .{ .last = .rg11b10_ufloat, .features = filtered.merge(blended).merge(storage) },
+            .{ .last = .bgra8_unorm_srgb, .features = filtered.merge(blended) },
+            .{ .last = .rgba16_snorm, .features = filtered.merge(storage) },
+            .{ .last = .rgb9e5_ufloat, .features = filtered },
+            .{ .last = .rgba32_float, .features = sampled.merge(color).merge(storage) },
+            .{ .last = .rgb10a2_uint, .features = sampled.merge(color).merge(storage) },
+            .{ .last = .stencil8, .features = sampled.merge(depth_stencil) },
+            .{ .last = .bc7_unorm_srgb, .features = filtered, .available = format_features.bc },
+            .{ .last = .astc_12x12_unorm_srgb, .features = filtered, .available = format_features.astc },
+        };
+
+        var class_index: usize = 0;
+        for (std.enums.values(sc.Format)[1..]) |format| {
+            if (@backingInt(format) > @backingInt(classes[class_index].last)) class_index += 1;
+            const class = classes[class_index];
+            if (!class.available) continue;
+
+            var required = class.features;
+            required.sampled_image_depth_comparison = to_vk.aspectsForFormat(format).depth;
+
+            const supports_format = blk: {
+                const vk_format = to_vk.format(format);
+                var properties_3: vk.FormatProperties3 = .{};
+                var properties_2: vk.FormatProperties2 = .{ .p_next = &properties_3, .format_properties = .{} };
+                instance.handle.getPhysicalDeviceFormatProperties2(physical_device, vk_format, &properties_2);
+                if (!properties_3.optimal_tiling_features.contains(required)) break :blk false;
+
+                const usage: vk.ImageUsageFlags = .{
+                    .color_attachment = required.color_attachment,
+                    .depth_stencil_attachment = required.depth_stencil_attachment,
+                };
+                if (!usage.color_attachment and !usage.depth_stencil_attachment) break :blk true;
+                const image_properties = instance.handle.getPhysicalDeviceImageFormatProperties(physical_device, vk_format, .@"2d", .optimal, usage, .{}) catch break :blk false;
+                break :blk image_properties.sample_counts.@"4";
+            };
+
+            if (!supports_format) {
+                std.log.info("vulkan adapter {s} lacks the guarantees of format {t}", .{ device_name, format });
+                return false;
+            }
+        }
+        return true;
+    }
 
     fn formatFeatures(instance: *Instance, physical_device: vk.PhysicalDevice) sc.FormatFeatures {
         const features = instance.handle.getPhysicalDeviceFeatures(physical_device);
@@ -588,18 +616,23 @@ pub const Device = struct {
         const d_obj = try gpa.create(Object(Device));
         errdefer gpa.destroy(d_obj);
 
-        // graphics queues must also support compute
         const family_properties = try instance.handle.getPhysicalDeviceQueueFamilyPropertiesAlloc(physical_device, arena);
+
         const graphics_family: u32 = for (family_properties, 0..) |family, i| {
+            // graphics queues must also support compute
             if (family.queue_flags.graphics and family.queue_flags.compute) break @intCast(i);
         } else return error.NoGraphicQueue; // TODO: when can this happen?
+
         const compute_family: u32 = for (family_properties, 0..) |family, i| {
             if (family.queue_flags.compute and !family.queue_flags.graphics) break @intCast(i);
         } else graphics_family;
+
         const transfer_family: u32 = for (family_properties, 0..) |family, i| {
-            if (family.queue_flags.transfer and !family.queue_flags.graphics and !family.queue_flags.compute and
-                family.min_image_transfer_granularity.width != 0) break @intCast(i);
+            const zero_image_transfer_granularity = family.min_image_transfer_granularity.width == 0;
+            if (family.queue_flags.transfer and !family.queue_flags.graphics and !family.queue_flags.compute and !zero_image_transfer_granularity)
+                break @intCast(i);
         } else compute_family;
+
         const family_from_kind: std.EnumArray(sc.QueueKind, u32) = .init(.{
             .graphics = graphics_family,
             .compute = compute_family,
@@ -624,11 +657,12 @@ pub const Device = struct {
         var features = Adapter.Features.required;
         features.core.features.texture_compression_bc = if (support.format_features.bc) .true else .false;
         features.core.features.texture_compression_astc_ldr = if (support.format_features.astc) .true else .false;
+
         var extensions_buffer: [16][*:0]const u8 = undefined;
         var extensions: std.ArrayList([*:0]const u8) = .initBuffer(&extensions_buffer);
         extensions.appendSliceAssumeCapacity(&Adapter.required_extensions);
         if (support.swapchain) extensions.appendAssumeCapacity(vk.device_extensions.khr_swapchain.name);
-        inline for (comptime std.meta.fieldNames(Adapter.Features.Optional)) |field_name| {
+        inline for (@typeInfo(Adapter.Features.Optional).@"struct".field_names) |field_name| {
             @field(@field(features, field_name), field_name) = .true;
             if (@field(support.optional, field_name)) {
                 extensions.appendAssumeCapacity(@field(Adapter.Features.optional_extensions, field_name).name);
@@ -649,13 +683,13 @@ pub const Device = struct {
         errdefer handle.destroyDevice(null);
 
         const texture_heap_set_layout = layout: {
-            var bindings = [_]vk.DescriptorSetLayoutBinding{.{
+            var binding: vk.DescriptorSetLayoutBinding = .{
                 .binding = 0,
                 .descriptor_type = .mutable_ext,
                 .descriptor_count = 0,
                 .stage_flags = .{ .vertex = true, .fragment = true, .compute = true },
                 .p_immutable_samplers = null,
-            }};
+            };
             const allowed_types: []const vk.DescriptorType = &.{ .storage_image, .sampled_image };
             const mutable_info: vk.MutableDescriptorTypeCreateInfoEXT = .{
                 .mutable_descriptor_type_list_count = 1,
@@ -673,12 +707,12 @@ pub const Device = struct {
                 .p_next = &binding_flags_info,
                 .flags = .{ .descriptor_buffer_ext = true },
                 .binding_count = 1,
-                .p_bindings = &bindings,
+                .p_bindings = (&binding)[0..1],
             };
             var variable_support: vk.DescriptorSetVariableDescriptorCountLayoutSupport = .{ .max_variable_descriptor_count = 0 };
             var layout_support: vk.DescriptorSetLayoutSupport = .{ .p_next = &variable_support, .supported = .false };
             handle.getDescriptorSetLayoutSupport(&layout_info, &layout_support);
-            bindings[0].descriptor_count = variable_support.max_variable_descriptor_count;
+            binding.descriptor_count = variable_support.max_variable_descriptor_count;
             break :layout try handle.createDescriptorSetLayout(&layout_info, null);
         };
         errdefer handle.destroyDescriptorSetLayout(texture_heap_set_layout, null);
@@ -723,6 +757,13 @@ pub const Device = struct {
         var properties: vk.PhysicalDeviceProperties2 = .{ .p_next = &descriptor_buffer_properties, .properties = undefined };
         instance.handle.getPhysicalDeviceProperties2(physical_device, &properties);
 
+        const has_host_visible_device_local = for (memory_properties.memory_types[0..memory_properties.memory_type_count]) |memory_type| {
+            // heuristic to check if ReBAR is on
+            if (memory_type.property_flags.device_local and
+                memory_type.property_flags.host_visible and
+                memory_properties.memory_heaps[memory_type.heap_index].size > 256 * 1024 * 1024) break true;
+        } else false;
+
         d_obj.set(table, .{
             .handle = handle,
             .instance = instance,
@@ -737,13 +778,7 @@ pub const Device = struct {
             .heap = .{ .entries = .empty },
 
             .memory_properties = memory_properties,
-            .has_host_visible_device_local = for (memory_properties.memory_types[0..memory_properties.memory_type_count]) |memory_type| {
-                const flags = memory_type.property_flags;
-                // heuristic to check if ReBAR is on
-                if (flags.device_local and flags.host_visible and
-                    memory_properties.memory_heaps[memory_type.heap_index].size > 256 * 1024 * 1024)
-                    break true;
-            } else false,
+            .has_host_visible_device_local = has_host_visible_device_local,
             .image_memory_type_bits = image_memory_type_bits,
             .descriptor_buffer_properties = descriptor_buffer_properties,
             .swapchain_supported = support.swapchain,
@@ -864,8 +899,8 @@ pub const Device = struct {
         const memory_type_bit_set: std.bit_set.Integer(32) = .{ .mask = memory_type_bits };
         const memory_type_index: u32 = find: for (properties_by_preference) |properties| {
             for (d.memory_properties.memory_types[0..d.memory_properties.memory_type_count], 0..) |memory_type, i| {
-                if (memory_type_bit_set.isSet(i) and
-                    memory_type.property_flags.contains(properties)) break :find @intCast(i);
+                if (memory_type_bit_set.isSet(i) and memory_type.property_flags.contains(properties))
+                    break :find @intCast(i);
             }
         } else return error.OutOfDeviceMemory;
 
@@ -1009,11 +1044,8 @@ pub const Queue = struct {
             d.pending_texture_inits.clearRetainingCapacity();
         }
 
-        try queue.submitAfterAcquires(
-            submit_infos,
-            waits,
-            if (signal) |point| semaphoreSubmitInfo(Timeline.fromHandle(point.timeline).handle, point.value) else null,
-        );
+        const signal_info = if (signal) |s| semaphoreSubmitInfo(Timeline.fromHandle(s.timeline).handle, s.value) else null;
+        try queue.submitAfterAcquires(submit_infos, waits, signal_info);
     }
 
     /// submits after `waits`, the pending swapchain acquires and texture initializations
@@ -1042,7 +1074,10 @@ pub const Queue = struct {
             wait_info.* = semaphoreSubmitInfo(Timeline.fromHandle(point.timeline).handle, point.value);
         }
 
-        const signals = [2]vk.SemaphoreSubmitInfo{ semaphoreSubmitInfo(queue.timeline, queue.last_submitted + 1), signal orelse undefined };
+        const signals = [2]vk.SemaphoreSubmitInfo{
+            semaphoreSubmitInfo(queue.timeline, queue.last_submitted + 1),
+            signal orelse undefined,
+        };
         try d.handle.queueSubmit2(queue.handle, &.{.{
             .wait_semaphore_info_count = @intCast(wait_infos.len),
             .p_wait_semaphore_infos = wait_infos.ptr,
@@ -1765,6 +1800,7 @@ pub const CommandBuffer = struct {
 
         const format = if (desc.format == .none) texture.desc.format else desc.format;
         std.debug.assert(format == texture.desc.format or (format == .stencil8 and to_vk.aspectsForFormat(texture.desc.format).stencil));
+
         const block = to_vk.blockForFormat(format);
         const queue_granularity = cb.queue.texture_copy_granularity;
         const granularity: [3]u32 = .{ queue_granularity.width * block.width, queue_granularity.height * block.height, queue_granularity.depth };
@@ -1831,25 +1867,29 @@ pub const CommandBuffer = struct {
             attachment.* = renderingAttachment(target.texture, target.load_op, target.store_op, .{
                 .color = .{ .float_32 = target.clear_color },
             });
-            const resolve_texture = textureFromHandle(target.resolve_texture orelse continue);
-            const texture_desc = textureFromHandle(target.texture).desc;
-            std.debug.assert(texture_desc.sample_count > 1 and resolve_texture.desc.sample_count == 1);
-            std.debug.assert(texture_desc.format == resolve_texture.desc.format);
-            const is_integer = to_vk.isIntegerFormat(texture_desc.format);
-            attachment.resolve_mode = .{ .average = !is_integer, .sample_zero = is_integer };
-            attachment.resolve_image_view = resolve_texture.default_view;
-            attachment.resolve_image_layout = .general;
+            if (target.resolve_texture) |resolve_texture_obj| {
+                const resolve_texture = textureFromHandle(resolve_texture_obj);
+                const texture_desc = textureFromHandle(target.texture).desc;
+                std.debug.assert(texture_desc.sample_count > 1 and resolve_texture.desc.sample_count == 1);
+                std.debug.assert(texture_desc.format == resolve_texture.desc.format);
+                const is_integer = to_vk.isIntegerFormat(texture_desc.format);
+                attachment.resolve_mode = .{ .average = !is_integer, .sample_zero = is_integer };
+                attachment.resolve_image_view = resolve_texture.default_view;
+                attachment.resolve_image_layout = .general;
+            }
         }
-        const depth = desc.depth_attachment;
-        const depth_attachment = if (depth.texture) |texture| renderingAttachment(texture, depth.load_op, depth.store_op, .{
-            .depth_stencil = .{ .depth = depth.clear_value, .stencil = 0 },
-        }) else null;
-        const stencil = desc.stencil_attachment;
-        const stencil_attachment = if (stencil.texture) |texture| renderingAttachment(texture, stencil.load_op, stencil.store_op, .{
-            .depth_stencil = .{ .depth = 0, .stencil = stencil.clear_value },
+
+        const d = desc.depth_attachment;
+        const depth_attachment = if (d.texture) |t| renderingAttachment(t, d.load_op, d.store_op, .{
+            .depth_stencil = .{ .depth = d.clear_value, .stencil = 0 },
         }) else null;
 
-        const first_texture = if (color_targets.len > 0) color_targets[0].texture else depth.texture orelse stencil.texture.?;
+        const s = desc.stencil_attachment;
+        const stencil_attachment = if (s.texture) |t| renderingAttachment(t, s.load_op, s.store_op, .{
+            .depth_stencil = .{ .depth = 0, .stencil = s.clear_value },
+        }) else null;
+
+        const first_texture = if (color_targets.len > 0) color_targets[0].texture else d.texture orelse s.texture.?;
         const first_texture_extent = textureFromHandle(first_texture).desc.extent;
         const extent: vk.Extent2D = .{ .width = first_texture_extent.width, .height = first_texture_extent.height };
 
@@ -2100,6 +2140,7 @@ pub const Texture = struct {
         std.debug.assert(create_desc.format != .none);
         std.debug.assert(create_desc.sample_count == 1 or
             (create_desc.type == .@"2d" and create_desc.mip_count == 1 and !create_desc.usage.storage));
+
         const texture = try d.textures.create(d.gpa);
         errdefer d.textures.destroy(texture);
 
