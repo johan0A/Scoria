@@ -344,6 +344,56 @@ pub const Format = enum(u32) {
     astc_12x10_unorm_srgb = 85,
     astc_12x12_unorm = 86,
     astc_12x12_unorm_srgb = 87,
+
+    pub const Info = struct {
+        block_extent: Extent2D,
+        block_size_bytes: u32,
+        depth: bool,
+        stencil: bool,
+    };
+
+    pub fn info(format: Format) Info {
+        const width: u32, const height: u32, const size_bytes: u32 = switch (format) {
+            .none => unreachable,
+            .r8_unorm, .r8_snorm, .r8_uint, .r8_sint, .stencil8 => .{ 1, 1, 1 },
+            .r16_unorm, .r16_snorm, .r16_uint, .r16_sint, .r16_float, .rg8_unorm, .rg8_snorm, .rg8_uint, .rg8_sint, .depth16_unorm => .{ 1, 1, 2 },
+            .r32_float, .r32_uint, .r32_sint, .rg16_unorm, .rg16_snorm, .rg16_uint, .rg16_sint, .rg16_float => .{ 1, 1, 4 },
+            .rgba8_unorm, .rgba8_unorm_srgb, .rgba8_snorm, .rgba8_uint, .rgba8_sint, .bgra8_unorm, .bgra8_unorm_srgb => .{ 1, 1, 4 },
+            .rgb10a2_uint, .rgb10a2_unorm, .rg11b10_ufloat, .rgb9e5_ufloat => .{ 1, 1, 4 },
+            .depth32_float, .depth32_float_stencil8 => .{ 1, 1, 4 },
+            .rg32_float, .rg32_uint, .rg32_sint, .rgba16_unorm, .rgba16_snorm, .rgba16_uint, .rgba16_sint, .rgba16_float => .{ 1, 1, 8 },
+            .rgba32_float, .rgba32_uint, .rgba32_sint => .{ 1, 1, 16 },
+            .bc1_unorm, .bc1_unorm_srgb, .bc4_unorm, .bc4_snorm => .{ 4, 4, 8 },
+            .bc3_unorm, .bc3_unorm_srgb, .bc5_unorm, .bc5_snorm => .{ 4, 4, 16 },
+            .bc6h_ufloat, .bc6h_float, .bc7_unorm, .bc7_unorm_srgb => .{ 4, 4, 16 },
+            .astc_4x4_unorm, .astc_4x4_unorm_srgb => .{ 4, 4, 16 },
+            .astc_5x4_unorm, .astc_5x4_unorm_srgb => .{ 5, 4, 16 },
+            .astc_5x5_unorm, .astc_5x5_unorm_srgb => .{ 5, 5, 16 },
+            .astc_6x5_unorm, .astc_6x5_unorm_srgb => .{ 6, 5, 16 },
+            .astc_6x6_unorm, .astc_6x6_unorm_srgb => .{ 6, 6, 16 },
+            .astc_8x5_unorm, .astc_8x5_unorm_srgb => .{ 8, 5, 16 },
+            .astc_8x6_unorm, .astc_8x6_unorm_srgb => .{ 8, 6, 16 },
+            .astc_8x8_unorm, .astc_8x8_unorm_srgb => .{ 8, 8, 16 },
+            .astc_10x5_unorm, .astc_10x5_unorm_srgb => .{ 10, 5, 16 },
+            .astc_10x6_unorm, .astc_10x6_unorm_srgb => .{ 10, 6, 16 },
+            .astc_10x8_unorm, .astc_10x8_unorm_srgb => .{ 10, 8, 16 },
+            .astc_10x10_unorm, .astc_10x10_unorm_srgb => .{ 10, 10, 16 },
+            .astc_12x10_unorm, .astc_12x10_unorm_srgb => .{ 12, 10, 16 },
+            .astc_12x12_unorm, .astc_12x12_unorm_srgb => .{ 12, 12, 16 },
+        };
+        return .{
+            .block_extent = .{ .width = width, .height = height },
+            .block_size_bytes = size_bytes,
+            .depth = switch (format) {
+                .depth16_unorm, .depth32_float, .depth32_float_stencil8 => true,
+                else => false,
+            },
+            .stencil = switch (format) {
+                .depth32_float_stencil8, .stencil8 => true,
+                else => false,
+            },
+        };
+    }
 };
 
 pub const StencilOp = enum(u32) {
