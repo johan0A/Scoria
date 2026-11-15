@@ -286,6 +286,7 @@ pub const Adapter = opaque {
     const required_extensions = [_][*:0]const u8{
         vk.device_extensions.ext_descriptor_buffer.name,
         vk.device_extensions.ext_mutable_descriptor_type.name,
+        vk.device_extensions.ext_extended_dynamic_state_3.name,
     };
 
     const Features = struct {
@@ -295,6 +296,7 @@ pub const Adapter = opaque {
         vk13: vk.PhysicalDeviceVulkan13Features = .{},
         descriptor_buffer: vk.PhysicalDeviceDescriptorBufferFeaturesEXT = .{},
         mutable_descriptor_type: vk.PhysicalDeviceMutableDescriptorTypeFeaturesEXT = .{},
+        extended_dynamic_state_3: vk.PhysicalDeviceExtendedDynamicState3FeaturesEXT = .{},
         unified_image_layouts: vk.PhysicalDeviceUnifiedImageLayoutsFeaturesKHR = .{},
         dynamic_rendering_local_read: vk.PhysicalDeviceDynamicRenderingLocalReadFeaturesKHR = .{},
         present_id_2: vk.PhysicalDevicePresentId2FeaturesKHR = .{},
@@ -351,6 +353,11 @@ pub const Adapter = opaque {
             },
             .descriptor_buffer = .{ .descriptor_buffer = .true },
             .mutable_descriptor_type = .{ .mutable_descriptor_type = .true },
+            .extended_dynamic_state_3 = .{
+                .extended_dynamic_state_3_color_blend_enable = .true,
+                .extended_dynamic_state_3_color_blend_equation = .true,
+                .extended_dynamic_state_3_color_write_mask = .true,
+            },
         };
 
         fn link(features: *Features, optional: Optional) *vk.PhysicalDeviceFeatures2 {
@@ -562,6 +569,7 @@ pub const Device = struct {
     textures: std.heap.MemoryPool(Object(Texture)),
     pipelines: std.heap.MemoryPool(Object(Pipeline)),
     depth_stencil_states: std.heap.MemoryPool(Object(DepthStencilState)),
+    blend_states: std.heap.MemoryPool(Object(BlendState)),
 
     const max_queue_count = @typeInfo(sc.QueueKind).@"enum".field_names.len;
 
@@ -799,6 +807,7 @@ pub const Device = struct {
             .textures = .empty,
             .pipelines = .empty,
             .depth_stencil_states = .empty,
+            .blend_states = .empty,
         });
         return d_obj;
     }
@@ -832,6 +841,7 @@ pub const Device = struct {
         d.textures.deinit(gpa);
         d.pipelines.deinit(gpa);
         d.depth_stencil_states.deinit(gpa);
+        d.blend_states.deinit(gpa);
         gpa.destroy(d_obj);
     }
 
@@ -1700,6 +1710,14 @@ pub const CommandBuffer = struct {
         cb.d.handle.cmdSetStencilReference(cb.handle, face, stencil.reference);
     }
 
+    pub fn setBlendState(cb_obj: *Object(CommandBuffer), blend_state_obj: *Object(BlendState)) void {
+        const cb = cb_obj.body();
+        const blend_state = blend_state_obj.body();
+        cb.d.handle.cmdSetColorBlendEnableEXT(cb.handle, 0, &blend_state.enables);
+        cb.d.handle.cmdSetColorBlendEquationEXT(cb.handle, 0, &blend_state.equations);
+        cb.d.handle.cmdSetColorWriteMaskEXT(cb.handle, 0, &blend_state.write_masks);
+    }
+
     pub fn dispatch(
         cb_obj: *Object(CommandBuffer),
         data: sc.DeviceAddress,
@@ -1918,6 +1936,22 @@ pub const CommandBuffer = struct {
         cb.d.handle.cmdSetDepthCompareOp(cb.handle, .always);
         cb.d.handle.cmdSetDepthBiasEnable(cb.handle, .false);
         cb.d.handle.cmdSetStencilTestEnable(cb.handle, .false);
+        // default blend state: blending disabled, all channels written
+        if (color_targets.len != 0) {
+            const enables: [sc.color_target_count_max]vk.Bool32 = @splat(.false);
+            const equations: [sc.color_target_count_max]vk.ColorBlendEquationEXT = @splat(.{
+                .src_color_blend_factor = .one,
+                .dst_color_blend_factor = .zero,
+                .color_blend_op = .add,
+                .src_alpha_blend_factor = .one,
+                .dst_alpha_blend_factor = .zero,
+                .alpha_blend_op = .add,
+            });
+            const write_masks: [sc.color_target_count_max]vk.ColorComponentFlags = @splat(.{ .r = true, .g = true, .b = true, .a = true });
+            cb.d.handle.cmdSetColorBlendEnableEXT(cb.handle, 0, enables[0..color_targets.len]);
+            cb.d.handle.cmdSetColorBlendEquationEXT(cb.handle, 0, equations[0..color_targets.len]);
+            cb.d.handle.cmdSetColorWriteMaskEXT(cb.handle, 0, write_masks[0..color_targets.len]);
+        }
     }
     fn renderingAttachment(
         texture: *sc.Texture,
@@ -1966,21 +2000,6 @@ pub const CommandBuffer = struct {
             .min_depth = viewport.min_depth,
             .max_depth = viewport.max_depth,
         }});
-    }
-
-    pub fn setDepthBias(cb_obj: *Object(CommandBuffer), depth_bias: sc.DepthBias) void {
-        const cb = cb_obj.body();
-        if (depth_bias.constant == 0 and depth_bias.slope == 0) {
-            cb.d.handle.cmdSetDepthBiasEnable(cb.handle, .false);
-            return;
-        }
-        cb.d.handle.cmdSetDepthBiasEnable(cb.handle, .true);
-        cb.d.handle.cmdSetDepthBias(
-            cb.handle,
-            depth_bias.constant,
-            depth_bias.clamp,
-            depth_bias.slope,
-        );
     }
 
     pub fn draw(
@@ -2068,6 +2087,35 @@ pub const DepthStencilState = struct {
 
     pub fn destroy(depth_stencil_state: *Object(DepthStencilState)) void {
         depth_stencil_state.body().d.depth_stencil_states.destroy(depth_stencil_state);
+    }
+};
+
+pub const BlendState = struct {
+    enables: [sc.color_target_count_max]vk.Bool32,
+    equations: [sc.color_target_count_max]vk.ColorBlendEquationEXT,
+    write_masks: [sc.color_target_count_max]vk.ColorComponentFlags,
+    d: *Device,
+
+    pub fn create(d: *Object(Device), desc: sc.BlendDesc, blend_state: **Object(BlendState)) !void {
+        var state: BlendState = .{ .enables = undefined, .equations = undefined, .write_masks = undefined, .d = d.body() };
+        for (desc.targets, &state.enables, &state.equations, &state.write_masks) |target, *enable, *equation, *write_mask| {
+            enable.* = .fromBool(!std.meta.eql(target.color, sc.BlendComponent{}) or !std.meta.eql(target.alpha, sc.BlendComponent{}));
+            equation.* = .{
+                .src_color_blend_factor = to_vk.blendFactor(target.color.src_factor),
+                .dst_color_blend_factor = to_vk.blendFactor(target.color.dst_factor),
+                .color_blend_op = to_vk.blendOp(target.color.op),
+                .src_alpha_blend_factor = to_vk.blendFactor(target.alpha.src_factor),
+                .dst_alpha_blend_factor = to_vk.blendFactor(target.alpha.dst_factor),
+                .alpha_blend_op = to_vk.blendOp(target.alpha.op),
+            };
+            write_mask.* = to_vk.writeMask(target.write_mask);
+        }
+        blend_state.* = try d.body().blend_states.create(d.body().gpa);
+        blend_state.*.set(d.body().table, state);
+    }
+
+    pub fn destroy(blend_state: *Object(BlendState)) void {
+        blend_state.body().d.blend_states.destroy(blend_state);
     }
 };
 
@@ -2339,12 +2387,10 @@ pub const Pipeline = struct {
             .{ .stage = .{ .fragment = true }, .module = pixel_module, .p_name = "main" },
         };
 
-        var color_formats: [8]vk.Format = undefined;
-        var blend_attachments: [8]vk.PipelineColorBlendAttachmentState = undefined;
-        for (color_targets, color_formats[0..color_targets.len], blend_attachments[0..color_targets.len]) |target, *format, *blend_attachment| {
+        var color_formats: [sc.color_target_count_max]vk.Format = @splat(.undefined);
+        for (color_targets, color_formats[0..color_targets.len]) |target, *format| {
             std.debug.assert(target.format != .none);
             format.* = to_vk.format(target.format);
-            blend_attachment.* = to_vk.colorBlendAttachment(target.blend, target.write_mask);
         }
 
         const dynamic_states = [_]vk.DynamicState{
@@ -2360,6 +2406,9 @@ pub const Pipeline = struct {
             .stencil_compare_mask,
             .stencil_write_mask,
             .stencil_reference,
+            .color_blend_enable_ext,
+            .color_blend_equation_ext,
+            .color_write_mask_ext,
         };
         const rendering_info: vk.PipelineRenderingCreateInfo = .{
             .view_mask = 0,
@@ -2403,10 +2452,10 @@ pub const Pipeline = struct {
                 .depth_test_enable = .false,
                 .depth_write_enable = .false,
                 .depth_compare_op = .always,
-                .depth_bounds_test_enable = .false,
                 .stencil_test_enable = .false,
                 .front = stencil_placeholder,
                 .back = stencil_placeholder,
+                .depth_bounds_test_enable = .false,
                 .min_depth_bounds = 0,
                 .max_depth_bounds = 1,
             },
@@ -2414,7 +2463,7 @@ pub const Pipeline = struct {
                 .logic_op_enable = .false,
                 .logic_op = .copy,
                 .attachment_count = @intCast(color_targets.len),
-                .p_attachments = &blend_attachments,
+                .p_attachments = null,
                 .blend_constants = .{ 0, 0, 0, 0 },
             },
             .p_dynamic_state = &.{ .dynamic_state_count = dynamic_states.len, .p_dynamic_states = &dynamic_states },
@@ -2558,6 +2607,7 @@ pub export fn symbol(name: [*:0]const u8) callconv(sc.@"callconv") *const anyopa
         .CommandPool = Object(CommandPool),
         .CommandBuffer = Object(CommandBuffer),
         .DepthStencilState = Object(DepthStencilState),
+        .BlendState = Object(BlendState),
         .Texture = Object(Texture),
         .Pipeline = Object(Pipeline),
     }, .{
@@ -2590,6 +2640,7 @@ pub export fn symbol(name: [*:0]const u8) callconv(sc.@"callconv") *const anyopa
         .setActiveTextureHeap = CommandBuffer.setActiveTextureHeap,
         .setPipeline = CommandBuffer.setPipeline,
         .setDepthStencilState = CommandBuffer.setDepthStencilState,
+        .setBlendState = CommandBuffer.setBlendState,
         .dispatch = CommandBuffer.dispatch,
         .dispatchIndirect = CommandBuffer.dispatchIndirect,
         .barrier = CommandBuffer.barrier,
@@ -2616,6 +2667,8 @@ pub export fn symbol(name: [*:0]const u8) callconv(sc.@"callconv") *const anyopa
         .destroyPipeline = Pipeline.destroy,
         .createDepthStencilState = DepthStencilState.create,
         .destroyDepthStencilState = DepthStencilState.destroy,
+        .createBlendState = BlendState.create,
+        .destroyBlendState = BlendState.destroy,
     });
     return map.get(std.mem.span(name)).?;
 }

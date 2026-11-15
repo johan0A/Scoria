@@ -8,6 +8,7 @@ const Slice = sc.Slice;
 const @"callconv" = sc.@"callconv";
 
 pub const descriptor_size_max: usize = 64;
+pub const color_target_count_max: usize = 8;
 pub const adapter_name_capacity_bytes: usize = 256;
 
 pub const DeviceAddress = u64;
@@ -24,6 +25,7 @@ pub const CommandBuffer = opaque {};
 pub const Texture = opaque {};
 pub const Pipeline = opaque {};
 pub const DepthStencilState = opaque {};
+pub const BlendState = opaque {};
 
 pub const Result = enum(u32) {
     ok = 0,
@@ -393,12 +395,6 @@ pub const Viewport = extern struct {
     max_depth: f32 = 1,
 };
 
-pub const DepthBias = extern struct {
-    constant: f32 = 0,
-    clamp: f32 = 0,
-    slope: f32 = 0,
-};
-
 pub const SizeAlign = extern struct {
     size: usize,
     alignment: usize,
@@ -561,15 +557,19 @@ pub const BlendComponent = extern struct {
     dst_factor: sc.BlendFactor = .zero,
 };
 
-pub const BlendDesc = extern struct {
+pub const BlendTarget = extern struct {
     color: sc.BlendComponent = .{},
     alpha: sc.BlendComponent = .{},
+    write_mask: sc.ColorWriteMask = .all,
+};
+
+pub const BlendDesc = extern struct {
+    /// Indexed by color attachment.
+    targets: [sc.color_target_count_max]sc.BlendTarget = .{ .{}, .{}, .{}, .{}, .{}, .{}, .{}, .{} },
 };
 
 pub const ColorTarget = extern struct {
     format: sc.Format,
-    write_mask: sc.ColorWriteMask = .all,
-    blend: ?*const sc.BlendDesc = null,
 };
 
 pub const ColorTargets = extern struct {

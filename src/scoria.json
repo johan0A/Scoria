@@ -13,6 +13,7 @@
 
   "constants": [
     { "name": "SC_DESCRIPTOR_SIZE_MAX", "type": "size_t", "value": "64", "doc": "" },
+    { "name": "SC_COLOR_TARGET_COUNT_MAX", "type": "size_t", "value": "8", "doc": "" },
     { "name": "ADAPTER_NAME_CAPACITY_BYTES", "type": "size_t", "value": "256", "doc": "" }
   ],
 
@@ -32,7 +33,8 @@
     { "name": "ScCommandBuffer", "doc": "" },
     { "name": "ScTexture", "doc": "" },
     { "name": "ScPipeline", "doc": "" },
-    { "name": "ScDepthStencilState", "doc": "" }
+    { "name": "ScDepthStencilState", "doc": "" },
+    { "name": "ScBlendState", "doc": "" }
   ],
 
   "function_pointers": [
@@ -141,15 +143,6 @@
         { "name": "height", "type": { "base": "float" }, "doc": "" },
         { "name": "min_depth", "type": { "base": "float" }, "default": 0.0, "doc": "" },
         { "name": "max_depth", "type": { "base": "float" }, "default": 1.0, "doc": "" }
-      ],
-      "doc": ""
-    },
-    {
-      "name": "ScDepthBias",
-      "fields": [
-        { "name": "constant", "type": { "base": "float" }, "default": 0.0, "doc": "" },
-        { "name": "clamp", "type": { "base": "float" }, "default": 0.0, "doc": "" },
-        { "name": "slope", "type": { "base": "float" }, "default": 0.0, "doc": "" }
       ],
       "doc": ""
     },
@@ -365,19 +358,25 @@
       "doc": ""
     },
     {
-      "name": "ScBlendDesc",
+      "name": "ScBlendTarget",
       "fields": [
         { "name": "color", "type": { "base": "ScBlendComponent" }, "default": {}, "doc": "" },
-        { "name": "alpha", "type": { "base": "ScBlendComponent" }, "default": {}, "doc": "" }
+        { "name": "alpha", "type": { "base": "ScBlendComponent" }, "default": {}, "doc": "" },
+        { "name": "write_mask", "type": { "base": "ScColorWriteMask" }, "default": "SC_COLOR_WRITE_MASK_ALL", "doc": "" }
+      ],
+      "doc": ""
+    },
+    {
+      "name": "ScBlendDesc",
+      "fields": [
+        { "name": "targets", "type": { "base": "ScBlendTarget", "array": "SC_COLOR_TARGET_COUNT_MAX" }, "default": [{}, {}, {}, {}, {}, {}, {}, {}], "doc": "Indexed by color attachment." }
       ],
       "doc": ""
     },
     {
       "name": "ScColorTarget",
       "fields": [
-        { "name": "format", "type": { "base": "ScFormat" }, "doc": "" },
-        { "name": "write_mask", "type": { "base": "ScColorWriteMask" }, "default": "SC_COLOR_WRITE_MASK_ALL", "doc": "" },
-        { "name": "blend", "type": { "base": "ScBlendDesc", "ptr": [{ "const": true, "optional": true }] }, "default": null, "doc": "" }
+        { "name": "format", "type": { "base": "ScFormat" }, "doc": "" }
       ],
       "doc": ""
     },
@@ -1272,6 +1271,17 @@
       "doc": ""
     },
     {
+      "name": "scSetBlendState",
+      "group": "ScCommandBuffer",
+      "dispatch": "table",
+      "return": { "base": "void" },
+      "params": [
+        { "name": "command_buffer", "type": { "base": "ScCommandBuffer", "ptr": [{}] }, "doc": "" },
+        { "name": "blend_state", "type": { "base": "ScBlendState", "ptr": [{}] }, "doc": "" }
+      ],
+      "doc": ""
+    },
+    {
       "name": "scSetPipeline",
       "group": "ScCommandBuffer",
       "dispatch": "table",
@@ -1616,6 +1626,31 @@
       "return": { "base": "void" },
       "params": [
         { "name": "pipeline", "type": { "base": "ScPipeline", "ptr": [{}] }, "doc": "" }
+      ],
+      "doc": ""
+    },
+    {
+      "name": "scCreateBlendState",
+      "group": "ScBlendState",
+      "dispatch": "table",
+      "return": { "base": "ScResult" },
+      "errors": [
+        "SC_RESULT_OUT_OF_MEMORY"
+      ],
+      "params": [
+        { "name": "device", "type": { "base": "ScDevice", "ptr": [{}] }, "doc": "" },
+        { "name": "desc", "type": { "base": "ScBlendDesc" }, "doc": "" },
+        { "name": "blend_state", "type": { "base": "ScBlendState", "ptr": [{}, {}] }, "out": true, "doc": "" }
+      ],
+      "doc": ""
+    },
+    {
+      "name": "scDestroyBlendState",
+      "group": "ScBlendState",
+      "dispatch": "table",
+      "return": { "base": "void" },
+      "params": [
+        { "name": "blend_state", "type": { "base": "ScBlendState", "ptr": [{}] }, "doc": "" }
       ],
       "doc": ""
     },

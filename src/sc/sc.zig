@@ -18,6 +18,7 @@ pub const @"callconv": std.lang.CallingConvention = switch (target.os.tag) {
 };
 
 pub const descriptor_size_max: usize = 64;
+pub const color_target_count_max: usize = 8;
 pub const adapter_name_capacity_bytes: usize = 256;
 
 pub const DeviceAddress = u64;
@@ -90,6 +91,7 @@ pub const CommandPool = opaque {
 pub const CommandBuffer = opaque {
     pub const setActiveTextureHeap = functions.setActiveTextureHeap;
     pub const setDepthStencilState = functions.setDepthStencilState;
+    pub const setBlendState = functions.setBlendState;
     pub const setPipeline = functions.setPipeline;
     pub const dispatch = functions.dispatch;
     pub const dispatchIndirect = functions.dispatchIndirect;
@@ -127,6 +129,11 @@ pub const Pipeline = opaque {
 pub const DepthStencilState = opaque {
     pub const create = functions.createDepthStencilState;
     pub const destroy = functions.destroyDepthStencilState;
+};
+
+pub const BlendState = opaque {
+    pub const create = functions.createBlendState;
+    pub const destroy = functions.destroyBlendState;
 };
 
 pub const Result = enum(u32) {
@@ -729,15 +736,19 @@ pub const BlendComponent = extern struct {
     dst_factor: BlendFactor = .zero,
 };
 
-pub const BlendDesc = extern struct {
+pub const BlendTarget = extern struct {
     color: BlendComponent = .{},
     alpha: BlendComponent = .{},
+    write_mask: ColorWriteMask = .all,
+};
+
+pub const BlendDesc = extern struct {
+    /// Indexed by color attachment.
+    targets: [color_target_count_max]BlendTarget = @splat(.{}),
 };
 
 pub const ColorTarget = extern struct {
     format: Format,
-    write_mask: ColorWriteMask = .all,
-    blend: ?*const BlendDesc = null,
 };
 
 pub const ColorTargets = extern struct {

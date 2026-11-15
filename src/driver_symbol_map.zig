@@ -17,6 +17,7 @@ const HandleTypes = struct {
     Texture: type,
     Pipeline: type,
     DepthStencilState: type,
+    BlendState: type,
 };
 
 fn Functions(handle_types: HandleTypes) type {
@@ -193,6 +194,10 @@ fn Functions(handle_types: HandleTypes) type {
             command_buffer: *handle_types.CommandBuffer,
             depth_stencil_state: *handle_types.DepthStencilState,
         ) void,
+        setBlendState: fn (
+            command_buffer: *handle_types.CommandBuffer,
+            blend_state: *handle_types.BlendState,
+        ) void,
         setPipeline: fn (
             command_buffer: *handle_types.CommandBuffer,
             pipeline: *handle_types.Pipeline,
@@ -360,6 +365,16 @@ fn Functions(handle_types: HandleTypes) type {
         }!void,
         destroyPipeline: fn (
             pipeline: *handle_types.Pipeline,
+        ) void,
+        createBlendState: fn (
+            device: *handle_types.Device,
+            desc: sc.BlendDesc,
+            blend_state: **handle_types.BlendState,
+        ) error{
+            OutOfMemory,
+        }!void,
+        destroyBlendState: fn (
+            blend_state: *handle_types.BlendState,
         ) void,
         createDepthStencilState: fn (
             device: *handle_types.Device,
@@ -700,6 +715,16 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
             );
         }
 
+        pub fn setBlendState(
+            command_buffer: *handle_types.CommandBuffer,
+            blend_state: *handle_types.BlendState,
+        ) callconv(sc.@"callconv") void {
+            return functions.setBlendState(
+                command_buffer,
+                blend_state,
+            );
+        }
+
         pub fn setPipeline(
             command_buffer: *handle_types.CommandBuffer,
             pipeline: *handle_types.Pipeline,
@@ -1034,6 +1059,26 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
             );
         }
 
+        pub fn createBlendState(
+            device: *handle_types.Device,
+            desc: sc.BlendDesc,
+            blend_state: **handle_types.BlendState,
+        ) callconv(sc.@"callconv") sc.Result {
+            return cResult(functions.createBlendState(
+                device,
+                desc,
+                blend_state,
+            ));
+        }
+
+        pub fn destroyBlendState(
+            blend_state: *handle_types.BlendState,
+        ) callconv(sc.@"callconv") void {
+            return functions.destroyBlendState(
+                blend_state,
+            );
+        }
+
         pub fn createDepthStencilState(
             device: *handle_types.Device,
             desc: sc.DepthStencilDesc,
@@ -1090,6 +1135,7 @@ pub fn map(
         .{ "scPresent", @ptrCast(&c_functions.present) },
         .{ "scSetActiveTextureHeap", @ptrCast(&c_functions.setActiveTextureHeap) },
         .{ "scSetDepthStencilState", @ptrCast(&c_functions.setDepthStencilState) },
+        .{ "scSetBlendState", @ptrCast(&c_functions.setBlendState) },
         .{ "scSetPipeline", @ptrCast(&c_functions.setPipeline) },
         .{ "scDispatch", @ptrCast(&c_functions.dispatch) },
         .{ "scDispatchIndirect", @ptrCast(&c_functions.dispatchIndirect) },
@@ -1115,6 +1161,8 @@ pub fn map(
         .{ "scCreateComputePipeline", @ptrCast(&c_functions.createComputePipeline) },
         .{ "scCreateGraphicsPipeline", @ptrCast(&c_functions.createGraphicsPipeline) },
         .{ "scDestroyPipeline", @ptrCast(&c_functions.destroyPipeline) },
+        .{ "scCreateBlendState", @ptrCast(&c_functions.createBlendState) },
+        .{ "scDestroyBlendState", @ptrCast(&c_functions.destroyBlendState) },
         .{ "scCreateDepthStencilState", @ptrCast(&c_functions.createDepthStencilState) },
         .{ "scDestroyDepthStencilState", @ptrCast(&c_functions.destroyDepthStencilState) },
     }));

@@ -10,6 +10,7 @@ pub const @"callconv": std.lang.CallingConvention = switch (target.os.tag) {
 };
 
 pub const descriptor_size_max: usize = 64;
+pub const color_target_count_max: usize = 8;
 pub const adapter_name_capacity_bytes: usize = 256;
 
 pub const DeviceAddress = u64;
@@ -26,6 +27,7 @@ pub const CommandBuffer = opaque {};
 pub const Texture = opaque {};
 pub const Pipeline = opaque {};
 pub const DepthStencilState = opaque {};
+pub const BlendState = opaque {};
 
 pub const Result = enum(u32) {
     ok = 0,
@@ -395,12 +397,6 @@ pub const Viewport = extern struct {
     max_depth: f32 = 1,
 };
 
-pub const DepthBias = extern struct {
-    constant: f32 = 0,
-    clamp: f32 = 0,
-    slope: f32 = 0,
-};
-
 pub const SizeAlign = extern struct {
     size: usize,
     alignment: usize,
@@ -563,15 +559,19 @@ pub const BlendComponent = extern struct {
     dst_factor: BlendFactor = .zero,
 };
 
-pub const BlendDesc = extern struct {
+pub const BlendTarget = extern struct {
     color: BlendComponent = .{},
     alpha: BlendComponent = .{},
+    write_mask: ColorWriteMask = .all,
+};
+
+pub const BlendDesc = extern struct {
+    /// Indexed by color attachment.
+    targets: [color_target_count_max]BlendTarget = .{ .{}, .{}, .{}, .{}, .{}, .{}, .{}, .{} },
 };
 
 pub const ColorTarget = extern struct {
     format: Format,
-    write_mask: ColorWriteMask = .all,
-    blend: ?*const BlendDesc = null,
 };
 
 pub const ColorTargets = extern struct {
@@ -1092,6 +1092,20 @@ pub fn setDepthStencilState(
     );
 }
 
+pub fn setBlendState(
+    command_buffer: *CommandBuffer,
+    blend_state: *BlendState,
+) void {
+    const f: *const fn (
+        command_buffer: *CommandBuffer,
+        blend_state: *BlendState,
+    ) callconv(@"callconv") void = @ptrCast(internal.table(command_buffer)[internal.slots.set_blend_state]);
+    return f(
+        command_buffer,
+        blend_state,
+    );
+}
+
 pub fn setPipeline(
     command_buffer: *CommandBuffer,
     pipeline: *Pipeline,
@@ -1574,6 +1588,34 @@ pub fn destroyPipeline(
     );
 }
 
+pub fn createBlendState(
+    device: *Device,
+    desc: BlendDesc,
+    blend_state: **BlendState,
+) Result {
+    const f: *const fn (
+        device: *Device,
+        desc: BlendDesc,
+        blend_state: **BlendState,
+    ) callconv(@"callconv") Result = @ptrCast(internal.table(device)[internal.slots.create_blend_state]);
+    return f(
+        device,
+        desc,
+        blend_state,
+    );
+}
+
+pub fn destroyBlendState(
+    blend_state: *BlendState,
+) void {
+    const f: *const fn (
+        blend_state: *BlendState,
+    ) callconv(@"callconv") void = @ptrCast(internal.table(blend_state)[internal.slots.destroy_blend_state]);
+    return f(
+        blend_state,
+    );
+}
+
 pub fn createDepthStencilState(
     device: *Device,
     desc: DepthStencilDesc,
@@ -1660,6 +1702,7 @@ const internal = struct {
         present: usize = 0,
         set_active_texture_heap: usize = 0,
         set_depth_stencil_state: usize = 0,
+        set_blend_state: usize = 0,
         set_pipeline: usize = 0,
         dispatch: usize = 0,
         dispatch_indirect: usize = 0,
@@ -1685,6 +1728,8 @@ const internal = struct {
         create_compute_pipeline: usize = 0,
         create_graphics_pipeline: usize = 0,
         destroy_pipeline: usize = 0,
+        create_blend_state: usize = 0,
+        destroy_blend_state: usize = 0,
         create_depth_stencil_state: usize = 0,
         destroy_depth_stencil_state: usize = 0,
     } = .{};
@@ -1727,6 +1772,7 @@ const internal = struct {
         slots.present = get_slot.?(instance, "scPresent");
         slots.set_active_texture_heap = get_slot.?(instance, "scSetActiveTextureHeap");
         slots.set_depth_stencil_state = get_slot.?(instance, "scSetDepthStencilState");
+        slots.set_blend_state = get_slot.?(instance, "scSetBlendState");
         slots.set_pipeline = get_slot.?(instance, "scSetPipeline");
         slots.dispatch = get_slot.?(instance, "scDispatch");
         slots.dispatch_indirect = get_slot.?(instance, "scDispatchIndirect");
@@ -1752,6 +1798,8 @@ const internal = struct {
         slots.create_compute_pipeline = get_slot.?(instance, "scCreateComputePipeline");
         slots.create_graphics_pipeline = get_slot.?(instance, "scCreateGraphicsPipeline");
         slots.destroy_pipeline = get_slot.?(instance, "scDestroyPipeline");
+        slots.create_blend_state = get_slot.?(instance, "scCreateBlendState");
+        slots.destroy_blend_state = get_slot.?(instance, "scDestroyBlendState");
         slots.create_depth_stencil_state = get_slot.?(instance, "scCreateDepthStencilState");
         slots.destroy_depth_stencil_state = get_slot.?(instance, "scDestroyDepthStencilState");
     }
