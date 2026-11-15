@@ -290,6 +290,12 @@ pub const TextureUsage = packed struct(u32) {
     padding: u28 = 0,
 };
 
+pub const AdapterFeatures = packed struct(u32) {
+    /// ScBlendState is available and pipelines may omit their embedded blend state.
+    blend_state: bool = false,
+    padding: u31 = 0,
+};
+
 /// Format capabilities beyond the guarantees of ScFormat. At least one of BC and ASTC is always available.
 pub const FormatFeatures = packed struct(u32) {
     /// SC_FORMAT_R32_FLOAT to SC_FORMAT_RGBA32_FLOAT support linear filtering and blending.
@@ -404,6 +410,7 @@ pub const AdapterInfo = extern struct {
     /// UTF-8, null-terminated.
     name: [sc.adapter_name_capacity_bytes]u8,
     kind: sc.AdapterKind,
+    features: sc.AdapterFeatures,
     format_features: sc.FormatFeatures,
 };
 
@@ -588,6 +595,8 @@ pub const GraphicsPipelineDesc = extern struct {
     /// SC_FORMAT_NONE for no stencil attachment.
     stencil_format: sc.Format = .none,
     color_targets: sc.ColorTargets = .{},
+    /// Embedded blend state, required without SC_ADAPTER_FEATURES_BLEND_STATE_BIT. NULL to set it dynamically with scSetBlendState.
+    blend: ?*const sc.BlendDesc = null,
 };
 
 pub const StencilDesc = extern struct {

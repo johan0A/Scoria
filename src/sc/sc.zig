@@ -131,6 +131,7 @@ pub const DepthStencilState = opaque {
     pub const destroy = functions.destroyDepthStencilState;
 };
 
+/// Requires `AdapterFeatures.blend_state`.
 pub const BlendState = opaque {
     pub const create = functions.createBlendState;
     pub const destroy = functions.destroyBlendState;
@@ -449,6 +450,13 @@ pub const TextureUsage = packed struct(u32) {
     padding: u28 = 0,
 };
 
+/// Optional capabilities of an adapter.
+pub const AdapterFeatures = packed struct(u32) {
+    /// `BlendState` is available and pipelines may omit their embedded blend state.
+    blend_state: bool = false,
+    padding: u31 = 0,
+};
+
 /// Format capabilities beyond the guarantees of `Format`. At least one of `bc` and `astc` is always available.
 pub const FormatFeatures = packed struct(u32) {
     /// `.r32_float` to `.rgba32_float` support linear filtering and blending.
@@ -573,6 +581,7 @@ pub const AdapterInfo = extern struct {
     /// UTF-8, null-terminated.
     name: [adapter_name_capacity_bytes]u8,
     kind: AdapterKind,
+    features: AdapterFeatures,
     format_features: FormatFeatures,
 };
 
@@ -771,6 +780,9 @@ pub const GraphicsPipelineDesc = extern struct {
     /// `.none` for no stencil attachment.
     stencil_format: Format = .none,
     color_targets: ColorTargets = .{},
+    /// Embedded blend state, required without `AdapterFeatures.blend_state`.
+    /// `null` to set it dynamically with `setBlendState`.
+    blend: ?*const BlendDesc = null,
 };
 
 pub const StencilDesc = extern struct {

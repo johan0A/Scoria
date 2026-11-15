@@ -156,10 +156,14 @@ pub const Instance = struct {
 
     pub fn adapterInfo(instance: *Object(Instance), adapter: *Adapter) sc.AdapterInfo {
         const properties = instance.body().handle.getPhysicalDeviceProperties(adapter.asPhysicalDevice());
+        var arena_impl: std.heap.ArenaAllocator = .init(instance.body().gpa);
+        defer arena_impl.deinit();
+        const support: Adapter.Support = Adapter.Support.query(instance.body(), adapter.asPhysicalDevice(), arena_impl.allocator()) catch @panic("TODO");
         return .{
             .name = properties.device_name,
             .kind = to_sc.adapterKind(properties.device_type),
-            .format_features = Adapter.formatFeatures(instance.body(), adapter.asPhysicalDevice()),
+            .features = .{ .blend_state = support.optional.extended_dynamic_state_3 },
+            .format_features = support.format_features,
         };
     }
 };
@@ -286,7 +290,6 @@ pub const Adapter = opaque {
     const required_extensions = [_][*:0]const u8{
         vk.device_extensions.ext_descriptor_buffer.name,
         vk.device_extensions.ext_mutable_descriptor_type.name,
-        vk.device_extensions.ext_extended_dynamic_state_3.name,
     };
 
     const Features = struct {
@@ -309,6 +312,7 @@ pub const Adapter = opaque {
             present_id_2: bool,
             present_wait_2: bool,
             swapchain_maintenance_1: bool,
+            extended_dynamic_state_3: bool,
         };
         const optional_extensions = .{
             .unified_image_layouts = vk.device_extensions.khr_unified_image_layouts,
@@ -316,9 +320,10 @@ pub const Adapter = opaque {
             .present_id_2 = vk.device_extensions.khr_present_id_2,
             .present_wait_2 = vk.device_extensions.khr_present_wait_2,
             .swapchain_maintenance_1 = vk.device_extensions.khr_swapchain_maintenance_1,
+            .extended_dynamic_state_3 = vk.device_extensions.ext_extended_dynamic_state_3,
         };
 
-        const required: Features = .{
+        const requested: Features = .{
             .core = .{ .features = .{
                 .shader_int_64 = .true,
                 .shader_int_16 = .true,
@@ -353,6 +358,11 @@ pub const Adapter = opaque {
             },
             .descriptor_buffer = .{ .descriptor_buffer = .true },
             .mutable_descriptor_type = .{ .mutable_descriptor_type = .true },
+            .unified_image_layouts = .{ .unified_image_layouts = .true },
+            .dynamic_rendering_local_read = .{ .dynamic_rendering_local_read = .true },
+            .present_id_2 = .{ .present_id_2 = .true },
+            .present_wait_2 = .{ .present_wait_2 = .true },
+            .swapchain_maintenance_1 = .{ .swapchain_maintenance_1 = .true },
             .extended_dynamic_state_3 = .{
                 .extended_dynamic_state_3_color_blend_enable = .true,
                 .extended_dynamic_state_3_color_blend_equation = .true,
@@ -372,8 +382,12 @@ pub const Adapter = opaque {
             return &features.core;
         }
 
-        fn isSubset(this: Features, other: Features) bool {
-            return isSubsetInner(this, other);
+        fn isSubset(this: Features, other: Features, optional: Optional) bool {
+            inline for (comptime std.meta.fieldNames(Features)) |field_name| {
+                const enabled = !@hasField(Optional, field_name) or @field(optional, field_name);
+                if (enabled and !isSubsetInner(@field(this, field_name), @field(other, field_name))) return false;
+            }
+            return true;
         }
         fn isSubsetInner(this: anytype, other: @TypeOf(this)) bool {
             const this_info = @typeInfo(@TypeOf(this)).@"struct";
@@ -416,7 +430,8 @@ pub const Adapter = opaque {
 
             var optional: Features.Optional = undefined;
             inline for (comptime std.meta.fieldNames(Features.Optional)) |field_name| {
-                @field(optional, field_name) = @field(available, field_name) and @field(@field(supported, field_name), field_name) == .true;
+                @field(optional, field_name) = @field(available, field_name) and
+                    Features.isSubsetInner(@field(Features.requested, field_name), @field(supported, field_name));
             }
 
             const queue_families = try instance.handle.getPhysicalDeviceQueueFamilyPropertiesAlloc(physical_device, arena);
@@ -434,7 +449,7 @@ pub const Adapter = opaque {
             const has_formats = (format_features.bc or format_features.astc) and has_required_formats;
 
             return .{
-                .compatible = has_graphics_queue and has_formats and Features.isSubset(Features.required, supported),
+                .compatible = has_graphics_queue and has_formats and Features.isSubset(Features.requested, supported, optional),
                 .swapchain = swapchain,
                 .optional = optional,
                 .format_features = format_features,
@@ -662,7 +677,7 @@ pub const Device = struct {
             queue_index_from_kind.set(kind, @intCast(index));
         }
 
-        var features = Adapter.Features.required;
+        var features = Adapter.Features.requested;
         features.core.features.texture_compression_bc = if (support.format_features.bc) .true else .false;
         features.core.features.texture_compression_astc_ldr = if (support.format_features.astc) .true else .false;
 
@@ -671,7 +686,6 @@ pub const Device = struct {
         extensions.appendSliceAssumeCapacity(&Adapter.required_extensions);
         if (support.swapchain) extensions.appendAssumeCapacity(vk.device_extensions.khr_swapchain.name);
         inline for (@typeInfo(Adapter.Features.Optional).@"struct".field_names) |field_name| {
-            @field(@field(features, field_name), field_name) = .true;
             if (@field(support.optional, field_name)) {
                 extensions.appendAssumeCapacity(@field(Adapter.Features.optional_extensions, field_name).name);
             }
@@ -1644,6 +1658,9 @@ pub const CommandBuffer = struct {
     pipeline_bind_point: vk.PipelineBindPoint = undefined,
     texture_heap_address: ?vk.DeviceAddress = null,
     in_render_pass: bool = false,
+    // copied so it can be re-applied after a pipeline with embedded blend state overwrote it
+    blend_state: BlendState = undefined,
+    blend_state_embedded: bool = false,
 
     d: *Device,
 
@@ -1664,6 +1681,11 @@ pub const CommandBuffer = struct {
         cb.d.handle.cmdBindPipeline(cb.handle, pipeline.bind_point, pipeline.handle);
         cb.pipeline_layout = pipeline.pipeline_layout;
         cb.pipeline_bind_point = pipeline.bind_point;
+        if (pipeline.bind_point == .graphics) {
+            const blend_was_embedded = cb.blend_state_embedded;
+            cb.blend_state_embedded = pipeline.blend_state_embedded;
+            if (blend_was_embedded and !pipeline.blend_state_embedded and cb.in_render_pass) cb.applyBlendState();
+        }
         cb.d.handle.cmdBindDescriptorBufferEmbeddedSamplersEXT(cb.handle, pipeline.bind_point, pipeline.pipeline_layout, 1);
         if (cb.texture_heap_address != null) cb.setDescriptorBufferOffsets();
     }
@@ -1712,10 +1734,8 @@ pub const CommandBuffer = struct {
 
     pub fn setBlendState(cb_obj: *Object(CommandBuffer), blend_state_obj: *Object(BlendState)) void {
         const cb = cb_obj.body();
-        const blend_state = blend_state_obj.body();
-        cb.d.handle.cmdSetColorBlendEnableEXT(cb.handle, 0, &blend_state.enables);
-        cb.d.handle.cmdSetColorBlendEquationEXT(cb.handle, 0, &blend_state.equations);
-        cb.d.handle.cmdSetColorWriteMaskEXT(cb.handle, 0, &blend_state.write_masks);
+        cb.blend_state = blend_state_obj.body().*;
+        if (!cb.blend_state_embedded) cb.applyBlendState();
     }
 
     pub fn dispatch(
@@ -1936,22 +1956,8 @@ pub const CommandBuffer = struct {
         cb.d.handle.cmdSetDepthCompareOp(cb.handle, .always);
         cb.d.handle.cmdSetDepthBiasEnable(cb.handle, .false);
         cb.d.handle.cmdSetStencilTestEnable(cb.handle, .false);
-        // default blend state: blending disabled, all channels written
-        if (color_targets.len != 0) {
-            const enables: [sc.color_target_count_max]vk.Bool32 = @splat(.false);
-            const equations: [sc.color_target_count_max]vk.ColorBlendEquationEXT = @splat(.{
-                .src_color_blend_factor = .one,
-                .dst_color_blend_factor = .zero,
-                .color_blend_op = .add,
-                .src_alpha_blend_factor = .one,
-                .dst_alpha_blend_factor = .zero,
-                .alpha_blend_op = .add,
-            });
-            const write_masks: [sc.color_target_count_max]vk.ColorComponentFlags = @splat(.{ .r = true, .g = true, .b = true, .a = true });
-            cb.d.handle.cmdSetColorBlendEnableEXT(cb.handle, 0, enables[0..color_targets.len]);
-            cb.d.handle.cmdSetColorBlendEquationEXT(cb.handle, 0, equations[0..color_targets.len]);
-            cb.d.handle.cmdSetColorWriteMaskEXT(cb.handle, 0, write_masks[0..color_targets.len]);
-        }
+        cb.blend_state = .fromDesc(cb.d, .{});
+        if (cb.d.optional_features.extended_dynamic_state_3 and !cb.blend_state_embedded) cb.applyBlendState();
     }
     fn renderingAttachment(
         texture: *sc.Texture,
@@ -1973,6 +1979,11 @@ pub const CommandBuffer = struct {
     fn textureFromHandle(texture: *sc.Texture) *Texture {
         const texture_obj: *Object(Texture) = @ptrCast(@alignCast(texture));
         return texture_obj.body();
+    }
+    fn applyBlendState(cb: *CommandBuffer) void {
+        cb.d.handle.cmdSetColorBlendEnableEXT(cb.handle, 0, &cb.blend_state.enables);
+        cb.d.handle.cmdSetColorBlendEquationEXT(cb.handle, 0, &cb.blend_state.equations);
+        cb.d.handle.cmdSetColorWriteMaskEXT(cb.handle, 0, &cb.blend_state.write_masks);
     }
 
     pub fn endRenderPass(cb_obj: *Object(CommandBuffer)) void {
@@ -2097,7 +2108,13 @@ pub const BlendState = struct {
     d: *Device,
 
     pub fn create(d: *Object(Device), desc: sc.BlendDesc, blend_state: **Object(BlendState)) !void {
-        var state: BlendState = .{ .enables = undefined, .equations = undefined, .write_masks = undefined, .d = d.body() };
+        std.debug.assert(d.body().optional_features.extended_dynamic_state_3);
+        blend_state.* = try d.body().blend_states.create(d.body().gpa);
+        blend_state.*.set(d.body().table, .fromDesc(d.body(), desc));
+    }
+
+    fn fromDesc(d: *Device, desc: sc.BlendDesc) BlendState {
+        var state: BlendState = .{ .enables = undefined, .equations = undefined, .write_masks = undefined, .d = d };
         for (desc.targets, &state.enables, &state.equations, &state.write_masks) |target, *enable, *equation, *write_mask| {
             enable.* = .fromBool(!std.meta.eql(target.color, sc.BlendComponent{}) or !std.meta.eql(target.alpha, sc.BlendComponent{}));
             equation.* = .{
@@ -2110,8 +2127,7 @@ pub const BlendState = struct {
             };
             write_mask.* = to_vk.writeMask(target.write_mask);
         }
-        blend_state.* = try d.body().blend_states.create(d.body().gpa);
-        blend_state.*.set(d.body().table, state);
+        return state;
     }
 
     pub fn destroy(blend_state: *Object(BlendState)) void {
@@ -2302,6 +2318,7 @@ pub const Pipeline = struct {
     handle: vk.Pipeline = .null,
     pipeline_layout: vk.PipelineLayout = .null,
     bind_point: vk.PipelineBindPoint,
+    blend_state_embedded: bool = false,
 
     samplers: []vk.Sampler = &.{},
     sampler_set_layout: vk.DescriptorSetLayout = .null,
@@ -2374,7 +2391,7 @@ pub const Pipeline = struct {
         std.debug.assert(color_targets.len <= 8);
         const shaders = [_]scir.Shader{ try scir.parse(vertex_ir), try scir.parse(pixel_ir) };
 
-        var pipeline: Pipeline = .{ .bind_point = .graphics, .d = d };
+        var pipeline: Pipeline = .{ .bind_point = .graphics, .blend_state_embedded = desc.blend != null, .d = d };
         errdefer pipeline.deinit();
         try pipeline.createLayout(&shaders, .{ .vertex = true, .fragment = true }, 2);
 
@@ -2406,10 +2423,32 @@ pub const Pipeline = struct {
             .stencil_compare_mask,
             .stencil_write_mask,
             .stencil_reference,
+
+            // must stay last, dropped when blend is embedded
             .color_blend_enable_ext,
             .color_blend_equation_ext,
             .color_write_mask_ext,
         };
+        std.debug.assert(desc.blend != null or d.optional_features.extended_dynamic_state_3);
+        const dynamic_state_count: u32 = if (desc.blend == null) dynamic_states.len else dynamic_states.len - 3;
+
+        var blend_attachments: [sc.color_target_count_max]vk.PipelineColorBlendAttachmentState = undefined;
+        if (desc.blend) |blend| {
+            const state: BlendState = .fromDesc(d, blend.*);
+            for (&blend_attachments, state.enables, state.equations, state.write_masks) |*attachment, enable, equation, write_mask| {
+                attachment.* = .{
+                    .blend_enable = enable,
+                    .src_color_blend_factor = equation.src_color_blend_factor,
+                    .dst_color_blend_factor = equation.dst_color_blend_factor,
+                    .color_blend_op = equation.color_blend_op,
+                    .src_alpha_blend_factor = equation.src_alpha_blend_factor,
+                    .dst_alpha_blend_factor = equation.dst_alpha_blend_factor,
+                    .alpha_blend_op = equation.alpha_blend_op,
+                    .color_write_mask = write_mask,
+                };
+            }
+        }
+
         const rendering_info: vk.PipelineRenderingCreateInfo = .{
             .view_mask = 0,
             .color_attachment_count = @intCast(color_targets.len),
@@ -2463,10 +2502,10 @@ pub const Pipeline = struct {
                 .logic_op_enable = .false,
                 .logic_op = .copy,
                 .attachment_count = @intCast(color_targets.len),
-                .p_attachments = null,
+                .p_attachments = if (desc.blend != null) &blend_attachments else null,
                 .blend_constants = .{ 0, 0, 0, 0 },
             },
-            .p_dynamic_state = &.{ .dynamic_state_count = dynamic_states.len, .p_dynamic_states = &dynamic_states },
+            .p_dynamic_state = &.{ .dynamic_state_count = dynamic_state_count, .p_dynamic_states = &dynamic_states },
             .layout = pipeline.pipeline_layout,
             .render_pass = .null,
             .subpass = 0,

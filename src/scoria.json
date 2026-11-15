@@ -159,6 +159,7 @@
       "fields": [
         { "name": "name", "type": { "base": "uint8_t", "array": "ADAPTER_NAME_CAPACITY_BYTES" }, "doc": "UTF-8, null-terminated." },
         { "name": "kind", "type": { "base": "ScAdapterKind" }, "doc": "" },
+        { "name": "features", "type": { "base": "ScAdapterFeatures" }, "doc": "" },
         { "name": "format_features", "type": { "base": "ScFormatFeatures" }, "doc": "" }
       ],
       "doc": ""
@@ -397,7 +398,8 @@
         { "name": "sample_count", "type": { "base": "uint32_t" }, "default": 1, "doc": "Must match the sample count of every attachment of the render pass." },
         { "name": "depth_format", "type": { "base": "ScFormat" }, "default": "SC_FORMAT_NONE", "doc": "SC_FORMAT_NONE for no depth attachment." },
         { "name": "stencil_format", "type": { "base": "ScFormat" }, "default": "SC_FORMAT_NONE", "doc": "SC_FORMAT_NONE for no stencil attachment." },
-        { "name": "color_targets", "type": { "base": "ScColorTargets" }, "default": {}, "doc": "" }
+        { "name": "color_targets", "type": { "base": "ScColorTargets" }, "default": {}, "doc": "" },
+        { "name": "blend", "type": { "base": "ScBlendDesc", "ptr": [{ "const": true, "optional": true }] }, "default": null, "doc": "Embedded blend state, required without SC_ADAPTER_FEATURES_BLEND_STATE_BIT. NULL to set it dynamically with scSetBlendState." }
       ],
       "doc": ""
     },
@@ -762,6 +764,15 @@
         { "name": "SC_TEXTURE_USAGE_STORAGE_BIT", "bit": 1, "doc": "" },
         { "name": "SC_TEXTURE_USAGE_COLOR_ATTACHMENT_BIT", "bit": 2, "doc": "" },
         { "name": "SC_TEXTURE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT", "bit": 3, "doc": "" }
+      ],
+      "combinations": [],
+      "doc": ""
+    },
+    {
+      "name": "ScAdapterFeatures",
+      "backing_type": "uint32_t",
+      "bits": [
+        { "name": "SC_ADAPTER_FEATURES_BLEND_STATE_BIT", "bit": 0, "doc": "ScBlendState is available and pipelines may omit their embedded blend state." }
       ],
       "combinations": [],
       "doc": ""
@@ -1642,7 +1653,7 @@
         { "name": "desc", "type": { "base": "ScBlendDesc" }, "doc": "" },
         { "name": "blend_state", "type": { "base": "ScBlendState", "ptr": [{}, {}] }, "out": true, "doc": "" }
       ],
-      "doc": ""
+      "doc": "Requires SC_ADAPTER_FEATURES_BLEND_STATE_BIT."
     },
     {
       "name": "scDestroyBlendState",

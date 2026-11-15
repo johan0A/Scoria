@@ -1241,6 +1241,7 @@ pub fn destroyPipeline(
     );
 }
 
+/// Requires SC_ADAPTER_FEATURES_BLEND_STATE_BIT.
 pub fn createBlendState(
     device: *sc.Device,
     desc: sc.BlendDesc,
