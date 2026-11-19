@@ -64,7 +64,7 @@ fn checkType(comptime Actual: type, comptime Expected: type, comptime path: []co
                 const name = actual.field_names[index];
                 const field_path = path ++ "." ++ name;
 
-                const is_size_align_alignment = Actual == sc.SizeAlign and std.mem.eql(u8, name, "alignment_byte_units");
+                const is_size_align_alignment = Actual == sc.SizeAlign and std.mem.eql(u8, name, "alignment_bytes");
                 const registry_name: []const u8 = if (is_size_align_alignment) "alignment" else name;
 
                 if (!std.mem.eql(u8, registry_name, expected.field_names[index])) {

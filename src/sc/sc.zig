@@ -11,6 +11,7 @@ pub const Slice = heap.Slice;
 pub const DeviceAllocator = heap.DeviceAllocator;
 pub const DescriptorHeap = @import("DescriptorHeap.zig");
 pub const DescriptorAllocator = @import("DescriptorAllocator.zig");
+pub const DeletionQueue = @import("DeletionQueue.zig");
 
 pub const @"callconv": std.lang.CallingConvention = switch (target.os.tag) {
     .windows => if (target.cpu.arch == .x86) .{ .x86_stdcall = .{} } else .c,
@@ -570,10 +571,10 @@ pub const DepthBias = extern struct {
 
 pub const SizeAlign = extern struct {
     size: usize,
-    alignment_byte_units: usize,
+    alignment_bytes: usize,
 
     pub fn alignment(size_align: SizeAlign) std.mem.Alignment {
-        return .fromByteUnits(size_align.alignment_byte_units);
+        return .fromByteUnits(size_align.alignment_bytes);
     }
 };
 

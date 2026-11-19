@@ -73,12 +73,9 @@ pub fn main(init: std.process.Init) !void {
     defer frame_timeline.destroy();
 
     var command_pools: [frames_in_flight]*sc.CommandPool = undefined;
-    var command_pool_count: usize = 0;
-    defer for (command_pools[0..command_pool_count]) |command_pool| command_pool.destroy();
-    for (&command_pools) |*command_pool| {
-        command_pool.* = try .create(queue);
-        command_pool_count += 1;
-    }
+    var inited_command_pools: std.ArrayList(*sc.CommandPool) = .initBuffer(&command_pools);
+    defer for (inited_command_pools.items) |command_pool| command_pool.destroy();
+    for (0..command_pools.len) |_| inited_command_pools.appendAssumeCapacity(try .create(queue));
 
     const positions_map = try gpu_arena.create([vertex_count][3]f32, .upload);
     positions_map.host.* = .{

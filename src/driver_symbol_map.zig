@@ -306,7 +306,7 @@ fn Functions(handle_types: HandleTypes) type {
         createTexture: fn (
             device: *handle_types.Device,
             desc: sc.TextureDesc,
-            data: sc.DeviceAddress,
+            memory: sc.DeviceAddress,
             texture: **handle_types.Texture,
         ) error{
             OutOfMemory,
@@ -974,13 +974,13 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
         pub fn createTexture(
             device: *handle_types.Device,
             desc: sc.TextureDesc,
-            data: sc.DeviceAddress,
+            memory: sc.DeviceAddress,
             texture: **handle_types.Texture,
         ) callconv(sc.@"callconv") sc.Result {
             return cResult(functions.createTexture(
                 device,
                 desc,
-                data,
+                memory,
                 texture,
             ));
         }

@@ -1475,19 +1475,19 @@ pub fn textureSampleCountMax(
 pub fn createTexture(
     device: *Device,
     desc: TextureDesc,
-    data: DeviceAddress,
+    memory: DeviceAddress,
     texture: **Texture,
 ) Result {
     const f: *const fn (
         device: *Device,
         desc: TextureDesc,
-        data: DeviceAddress,
+        memory: DeviceAddress,
         texture: **Texture,
     ) callconv(@"callconv") Result = @ptrCast(internal.table(device)[internal.slots.create_texture]);
     return f(
         device,
         desc,
-        data,
+        memory,
         texture,
     );
 }

@@ -1536,7 +1536,7 @@
       "params": [
         { "name": "device", "type": { "base": "ScDevice", "ptr": [{}] }, "doc": "" },
         { "name": "desc", "type": { "base": "ScTextureDesc" }, "doc": "" },
-        { "name": "data", "type": { "base": "uint8_t", "device_ptr": [{ "len": "none" }] }, "doc": "" },
+        { "name": "memory", "type": { "base": "uint8_t", "device_ptr": [{ "len": "none" }] }, "doc": "" },
         { "name": "texture", "type": { "base": "ScTexture", "ptr": [{}, {}] }, "out": true, "doc": "" }
       ],
       "doc": ""

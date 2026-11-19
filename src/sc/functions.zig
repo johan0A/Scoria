@@ -1050,7 +1050,7 @@ pub fn textureSampleCountMax(
 pub fn createTexture(
     device: *sc.Device,
     desc: sc.TextureDesc,
-    data: Ptr(.many, u8, .{}),
+    memory: Ptr(.many, u8, .{}),
 ) error{
     OutOfMemory,
     OutOfDeviceMemory,
@@ -1059,14 +1059,14 @@ pub fn createTexture(
     const f: *const fn (
         device: *sc.Device,
         desc: sc.TextureDesc,
-        data: Ptr(.many, u8, .{}),
+        memory: Ptr(.many, u8, .{}),
         texture: **sc.Texture,
     ) callconv(@"callconv") sc.Result = @ptrCast(internal.table(device)[internal.slots.create_texture]);
     var texture: *sc.Texture = undefined;
     const result = f(
         device,
         desc,
-        data,
+        memory,
         &texture,
     );
     switch (result) {
