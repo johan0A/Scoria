@@ -39,7 +39,7 @@ pub fn push(
     gpa: std.mem.Allocator,
     timeline_value: u64,
     comptime function: anytype,
-    args: std.meta.ArgsTuple(@TypeOf(function)),
+    args: anytype,
 ) !void {
     try queue.ensureUnusedCapacity(gpa, 1);
     queue.pushAssumeCapacity(timeline_value, function, args);
@@ -49,7 +49,7 @@ pub fn pushAssumeCapacity(
     queue: *DeletionQueue,
     timeline_value: u64,
     comptime function: anytype,
-    args: std.meta.ArgsTuple(@TypeOf(function)),
+    args: anytype,
 ) void {
     const Args = @TypeOf(args);
     if (@sizeOf(Args) > Callback.args_capacity_bytes) @compileError("args size too large");
@@ -83,6 +83,9 @@ test {
         fn append(order: *std.ArrayList(u32), id: u32) void {
             order.appendAssumeCapacity(id);
         }
+        fn appendGeneric(comptime T: type, order: *std.ArrayList(T), id: anytype) void {
+            order.appendAssumeCapacity(@intCast(id));
+        }
     };
     var order_buffer: [8]u32 = undefined;
     var order: std.ArrayList(u32) = .initBuffer(&order_buffer);
@@ -90,13 +93,16 @@ test {
     try queue.push(gpa, 1, local.append, .{ &order, 10 });
     try queue.push(gpa, 1, local.append, .{ &order, 11 });
     try queue.push(gpa, 2, local.append, .{ &order, 20 });
+    var id_runtime: u64 = 21;
+    _ = &id_runtime;
+    try queue.push(gpa, 2, local.appendGeneric, .{ u32, &order, id_runtime });
     try queue.ensureUnusedCapacity(gpa, 1);
     queue.pushAssumeCapacity(3, local.append, .{ &order, 30 });
 
     queue.flush(0);
     try std.testing.expectEqualSlices(u32, &.{}, order.items);
     queue.flush(2);
-    try std.testing.expectEqualSlices(u32, &.{ 10, 11, 20 }, order.items);
+    try std.testing.expectEqualSlices(u32, &.{ 10, 11, 20, 21 }, order.items);
     queue.flush(std.math.maxInt(u64));
-    try std.testing.expectEqualSlices(u32, &.{ 10, 11, 20, 30 }, order.items);
+    try std.testing.expectEqualSlices(u32, &.{ 10, 11, 20, 21, 30 }, order.items);
 }
