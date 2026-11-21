@@ -18,7 +18,7 @@ const Callback = struct {
 
 pub fn initCapacity(gpa: std.mem.Allocator, count: usize) !DeletionQueue {
     var queue: DeletionQueue = .empty;
-    try queue.callbacks.ensureUnusedCapacity(gpa, count);
+    try queue.ensureUnusedCapacity(gpa, count);
     return queue;
 }
 
@@ -29,6 +29,10 @@ pub fn deinit(queue: *DeletionQueue, gpa: std.mem.Allocator) void {
     queue.* = undefined;
 }
 
+pub fn ensureUnusedCapacity(queue: *DeletionQueue, gpa: std.mem.Allocator, count: usize) !void {
+    try queue.callbacks.ensureUnusedCapacity(gpa, count);
+}
+
 // args must be bellow 128 bytes and have a lower than 16 bytes alignement
 pub fn push(
     queue: *DeletionQueue,
@@ -37,6 +41,16 @@ pub fn push(
     comptime function: anytype,
     args: std.meta.ArgsTuple(@TypeOf(function)),
 ) !void {
+    try queue.ensureUnusedCapacity(gpa, 1);
+    queue.pushAssumeCapacity(timeline_value, function, args);
+}
+
+pub fn pushAssumeCapacity(
+    queue: *DeletionQueue,
+    timeline_value: u64,
+    comptime function: anytype,
+    args: std.meta.ArgsTuple(@TypeOf(function)),
+) void {
     const Args = @TypeOf(args);
     if (@sizeOf(Args) > Callback.args_capacity_bytes) @compileError("args size too large");
     if (@alignOf(Args) > Callback.args_alignment) @compileError("args alignement too large");
@@ -49,7 +63,7 @@ pub fn push(
     };
     var callback: Callback = .{ .function = local.call, .args = undefined, .timeline_value = timeline_value };
     @as(*Args, @ptrCast(&callback.args)).* = args;
-    try queue.callbacks.pushFirst(gpa, callback);
+    queue.callbacks.pushFirstAssumeCapacity(callback);
 }
 
 pub fn flush(queue: *DeletionQueue, timeline_value: u64) void {
@@ -76,7 +90,8 @@ test {
     try queue.push(gpa, 1, local.append, .{ &order, 10 });
     try queue.push(gpa, 1, local.append, .{ &order, 11 });
     try queue.push(gpa, 2, local.append, .{ &order, 20 });
-    try queue.push(gpa, 3, local.append, .{ &order, 30 });
+    try queue.ensureUnusedCapacity(gpa, 1);
+    queue.pushAssumeCapacity(3, local.append, .{ &order, 30 });
 
     queue.flush(0);
     try std.testing.expectEqualSlices(u32, &.{}, order.items);
