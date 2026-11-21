@@ -24,6 +24,28 @@ pub const adapter_name_capacity_bytes: usize = 256;
 
 pub const DeviceAddress = u64;
 
+pub const OwnedTexture = struct {
+    texture: *Texture,
+    memory: Slice(u8, .{}),
+    alignment: std.mem.Alignment,
+
+    pub fn create(device: *Device, gpa: DeviceAllocator, desc: TextureDesc) !OwnedTexture {
+        const size_align = device.textureSizeAlign(desc);
+        const memory = try gpa.runtimeAlignedAlloc(u8, size_align.alignment(), size_align.size, .device_local);
+        errdefer gpa.runtimeAlignedfree(memory.device(), size_align.alignment(), .device_local);
+        return .{
+            .texture = try .create(device, desc, memory.device_ptr),
+            .memory = memory.device(),
+            .alignment = size_align.alignment(),
+        };
+    }
+
+    pub fn destroy(texture: OwnedTexture, gpa: DeviceAllocator) void {
+        texture.texture.destroy();
+        gpa.runtimeAlignedfree(texture.memory, texture.alignment, .device_local);
+    }
+};
+
 pub const Instance = opaque {
     pub const create = functions.createInstance;
     pub const destroy = functions.destroyInstance;
