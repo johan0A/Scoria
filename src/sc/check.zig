@@ -75,13 +75,13 @@ fn checkType(comptime Actual: type, comptime Expected: type, comptime path: []co
                 if (actual.field_types[index] != Field) {
                     fail(field_path, "expected type '{s}', found '{s}'", .{ @typeName(Field), @typeName(actual.field_types[index]) });
                 }
-                const actual_attrs = actual.field_attrs[index];
-                const expected_attrs = expected.field_attrs[index];
-                if (actual_attrs.@"align" != expected_attrs.@"align") {
-                    fail(field_path, "expected alignment {?d}, found {?d}", .{ expected_attrs.@"align", actual_attrs.@"align" });
+                const actual_attributes = actual.field_attrs[index];
+                const expected_attributes = expected.field_attrs[index];
+                if (actual_attributes.@"align" != expected_attributes.@"align") {
+                    fail(field_path, "expected alignment {?d}, found {?d}", .{ expected_attributes.@"align", actual_attributes.@"align" });
                 }
-                const actual_default = actual_attrs.defaultValue(Field);
-                const expected_default = expected_attrs.defaultValue(Field);
+                const actual_default = actual_attributes.defaultValue(Field);
+                const expected_default = expected_attributes.defaultValue(Field);
                 if (!std.meta.eql(actual_default, expected_default)) {
                     fail(field_path, "expected default {any}, found {any}", .{ expected_default, actual_default });
                 }

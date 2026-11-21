@@ -30,13 +30,13 @@ pub fn Ptr(
         pub const @"null": @This() = if (attributes.optional) .{ .addr = 0 } else @compileError("pointer is not optional");
 
         pub const Host = blk: {
-            const H = @Pointer(switch (size) {
+            const HostPointer = @Pointer(switch (size) {
                 .one => .one,
                 .many => .many,
             }, .{
                 .@"align" = if (attributes.@"align") |a| a.toByteUnits() else null,
             }, Element, null);
-            break :blk if (attributes.optional) ?H else H;
+            break :blk if (attributes.optional) ?HostPointer else HostPointer;
         };
 
         pub const info: PointerInfo = .{
@@ -45,7 +45,7 @@ pub fn Ptr(
             .attributes = attributes,
         };
 
-        pub const alignment: ?std.mem.Alignment = if (attributes.@"align") |a| a else switch (Element) {
+        pub const alignment: ?std.mem.Alignment = attributes.@"align" orelse switch (Element) {
             anyopaque => null, // TODO: replace with @compileError("no align available for uninstantiable type 'anyopaque'")
             else => .of(Element),
         };
@@ -72,11 +72,11 @@ pub fn Ptr(
         }
 
         pub fn as(ptr: anytype) @This() {
-            const Src = @TypeOf(ptr);
+            const Source = @TypeOf(ptr);
             comptime {
-                if (!isDevicePtr(Src))
-                    @compileError("expected a device pointer, found '" ++ @typeName(Src) ++ "'");
-                _ = @as(Host, @as(Src.Host, undefined));
+                if (!isDevicePtr(Source))
+                    @compileError("expected a device pointer, found '" ++ @typeName(Source) ++ "'");
+                _ = @as(Host, @as(Source.Host, undefined));
             }
             return .{ .addr = ptr.addr };
         }
@@ -85,22 +85,22 @@ pub fn Ptr(
             comptime blk: {
                 if (!isDevicePtr(@TypeOf(ptr)))
                     @compileError("expected a device pointer, found '" ++ @typeName(@TypeOf(ptr)) ++ "'");
-                const ptr_align = @TypeOf(ptr).alignment orelse break :blk;
-                const this_align = alignment orelse break :blk;
-                if (this_align.compare(.gt, ptr_align))
+                const source_alignment = @TypeOf(ptr).alignment orelse break :blk;
+                const destination_alignment = alignment orelse break :blk;
+                if (destination_alignment.compare(.gt, source_alignment))
                     @compileError("cast increases pointer alignment; use alignCast");
             }
             return .{ .addr = ptr.addr };
         }
 
         pub fn alignCast(ptr: anytype) @This() {
-            const Src = @TypeOf(ptr);
+            const Source = @TypeOf(ptr);
             comptime {
-                if (!isDevicePtr(Src))
-                    @compileError("expected a device pointer, found '" ++ @typeName(Src) ++ "'");
-                var a = Src.info.attributes;
+                if (!isDevicePtr(Source))
+                    @compileError("expected a device pointer, found '" ++ @typeName(Source) ++ "'");
+                var a = Source.info.attributes;
                 a.@"align" = attributes.@"align";
-                _ = @as(Host, @as(Ptr(Src.info.size, Src.info.Element, a).Host, undefined));
+                _ = @as(Host, @as(Ptr(Source.info.size, Source.info.Element, a).Host, undefined));
             }
             return .fromInt(ptr.addr);
         }
@@ -126,7 +126,7 @@ pub fn Ptr(
             return .{ .addr = ptr.addr + n * @sizeOf(Element) };
         }
 
-        /// equivalent of `&ptr[index]`
+        /// Equivalent of `&ptr[index]`.
         pub fn elementPtr(ptr: @This(), index: u64) Ptr(.one, Element, element_attributes) {
             if (size != .many) @compileError("expected a many item pointer");
             if (attributes.optional) @compileError("cannot be optional");
@@ -164,63 +164,63 @@ pub fn Slice(
         };
 
         pub const Host = blk: {
-            const H = @Pointer(.slice, .{
+            const HostPointer = @Pointer(.slice, .{
                 .@"align" = if (attributes.@"align") |a| a.toByteUnits() else null,
             }, Element, null);
-            break :blk if (attributes.optional) ?H else H;
+            break :blk if (attributes.optional) ?HostPointer else HostPointer;
         };
 
         pub const empty: @This() = .{ .ptr = .empty, .len = 0 };
 
-        pub fn as(src: anytype) @This() {
-            const Src = @TypeOf(src);
+        pub fn as(source: anytype) @This() {
+            const Source = @TypeOf(source);
             comptime {
-                if (!isDeviceSlice(Src) and !isDevicePtr(Src))
-                    @compileError("expected a device pointer or slice, found '" ++ @typeName(Src) ++ "'");
-                _ = @as(Host, @as(Src.Host, undefined));
+                if (!isDeviceSlice(Source) and !isDevicePtr(Source))
+                    @compileError("expected a device pointer or slice, found '" ++ @typeName(Source) ++ "'");
+                _ = @as(Host, @as(Source.Host, undefined));
             }
-            if (comptime isDeviceSlice(Src)) {
-                return .{ .ptr = .{ .addr = src.ptr.addr }, .len = src.len };
+            if (comptime isDeviceSlice(Source)) {
+                return .{ .ptr = .{ .addr = source.ptr.addr }, .len = source.len };
             } else {
                 return .{
-                    .ptr = .{ .addr = src.addr },
-                    .len = @typeInfo(Src.info.Element).array.len,
+                    .ptr = .{ .addr = source.addr },
+                    .len = @typeInfo(Source.info.Element).array.len,
                 };
             }
         }
 
-        pub fn ptrCast(src: anytype) @This() {
-            const Src = @TypeOf(src);
-            comptime if (!isDeviceSlice(Src))
-                @compileError("expected a device slice, found '" ++ @typeName(Src) ++ "'");
-            const byte_len = src.len * @sizeOf(Src.info.Element);
-            std.debug.assert(byte_len % @sizeOf(Element) == 0);
+        pub fn ptrCast(source: anytype) @This() {
+            const Source = @TypeOf(source);
+            comptime if (!isDeviceSlice(Source))
+                @compileError("expected a device slice, found '" ++ @typeName(Source) ++ "'");
+            const byte_count = source.len * @sizeOf(Source.info.Element);
+            std.debug.assert(byte_count % @sizeOf(Element) == 0);
             return .{
-                .ptr = .ptrCast(src.ptr),
-                .len = byte_len / @sizeOf(Element),
+                .ptr = .ptrCast(source.ptr),
+                .len = byte_count / @sizeOf(Element),
             };
         }
 
-        pub fn alignCast(src: anytype) @This() {
-            const Src = @TypeOf(src);
+        pub fn alignCast(source: anytype) @This() {
+            const Source = @TypeOf(source);
             comptime {
-                if (!isDeviceSlice(Src))
-                    @compileError("expected a device slice, found '" ++ @typeName(Src) ++ "'");
-                var a = Src.info.attributes;
+                if (!isDeviceSlice(Source))
+                    @compileError("expected a device slice, found '" ++ @typeName(Source) ++ "'");
+                var a = Source.info.attributes;
                 a.@"align" = attributes.@"align";
-                _ = @as(Host, @as(Slice(Src.info.Element, a).Host, undefined));
+                _ = @as(Host, @as(Slice(Source.info.Element, a).Host, undefined));
             }
-            return .{ .ptr = .fromInt(src.ptr.addr), .len = src.len };
+            return .{ .ptr = .fromInt(source.ptr.addr), .len = source.len };
         }
 
-        pub fn asBytes(self: @This()) Slice(u8, blk: {
+        pub fn asBytes(slice: @This()) Slice(u8, blk: {
             var a = attributes;
-            a.@"align" = @TypeOf(self.ptr).alignment;
+            a.@"align" = @TypeOf(slice.ptr).alignment;
             break :blk a;
         }) {
             return .{
-                .ptr = .{ .addr = self.ptr.addr },
-                .len = self.len * @sizeOf(Element),
+                .ptr = .{ .addr = slice.ptr.addr },
+                .len = slice.len * @sizeOf(Element),
             };
         }
     };
@@ -290,121 +290,121 @@ pub const DeviceAllocator = struct {
     vtable: *const VTable,
 
     pub const VTable = struct {
-        alloc: *const fn (*anyopaque, len: usize, alignment: Alignment, memory_type: sc.MemoryKind, ret_addr: usize) Error!sc.HostDeviceAddress,
-        free: *const fn (*anyopaque, memory: ByteSlice, alignment: Alignment, memory_type: sc.MemoryKind, ret_addr: usize) void,
+        alloc: *const fn (*anyopaque, size: usize, alignment: Alignment, memory_kind: sc.MemoryKind, ret_addr: usize) Error!sc.HostDeviceAddress,
+        free: *const fn (*anyopaque, memory: ByteSlice, alignment: Alignment, memory_kind: sc.MemoryKind, ret_addr: usize) void,
     };
 
     pub fn noAlloc(
-        self: *anyopaque,
-        len: usize,
+        context: *anyopaque,
+        size: usize,
         alignment: Alignment,
-        memory_type: sc.MemoryKind,
+        memory_kind: sc.MemoryKind,
         ret_addr: usize,
     ) Error!sc.HostDeviceAddress {
-        _ = self;
-        _ = len;
+        _ = context;
+        _ = size;
         _ = alignment;
-        _ = memory_type;
+        _ = memory_kind;
         _ = ret_addr;
         return error.OutOfDeviceMemory;
     }
 
     pub fn noFree(
-        self: *anyopaque,
+        context: *anyopaque,
         memory: ByteSlice,
         alignment: Alignment,
-        memory_type: sc.MemoryKind,
+        memory_kind: sc.MemoryKind,
         ret_addr: usize,
     ) void {
-        _ = self;
+        _ = context;
         _ = memory;
         _ = alignment;
-        _ = memory_type;
+        _ = memory_kind;
         _ = ret_addr;
     }
 
-    pub inline fn rawAlloc(a: DeviceAllocator, len: usize, alignment: Alignment, memory_type: sc.MemoryKind, ret_addr: usize) Error!sc.HostDeviceAddress {
-        return a.vtable.alloc(a.ptr, len, alignment, memory_type, ret_addr);
+    pub inline fn rawAlloc(a: DeviceAllocator, size: usize, alignment: Alignment, memory_kind: sc.MemoryKind, ret_addr: usize) Error!sc.HostDeviceAddress {
+        return a.vtable.alloc(a.ptr, size, alignment, memory_kind, ret_addr);
     }
 
-    pub inline fn rawFree(a: DeviceAllocator, memory: ByteSlice, alignment: Alignment, memory_type: sc.MemoryKind, ret_addr: usize) void {
-        return a.vtable.free(a.ptr, memory, alignment, memory_type, ret_addr);
+    pub inline fn rawFree(a: DeviceAllocator, memory: ByteSlice, alignment: Alignment, memory_kind: sc.MemoryKind, ret_addr: usize) void {
+        return a.vtable.free(a.ptr, memory, alignment, memory_kind, ret_addr);
     }
 
-    pub fn create(a: DeviceAllocator, comptime T: type, memory: sc.MemoryKind) Error!AllocationOne(T, null) {
+    pub fn create(a: DeviceAllocator, comptime T: type, memory_kind: sc.MemoryKind) Error!AllocationOne(T, null) {
         if (@sizeOf(T) == 0) {
             return .{
                 .device = .fromInt((Ptr(.one, T, .{}).alignment orelse .@"1").backward(std.math.maxInt(u64))),
                 .host = @ptrFromInt(comptime std.mem.alignBackward(usize, std.math.maxInt(usize), @alignOf(T))),
             };
         }
-        const result = try a.allocBytesWithAlignment(.of(T), @sizeOf(T), memory, @returnAddress());
+        const result = try a.allocBytesWithAlignment(.of(T), @sizeOf(T), memory_kind, @returnAddress());
         return .{
             .device = .fromInt(result.device.addr),
             .host = @ptrCast(@alignCast(result.host)),
         };
     }
 
-    pub fn destroy(self: DeviceAllocator, allocation: anytype, memory: sc.MemoryKind) void {
+    pub fn destroy(device_allocator: DeviceAllocator, allocation: anytype, memory_kind: sc.MemoryKind) void {
         const info = @TypeOf(allocation).info;
         if (info.size != .one) @compileError("owned.device must be a single item device pointer");
         const T = info.Element;
         if (@sizeOf(T) == 0) return;
-        self.rawFree(
+        device_allocator.rawFree(
             .{ .ptr = .{ .addr = allocation.addr }, .len = @sizeOf(T) },
             comptime info.attributes.@"align" orelse .of(T),
-            memory,
+            memory_kind,
             @returnAddress(),
         );
     }
 
-    pub fn alloc(self: DeviceAllocator, comptime T: type, n: usize, memory: sc.MemoryKind) Error!Allocation(T, null) {
-        return self.alignedAllocWithRetAddr(T, null, n, memory, @returnAddress());
+    pub fn alloc(device_allocator: DeviceAllocator, comptime T: type, n: usize, memory_kind: sc.MemoryKind) Error!Allocation(T, null) {
+        return device_allocator.alignedAllocWithRetAddr(T, null, n, memory_kind, @returnAddress());
     }
 
     pub fn alignedAlloc(
-        self: DeviceAllocator,
+        device_allocator: DeviceAllocator,
         comptime T: type,
         comptime alignment: ?Alignment,
         n: usize,
-        memory: sc.MemoryKind,
+        memory_kind: sc.MemoryKind,
     ) Error!Allocation(T, alignment) {
-        return self.alignedAllocWithRetAddr(T, alignment, n, memory, @returnAddress());
+        return device_allocator.alignedAllocWithRetAddr(T, alignment, n, memory_kind, @returnAddress());
     }
 
     pub fn runtimeAlignedAlloc(
-        self: DeviceAllocator,
+        device_allocator: DeviceAllocator,
         comptime T: type,
         alignment: Alignment,
         n: usize,
-        memory: sc.MemoryKind,
+        memory_kind: sc.MemoryKind,
     ) Error!Allocation(T, null) {
-        return self.runtimeAlignedAllocWithRetAddr(T, alignment, n, memory, @returnAddress());
+        return device_allocator.runtimeAlignedAllocWithRetAddr(T, alignment, n, memory_kind, @returnAddress());
     }
 
     pub inline fn alignedAllocWithRetAddr(
-        self: DeviceAllocator,
+        device_allocator: DeviceAllocator,
         comptime T: type,
         comptime alignment: ?Alignment,
         n: usize,
-        memory: sc.MemoryKind,
+        memory_kind: sc.MemoryKind,
         return_address: usize,
     ) Error!Allocation(T, alignment) {
         const a: Alignment = alignment orelse comptime .of(T);
-        const owned = try self.runtimeAlignedAllocWithRetAddr(T, a, n, memory, return_address);
+        const owned = try device_allocator.runtimeAlignedAllocWithRetAddr(T, a, n, memory_kind, return_address);
         return .{ .device_ptr = .alignCast(owned.device_ptr), .host_ptr = @alignCast(owned.host_ptr), .len = owned.len };
     }
 
     pub inline fn runtimeAlignedAllocWithRetAddr(
-        self: DeviceAllocator,
+        device_allocator: DeviceAllocator,
         comptime T: type,
         alignment: Alignment,
         n: usize,
-        memory: sc.MemoryKind,
+        memory_kind: sc.MemoryKind,
         return_address: usize,
     ) Error!Allocation(T, null) {
         const byte_count = std.math.mul(usize, @sizeOf(T), n) catch return error.OutOfDeviceMemory;
-        const result = try self.allocBytesWithAlignment(alignment, byte_count, memory, return_address);
+        const result = try device_allocator.allocBytesWithAlignment(alignment, byte_count, memory_kind, return_address);
         const host_ptr: [*]T = @ptrCast(@alignCast(result.host));
         return .{
             .device_ptr = .fromInt(result.device.addr),
@@ -414,39 +414,39 @@ pub const DeviceAllocator = struct {
     }
 
     fn allocBytesWithAlignment(
-        self: DeviceAllocator,
+        device_allocator: DeviceAllocator,
         alignment: Alignment,
         byte_count: usize,
-        memory: sc.MemoryKind,
+        memory_kind: sc.MemoryKind,
         return_address: usize,
     ) Error!sc.HostDeviceAddress {
         if (byte_count == 0) return .{
             .device = .{ .addr = alignment.backward(std.math.maxInt(u64)) },
             .host = @ptrFromInt(alignment.backward(std.math.maxInt(usize))),
         };
-        return try self.rawAlloc(byte_count, alignment, memory, return_address);
+        return try device_allocator.rawAlloc(byte_count, alignment, memory_kind, return_address);
     }
 
-    pub fn free(self: DeviceAllocator, allocation: anytype, memory_type: sc.MemoryKind) void {
+    pub fn free(device_allocator: DeviceAllocator, allocation: anytype, memory_kind: sc.MemoryKind) void {
         const info = @TypeOf(allocation).info;
         const T = info.Element;
         const bytes = allocation.asBytes();
         if (bytes.len == 0) return;
-        self.rawFree(
+        device_allocator.rawFree(
             .as(bytes),
             comptime info.attributes.@"align" orelse .of(T),
-            memory_type,
+            memory_kind,
             @returnAddress(),
         );
     }
 
-    pub fn runtimeAlignedfree(self: DeviceAllocator, allocation: anytype, alignment: Alignment, memory_type: sc.MemoryKind) void {
+    pub fn runtimeAlignedFree(device_allocator: DeviceAllocator, allocation: anytype, alignment: Alignment, memory_kind: sc.MemoryKind) void {
         const bytes = allocation.asBytes();
         if (bytes.len == 0) return;
-        self.rawFree(
+        device_allocator.rawFree(
             .as(bytes),
             alignment,
-            memory_type,
+            memory_kind,
             @returnAddress(),
         );
     }
@@ -460,16 +460,16 @@ pub const DeviceAllocator = struct {
     };
 
     fn unreachableFree(
-        self: *anyopaque,
+        context: *anyopaque,
         memory: ByteSlice,
         alignment: Alignment,
-        memory_type: sc.MemoryKind,
+        memory_kind: sc.MemoryKind,
         ret_addr: usize,
     ) void {
-        _ = self;
+        _ = context;
         _ = memory;
         _ = alignment;
-        _ = memory_type;
+        _ = memory_kind;
         _ = ret_addr;
         unreachable;
     }
@@ -487,28 +487,28 @@ pub fn rawDeviceAllocator(d: *sc.Device) DeviceAllocator {
 
 pub const raw_device_allocator = struct {
     pub fn alloc(
-        self: *anyopaque,
-        len: usize,
+        context: *anyopaque,
+        size: usize,
         alignment: std.mem.Alignment,
-        memory_type: sc.MemoryKind,
+        memory_kind: sc.MemoryKind,
         ret_addr: usize,
     ) DeviceAllocator.Error!sc.HostDeviceAddress {
         _ = ret_addr;
-        const device: *sc.Device = @ptrCast(@alignCast(self));
-        return try device.alloc(len, alignment.toByteUnits(), memory_type);
+        const device: *sc.Device = @ptrCast(@alignCast(context));
+        return try device.alloc(size, alignment.toByteUnits(), memory_kind);
     }
 
     pub fn free(
-        self: *anyopaque,
+        context: *anyopaque,
         memory: Slice(u8, .{}),
         alignment: std.mem.Alignment,
-        memory_type: sc.MemoryKind,
+        memory_kind: sc.MemoryKind,
         ret_addr: usize,
     ) void {
         _ = alignment;
-        _ = memory_type;
+        _ = memory_kind;
         _ = ret_addr;
-        const device: *sc.Device = @ptrCast(@alignCast(self));
+        const device: *sc.Device = @ptrCast(@alignCast(context));
         return device.free(.fromInt(memory.ptr.addr));
     }
 };
@@ -536,16 +536,16 @@ pub const FixedBufferAllocator = struct {
 
         fn alloc(
             r: *Region,
-            len: usize,
+            size: usize,
             alignment: std.mem.Alignment,
         ) DeviceAllocator.Error!sc.HostDeviceAddress {
             if (r.buffer.len == 0) return error.OutOfMemory;
 
             const addr = alignment.forward(r.base() + r.end_index);
             const start = addr - r.base();
-            const new_end = std.math.add(u64, start, len) catch return error.OutOfMemory;
-            if (new_end > r.buffer.len) return error.OutOfMemory;
-            r.end_index = new_end;
+            const end_new = std.math.add(u64, start, size) catch return error.OutOfMemory;
+            if (end_new > r.buffer.len) return error.OutOfMemory;
+            r.end_index = end_new;
 
             return .{
                 .device = .fromInt(addr),
@@ -553,14 +553,14 @@ pub const FixedBufferAllocator = struct {
             };
         }
 
-        fn resize(r: *Region, memory: Slice(u8, .{}), new_len: usize) bool {
+        fn resize(r: *Region, memory: Slice(u8, .{}), size_new: usize) bool {
             std.debug.assert(r.ownsAddr(memory.ptr.addr));
-            if (!r.isLastAllocation(memory)) return new_len <= memory.len;
-            if (new_len <= memory.len) {
-                r.end_index -= memory.len - new_len;
+            if (!r.isLastAllocation(memory)) return size_new <= memory.len;
+            if (size_new <= memory.len) {
+                r.end_index -= memory.len - size_new;
                 return true;
             }
-            const grow = new_len - memory.len;
+            const grow = size_new - memory.len;
             if (r.end_index + grow > r.buffer.len) return false;
             r.end_index += grow;
             return true;
@@ -619,27 +619,27 @@ pub const FixedBufferAllocator = struct {
     }
 
     fn alloc(
-        self: *anyopaque,
-        len: usize,
+        context: *anyopaque,
+        size: usize,
         alignment: std.mem.Alignment,
-        memory_type: sc.MemoryKind,
+        memory_kind: sc.MemoryKind,
         ret_addr: usize,
     ) DeviceAllocator.Error!sc.HostDeviceAddress {
         _ = ret_addr;
-        const fba: *FixedBufferAllocator = @ptrCast(@alignCast(self));
-        return fba.regions.getPtr(memory_type).alloc(len, alignment);
+        const fba: *FixedBufferAllocator = @ptrCast(@alignCast(context));
+        return fba.regions.getPtr(memory_kind).alloc(size, alignment);
     }
 
     fn free(
-        self: *anyopaque,
+        context: *anyopaque,
         memory: Slice(u8, .{}),
         alignment: std.mem.Alignment,
-        memory_type: sc.MemoryKind,
+        memory_kind: sc.MemoryKind,
         ret_addr: usize,
     ) void {
         _ = alignment;
         _ = ret_addr;
-        const fba: *FixedBufferAllocator = @ptrCast(@alignCast(self));
-        fba.regions.getPtr(memory_type).free(memory);
+        const fba: *FixedBufferAllocator = @ptrCast(@alignCast(context));
+        fba.regions.getPtr(memory_kind).free(memory);
     }
 };

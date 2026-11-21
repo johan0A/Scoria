@@ -5,10 +5,10 @@ pub const SamplerDesc = packed struct(u64) {
 
     address: AddressUVW = .{},
 
-    coord: Coord = .normalized,
+    coordinates: Coordinates = .normalized,
     border_color: BorderColor = .transparent_black,
     reduction: Reduction = .weighted_average,
-    max_anisotropy: Anisotropy = .x1,
+    anisotropy_max: Anisotropy = .x1,
 
     compare: Compare = .{},
 
@@ -16,7 +16,7 @@ pub const SamplerDesc = packed struct(u64) {
     lod_max: Lod = .max,
     lod_bias: Bias = .none,
 
-    _pad: u1 = 0,
+    _padding: u1 = 0,
 
     pub const Filter = enum(u1) {
         nearest = 0,
@@ -46,7 +46,7 @@ pub const SamplerDesc = packed struct(u64) {
         clamp_to_border = 3,
     };
 
-    pub const Coord = enum(u1) {
+    pub const Coordinates = enum(u1) {
         normalized = 0,
         pixel = 1,
     };
@@ -83,7 +83,7 @@ pub const SamplerDesc = packed struct(u64) {
     };
 
     pub const Compare = packed struct(u4) {
-        enable: bool = false,
+        enabled: bool = false,
         op: Op = .never,
     };
 
@@ -94,8 +94,8 @@ pub const SamplerDesc = packed struct(u64) {
         pub fn of(x: f32) Lod {
             return @fromBackingInt(@intFromFloat(@min(x, 15.996) * 256.0));
         }
-        pub fn toF32(self: Lod) f32 {
-            return @as(f32, @floatFromInt(@backingInt(self))) / 256.0;
+        pub fn toF32(lod: Lod) f32 {
+            return @as(f32, @floatFromInt(@backingInt(lod))) / 256.0;
         }
     };
 
@@ -105,8 +105,8 @@ pub const SamplerDesc = packed struct(u64) {
         pub fn of(x: f32) Bias {
             return @fromBackingInt(@intFromFloat(x * 256));
         }
-        pub fn toF32(self: Bias) f32 {
-            return @as(f32, @floatFromInt(@backingInt(self))) / 256;
+        pub fn toF32(bias: Bias) f32 {
+            return @as(f32, @floatFromInt(@backingInt(bias))) / 256;
         }
     };
 };

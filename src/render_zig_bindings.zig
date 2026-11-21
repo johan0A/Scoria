@@ -444,8 +444,8 @@ fn renderSliceType(w: *std.Io.Writer, registry: Registry, style: BindingStyle, @
 
 fn renderSliceElementType(w: *std.Io.Writer, registry: Registry, style: BindingStyle, @"type": Registry.Type) !void {
     const element = pointee(@"type");
-    const is_untyped = element.ptrs.len == 0 and element.device_ptrs.len == 0 and element.base == .builtin and element.base.builtin == .void;
-    if (is_untyped) return w.writeAll("u8");
+    const untyped = element.ptrs.len == 0 and element.device_ptrs.len == 0 and element.base == .builtin and element.base.builtin == .void;
+    if (untyped) return w.writeAll("u8");
     try renderType(w, registry, style, element);
 }
 

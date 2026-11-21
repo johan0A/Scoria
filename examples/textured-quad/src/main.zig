@@ -5,7 +5,7 @@ const common = @import("common");
 
 const scSymbol = @extern(sc.Symbol, .{ .name = "scSymbol" });
 
-const frames_in_flight = 2;
+const frame_in_flight_count = 2;
 const vertex_count = 6;
 const descriptor_count_max = 65536;
 const texture_extent: sc.Extent3D = .{ .width = 256, .height = 256, .depth = 1 };
@@ -20,7 +20,7 @@ const Renderer = struct {
     queue: *sc.Queue,
     swapchain: *sc.Swapchain,
     frame_timeline: *sc.Timeline,
-    command_pools: [frames_in_flight]*sc.CommandPool,
+    command_pools: [frame_in_flight_count]*sc.CommandPool,
     frame_index: u64,
     descriptor_heap: sc.Ptr(.many, u8, .{}),
     data: sc.Ptr(.one, Data, .{}),
@@ -75,10 +75,10 @@ pub fn main(init: std.process.Init) !void {
     const frame_timeline: *sc.Timeline = try .create(device, 0);
     defer frame_timeline.destroy();
 
-    var command_pools: [frames_in_flight]*sc.CommandPool = undefined;
-    var inited_command_pools: std.ArrayList(*sc.CommandPool) = .initBuffer(&command_pools);
-    defer for (inited_command_pools.items) |command_pool| command_pool.destroy();
-    for (command_pools.len) |_| inited_command_pools.appendAssumeCapacity(try .create(queue));
+    var command_pools: [frame_in_flight_count]*sc.CommandPool = undefined;
+    var command_pools_created: std.ArrayList(*sc.CommandPool) = .initBuffer(&command_pools);
+    defer for (command_pools_created.items) |command_pool| command_pool.destroy();
+    for (0..command_pools.len) |_| command_pools_created.appendAssumeCapacity(try .create(queue));
 
     const descriptor_heap: sc.DescriptorHeap = try .init(device, gpu_arena, descriptor_count_max);
 
@@ -175,7 +175,7 @@ fn drawFrameOnExpose(userdata: ?*anyopaque, event: [*c]c.SDL_Event) callconv(.c)
 
 fn drawFrame(renderer: *Renderer) !void {
     const frame_index = renderer.frame_index;
-    if (frame_index > frames_in_flight) try renderer.frame_timeline.wait(frame_index - frames_in_flight);
+    if (frame_index > frame_in_flight_count) try renderer.frame_timeline.wait(frame_index - frame_in_flight_count);
 
     var width: c_int = undefined;
     var height: c_int = undefined;
@@ -185,7 +185,7 @@ fn drawFrame(renderer: *Renderer) !void {
         else => |e| return e,
     };
 
-    const command_pool = renderer.command_pools[frame_index % frames_in_flight];
+    const command_pool = renderer.command_pools[frame_index % frame_in_flight_count];
     try command_pool.reset();
     const command_buffer = try command_pool.startCommandRecording();
     command_buffer.setActiveTextureHeap(renderer.descriptor_heap);

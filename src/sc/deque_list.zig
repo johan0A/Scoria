@@ -4,85 +4,85 @@ pub fn DequeList(T: type) type {
     return struct {
         buffer: []T,
         head: usize,
-        len: usize,
+        count: usize,
 
-        const Self = @This();
+        const Deque = @This();
 
-        pub const empty: Self = .{ .buffer = &.{}, .head = 0, .len = 0 };
+        pub const empty: Deque = .{ .buffer = &.{}, .head = 0, .count = 0 };
 
-        pub fn deinit(deque: *Self, gpa: std.mem.Allocator) void {
+        pub fn deinit(deque: *Deque, gpa: std.mem.Allocator) void {
             gpa.free(deque.buffer);
             deque.* = undefined;
         }
 
-        pub fn pushFirst(deque: *Self, gpa: std.mem.Allocator, item: T) !void {
+        pub fn pushFirst(deque: *Deque, gpa: std.mem.Allocator, item: T) !void {
             try deque.ensureUnusedCapacity(gpa, 1);
             deque.pushFirstAssumeCapacity(item);
         }
 
-        pub fn pushFirstAssumeCapacity(deque: *Self, item: T) void {
-            std.debug.assert(deque.len < deque.buffer.len);
-            const tail = (deque.head + deque.len) & (deque.buffer.len - 1);
+        pub fn pushFirstAssumeCapacity(deque: *Deque, item: T) void {
+            std.debug.assert(deque.count < deque.buffer.len);
+            const tail = (deque.head + deque.count) & (deque.buffer.len - 1);
             deque.buffer[tail] = item;
-            deque.len += 1;
+            deque.count += 1;
         }
 
-        pub fn pushLast(deque: *Self, gpa: std.mem.Allocator, item: T) !void {
+        pub fn pushLast(deque: *Deque, gpa: std.mem.Allocator, item: T) !void {
             try deque.ensureUnusedCapacity(gpa, 1);
             deque.pushLastAssumeCapacity(item);
         }
 
-        pub fn ensureUnusedCapacity(deque: *Self, gpa: std.mem.Allocator, count: usize) !void {
-            const capacity_min = deque.len + count;
+        pub fn ensureUnusedCapacity(deque: *Deque, gpa: std.mem.Allocator, count: usize) !void {
+            const capacity_min = deque.count + count;
             if (capacity_min <= deque.buffer.len) return;
-            const old_capacity = deque.buffer.len;
-            const new_capacity = @max(try std.math.ceilPowerOfTwo(usize, capacity_min), 8);
-            deque.buffer = try gpa.realloc(deque.buffer, new_capacity);
+            const capacity_old = deque.buffer.len;
+            const capacity_new = @max(try std.math.ceilPowerOfTwo(usize, capacity_min), 8);
+            deque.buffer = try gpa.realloc(deque.buffer, capacity_new);
 
-            const tail_len = (deque.head + deque.len) -| old_capacity;
-            const head_len = deque.len - tail_len;
-            if (tail_len <= head_len) {
-                @memcpy(deque.buffer[old_capacity..][0..tail_len], deque.buffer[0..tail_len]);
+            const tail_count = (deque.head + deque.count) -| capacity_old;
+            const head_count = deque.count - tail_count;
+            if (tail_count <= head_count) {
+                @memcpy(deque.buffer[capacity_old..][0..tail_count], deque.buffer[0..tail_count]);
             } else {
-                const head_new = new_capacity - head_len;
-                @memcpy(deque.buffer[head_new..][0..head_len], deque.buffer[deque.head..][0..head_len]);
+                const head_new = capacity_new - head_count;
+                @memcpy(deque.buffer[head_new..][0..head_count], deque.buffer[deque.head..][0..head_count]);
                 deque.head = head_new;
             }
         }
 
-        pub fn pushLastAssumeCapacity(deque: *Self, item: T) void {
-            std.debug.assert(deque.len < deque.buffer.len);
+        pub fn pushLastAssumeCapacity(deque: *Deque, item: T) void {
+            std.debug.assert(deque.count < deque.buffer.len);
             deque.head = (deque.head -% 1) & (deque.buffer.len - 1);
             deque.buffer[deque.head] = item;
-            deque.len += 1;
+            deque.count += 1;
         }
 
-        pub fn popFirst(deque: *Self) ?T {
-            if (deque.len == 0) return null;
-            deque.len -= 1;
-            return deque.buffer[(deque.head + deque.len) & (deque.buffer.len - 1)];
+        pub fn popFirst(deque: *Deque) ?T {
+            if (deque.count == 0) return null;
+            deque.count -= 1;
+            return deque.buffer[(deque.head + deque.count) & (deque.buffer.len - 1)];
         }
 
-        pub fn popLast(deque: *Self) ?T {
-            if (deque.len == 0) return null;
+        pub fn popLast(deque: *Deque) ?T {
+            if (deque.count == 0) return null;
             const item = deque.buffer[deque.head];
             deque.head = (deque.head + 1) & (deque.buffer.len - 1);
-            deque.len -= 1;
+            deque.count -= 1;
             return item;
         }
 
-        pub fn first(deque: Self) ?*T {
-            return if (deque.len == 0) null else deque.at(0);
+        pub fn first(deque: Deque) ?*T {
+            return if (deque.count == 0) null else deque.at(0);
         }
 
-        pub fn last(deque: Self) ?*T {
-            return if (deque.len == 0) null else deque.at(deque.len - 1);
+        pub fn last(deque: Deque) ?*T {
+            return if (deque.count == 0) null else deque.at(deque.count - 1);
         }
 
-        /// index 0 is the first item
-        pub fn at(deque: Self, index: usize) *T {
-            std.debug.assert(index < deque.len);
-            return &deque.buffer[(deque.head + deque.len - 1 - index) & (deque.buffer.len - 1)];
+        /// Index 0 is the first item.
+        pub fn at(deque: Deque, index: usize) *T {
+            std.debug.assert(index < deque.count);
+            return &deque.buffer[(deque.head + deque.count - 1 - index) & (deque.buffer.len - 1)];
         }
     };
 }
@@ -118,7 +118,7 @@ test "both ends" {
 
     for (0..20) |i| try deque.pushLast(gpa, @intCast(i));
     for (0..20) |i| try deque.pushFirst(gpa, @intCast(100 + i));
-    try std.testing.expectEqual(40, deque.len);
+    try std.testing.expectEqual(40, deque.count);
     try std.testing.expectEqual(119, deque.first().?.*);
     try std.testing.expectEqual(19, deque.last().?.*);
     try std.testing.expectEqual(100, deque.at(19).*);

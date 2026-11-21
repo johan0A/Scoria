@@ -552,10 +552,10 @@ fn convertPtr(
         .@"const" = json_pointer.@"const",
         .alignment = json_pointer.alignment,
         .size = blk: {
-            const len_name = json_pointer.len orelse break :blk .one;
-            if (std.mem.eql(u8, len_name, "none")) break :blk .many;
-            if (std.mem.eql(u8, len_name, "null_terminated")) break :blk .null_terminated;
-            const sibling_index = findByName(siblings, len_name) orelse return error.UnknownLen;
+            const count_name = json_pointer.len orelse break :blk .one;
+            if (std.mem.eql(u8, count_name, "none")) break :blk .many;
+            if (std.mem.eql(u8, count_name, "null_terminated")) break :blk .null_terminated;
+            const sibling_index = findByName(siblings, count_name) orelse return error.UnknownLen;
             break :blk .{ .sized_by_arg = @intCast(sibling_index) };
         },
     };

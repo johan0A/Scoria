@@ -18,7 +18,7 @@ pub fn init(device: *sc.Device, allocator: sc.DeviceAllocator, capacity: u32) sc
 }
 
 pub fn deinit(heap: DescriptorHeap, allocator: sc.DeviceAllocator) void {
-    allocator.runtimeAlignedfree(heap.memory.device(), heap.alignment, .upload);
+    allocator.runtimeAlignedFree(heap.memory.device(), heap.alignment, .upload);
 }
 
 pub fn store(heap: DescriptorHeap, descriptor: *const sc.Descriptor, index: usize) void {

@@ -32,7 +32,7 @@ pub const OwnedTexture = struct {
     pub fn create(device: *Device, gpa: DeviceAllocator, desc: TextureDesc) !OwnedTexture {
         const size_align = device.textureSizeAlign(desc);
         const memory = try gpa.runtimeAlignedAlloc(u8, size_align.alignment(), size_align.size, .device_local);
-        errdefer gpa.runtimeAlignedfree(memory.device(), size_align.alignment(), .device_local);
+        errdefer gpa.runtimeAlignedFree(memory.device(), size_align.alignment(), .device_local);
         return .{
             .texture = try .create(device, desc, memory.device_ptr),
             .memory = memory.device(),
@@ -42,7 +42,7 @@ pub const OwnedTexture = struct {
 
     pub fn destroy(texture: OwnedTexture, gpa: DeviceAllocator) void {
         texture.texture.destroy();
-        gpa.runtimeAlignedfree(texture.memory, texture.alignment, .device_local);
+        gpa.runtimeAlignedFree(texture.memory, texture.alignment, .device_local);
     }
 };
 
@@ -625,7 +625,7 @@ pub const HostDeviceAddress = extern struct {
 
 pub const SwapchainDesc = extern struct {
     format: Format,
-    /// format must be supported by the surface for this color space.
+    /// Must be supported by the surface for this color space.
     color_space: ColorSpace = .srgb_nonlinear,
     present_mode: PresentMode,
     usage: TextureUsage,
@@ -723,7 +723,7 @@ pub const TextureDesc = extern struct {
     format: Format,
     usage: TextureUsage = .{},
     /// Additional formats this texture may be viewed as (must be format-compatible).
-    /// listing formats can disable lossless compression.
+    /// Listing formats can disable lossless compression.
     /// Only read during creation.
     view_formats: Formats = .{},
 };

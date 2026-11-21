@@ -22,9 +22,9 @@ pub fn initCapacity(gpa: std.mem.Allocator, count: usize) !DeletionQueue {
     return queue;
 }
 
-/// asserts that every callback has been flushed
+/// Assert every callback has been flushed.
 pub fn deinit(queue: *DeletionQueue, gpa: std.mem.Allocator) void {
-    std.debug.assert(queue.callbacks.len == 0);
+    std.debug.assert(queue.callbacks.count == 0);
     queue.callbacks.deinit(gpa);
     queue.* = undefined;
 }
@@ -33,7 +33,6 @@ pub fn ensureUnusedCapacity(queue: *DeletionQueue, gpa: std.mem.Allocator, count
     try queue.callbacks.ensureUnusedCapacity(gpa, count);
 }
 
-// args must be bellow 128 bytes and have a lower than 16 bytes alignement
 pub fn push(
     queue: *DeletionQueue,
     gpa: std.mem.Allocator,
@@ -53,7 +52,7 @@ pub fn pushAssumeCapacity(
 ) void {
     const Args = @TypeOf(args);
     if (@sizeOf(Args) > Callback.args_capacity_bytes) @compileError("args size too large");
-    if (@alignOf(Args) > Callback.args_alignment) @compileError("args alignement too large");
+    if (@alignOf(Args) > Callback.args_alignment) @compileError("args alignment too large");
     if (queue.callbacks.first()) |newest| std.debug.assert(newest.timeline_value <= timeline_value);
 
     const local = struct {

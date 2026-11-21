@@ -17,11 +17,11 @@ pub fn init(gpa: std.mem.Allocator, heap: sc.DescriptorHeap) !DescriptorAllocato
     return .{ .heap = heap, .free_list_next = try gpa.alloc(u32, heap.capacity) };
 }
 
-pub fn deinit(self: *DescriptorAllocator, gpa: std.mem.Allocator) void {
-    gpa.free(self.free_list_next);
+pub fn deinit(allocator: *DescriptorAllocator, gpa: std.mem.Allocator) void {
+    gpa.free(allocator.free_list_next);
 }
 
-pub fn allocMips(self: *DescriptorAllocator, texture: *sc.Texture, kind: Kind, desc: sc.TextureViewDesc) !Range {
+pub fn allocMips(allocator: *DescriptorAllocator, texture: *sc.Texture, kind: Kind, desc: sc.TextureViewDesc) !Range {
     std.debug.assert(desc.mip_count >= 1 and desc.mip_count <= mip_count_max);
 
     var descriptors: [mip_count_max]sc.Descriptor = undefined;
@@ -35,22 +35,22 @@ pub fn allocMips(self: *DescriptorAllocator, texture: *sc.Texture, kind: Kind, d
         };
     }
 
-    const free_list_head = &self.free_list_heads[desc.mip_count - 1];
+    const free_list_head = &allocator.free_list_heads[desc.mip_count - 1];
     const index = index: {
         if (free_list_head.* != free_list_end) {
             const index = free_list_head.*;
-            free_list_head.* = self.free_list_next[index];
+            free_list_head.* = allocator.free_list_next[index];
             break :index index;
         }
-        if (self.index_next + desc.mip_count > self.heap.capacity) return error.OutOfDescriptors;
-        defer self.index_next += desc.mip_count;
-        break :index self.index_next;
+        if (allocator.index_next + desc.mip_count > allocator.heap.capacity) return error.OutOfDescriptors;
+        defer allocator.index_next += desc.mip_count;
+        break :index allocator.index_next;
     };
-    for (descriptors[0..desc.mip_count], index..) |*descriptor, slot| self.heap.store(descriptor, slot);
+    for (descriptors[0..desc.mip_count], index..) |*descriptor, slot| allocator.heap.store(descriptor, slot);
     return .{ .index = index, .count = desc.mip_count };
 }
 
-pub fn free(self: *DescriptorAllocator, range: Range) void {
-    self.free_list_next[range.index] = self.free_list_heads[range.count - 1];
-    self.free_list_heads[range.count - 1] = range.index;
+pub fn free(allocator: *DescriptorAllocator, range: Range) void {
+    allocator.free_list_next[range.index] = allocator.free_list_heads[range.count - 1];
+    allocator.free_list_heads[range.count - 1] = range.index;
 }

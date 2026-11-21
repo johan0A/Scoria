@@ -50,7 +50,7 @@ pub const Instance = struct {
 
         const loader: VulkanLoader = try .open();
         errdefer loader.close();
-        const base_dispatch: vk.BaseWrapper = .load(loader.proc);
+        const base_dispatch: vk.BaseWrapper = .load(loader.getInstanceProcAddress);
 
         var extensions: std.ArrayList([*:0]const u8) = .empty;
         var surface_support: SurfaceSupport = .{};
@@ -435,7 +435,7 @@ pub const Adapter = opaque {
             }
 
             const queue_families = try instance.handle.getPhysicalDeviceQueueFamilyPropertiesAlloc(physical_device, arena);
-            const has_graphics_queue = for (queue_families) |family| {
+            const graphics_queue_supported = for (queue_families) |family| {
                 if (family.queue_flags.graphics and family.queue_flags.compute) break true;
             } else false;
 
@@ -445,11 +445,11 @@ pub const Adapter = opaque {
             optional.swapchain_maintenance_1 = optional.swapchain_maintenance_1 and swapchain and instance.surface_support.maintenance_1;
 
             const format_features = formatFeatures(instance, physical_device);
-            const has_required_formats = hasRequiredFormats(instance, physical_device, format_features, std.mem.sliceTo(&properties.device_name, 0));
-            const has_formats = (format_features.bc or format_features.astc) and has_required_formats;
+            const required_formats_supported = hasRequiredFormats(instance, physical_device, format_features, std.mem.sliceTo(&properties.device_name, 0));
+            const formats_supported = (format_features.bc or format_features.astc) and required_formats_supported;
 
             return .{
-                .compatible = has_graphics_queue and has_formats and Features.isSubset(Features.requested, supported, optional),
+                .compatible = graphics_queue_supported and formats_supported and Features.isSubset(Features.requested, supported, optional),
                 .swapchain = swapchain,
                 .optional = optional,
                 .format_features = format_features,
@@ -553,7 +553,7 @@ pub const Device = struct {
     gpa: std.mem.Allocator,
     table: *anyopaque,
 
-    queues: [max_queue_count]Object(Queue),
+    queues: [queue_count_max]Object(Queue),
     queue_count: u8,
     queue_index_from_kind: std.EnumArray(sc.QueueKind, u8),
 
@@ -561,7 +561,7 @@ pub const Device = struct {
 
     memory_properties: vk.PhysicalDeviceMemoryProperties,
     has_host_visible_device_local: bool,
-    /// memory types able to hold most common textures, `.device_local` allocations must use one of them
+    /// Memory types able to hold most common textures, `.device_local` allocations must use one of them.
     image_memory_type_bits: u32,
     descriptor_buffer_properties: vk.PhysicalDeviceDescriptorBufferPropertiesEXT,
     swapchain_supported: bool,
@@ -569,9 +569,9 @@ pub const Device = struct {
 
     texture_heap_set_layout: vk.DescriptorSetLayout,
 
-    /// pending undefined to general layout transitions
+    /// Pending undefined to general layout transitions.
     pending_texture_inits: std.array_hash_map.Auto(vk.Image, sc.TextureDesc),
-    /// orders texture initializations between queues
+    /// Orders texture initializations between queues.
     texture_init_timeline: struct {
         semaphore: vk.Semaphore,
         value: u64,
@@ -586,7 +586,7 @@ pub const Device = struct {
     depth_stencil_states: std.heap.MemoryPool(Object(DepthStencilState)),
     blend_states: std.heap.MemoryPool(Object(BlendState)),
 
-    const max_queue_count = @typeInfo(sc.QueueKind).@"enum".field_names.len;
+    const queue_count_max = @typeInfo(sc.QueueKind).@"enum".field_names.len;
 
     const AddressMap = struct {
         entries: std.ArrayList(Entry),
@@ -662,7 +662,7 @@ pub const Device = struct {
             .transfer = transfer_family,
         });
 
-        var queue_infos: [max_queue_count]vk.DeviceQueueCreateInfo = undefined;
+        var queue_infos: [queue_count_max]vk.DeviceQueueCreateInfo = undefined;
         var queue_count: u8 = 0;
         var queue_index_from_kind: std.EnumArray(sc.QueueKind, u8) = undefined;
         for (std.enums.values(sc.QueueKind)) |kind| {
@@ -739,7 +739,7 @@ pub const Device = struct {
         };
         errdefer handle.destroyDescriptorSetLayout(texture_heap_set_layout, null);
 
-        var queues: [max_queue_count]Object(Queue) = undefined;
+        var queues: [queue_count_max]Object(Queue) = undefined;
         var initialized_queue_count: usize = 0;
         errdefer for (queues[0..initialized_queue_count]) |*queue| {
             handle.destroySemaphore(queue.body().timeline, null);
@@ -868,10 +868,10 @@ pub const Device = struct {
         d: *Object(Device),
         size: usize,
         alignment: usize,
-        memory: sc.MemoryKind,
+        memory_kind: sc.MemoryKind,
         mapped_memory: *sc.HostDeviceAddress,
     ) !void {
-        mapped_memory.* = allocInner(d.body(), size, .fromByteUnits(alignment), memory) catch |err| return switch (err) {
+        mapped_memory.* = allocInner(d.body(), size, .fromByteUnits(alignment), memory_kind) catch |err| return switch (err) {
             error.InvalidExternalHandle => unreachable,
             error.InvalidOpaqueCaptureAddressKHR,
             error.Unknown,
@@ -886,16 +886,16 @@ pub const Device = struct {
         d: *Device,
         size: usize,
         alignment: std.mem.Alignment,
-        memory: sc.MemoryKind,
+        memory_kind: sc.MemoryKind,
     ) !sc.HostDeviceAddress {
         std.debug.assert(size > 0);
 
-        var families: [max_queue_count]u32 = undefined;
+        var families: [queue_count_max]u32 = undefined;
         for (d.queues[0..d.queue_count], families[0..d.queue_count]) |*queue, *family| family.* = queue.body().family;
         const concurrent = d.queue_count > 1;
         var buffer_info: vk.BufferCreateInfo = .{
             .size = size,
-            .usage = to_vk.bufferUsage(memory),
+            .usage = to_vk.bufferUsage(memory_kind),
             .sharing_mode = if (concurrent) .concurrent else .exclusive,
             .queue_family_index_count = if (concurrent) d.queue_count else 0,
             .p_queue_family_indices = &families,
@@ -910,12 +910,12 @@ pub const Device = struct {
         errdefer d.handle.destroyBuffer(buffer, null);
         const requirements = d.handle.getBufferMemoryRequirements(buffer);
 
-        const memory_type_bits = requirements.memory_type_bits & switch (memory) {
+        const memory_type_bits = requirements.memory_type_bits & switch (memory_kind) {
             .device_local => d.image_memory_type_bits,
             .upload, .readback => std.math.maxInt(u32),
         };
         const host_visible: vk.MemoryPropertyFlags = .{ .host_visible = true, .host_coherent = true };
-        const properties_by_preference: []const vk.MemoryPropertyFlags = switch (memory) {
+        const properties_by_preference: []const vk.MemoryPropertyFlags = switch (memory_kind) {
             .upload => if (d.has_host_visible_device_local) &.{ host_visible.merge(.{ .device_local = true }), host_visible } else &.{host_visible},
             .device_local => &.{.{ .device_local = true }},
             .readback => &.{ host_visible.merge(.{ .host_cached = true }), host_visible },
@@ -942,7 +942,7 @@ pub const Device = struct {
             .memory = device_memory,
             .size = buffer_info.size,
             .device_addr = d.handle.getBufferDeviceAddress(&.{ .buffer = buffer }),
-            .host_addr = switch (memory) {
+            .host_addr = switch (memory_kind) {
                 .upload, .readback => @intFromPtr(try d.handle.mapMemory(device_memory, 0, vk.WHOLE_SIZE, .{})),
                 .device_local => null,
             },
@@ -967,13 +967,13 @@ pub const Queue = struct {
     handle: vk.Queue,
     family: u32,
     texture_copy_granularity: vk.Extent3D,
-    /// signaled by every submission, with `last_submitted` as the latest value
+    /// Signaled by every submission, with `last_submitted` as the latest value.
     timeline: vk.Semaphore,
     last_submitted: u64,
     command_pool: vk.CommandPool,
-    /// driver recorded command buffers
+    /// Driver recorded command buffers.
     pending_command_buffers: std.ArrayList(PendingCommandBuffer),
-    /// swapchains whose back buffer acquire is waited on by the next submission
+    /// Swapchains whose back buffer acquire is waited on by the next submission.
     pending_acquires: std.ArrayList(*Swapchain),
     d: *Device,
 
@@ -1072,8 +1072,8 @@ pub const Queue = struct {
         try queue.submitAfterAcquires(submit_infos, waits, signal_info);
     }
 
-    /// submits after `waits`, the pending swapchain acquires and texture initializations
-    /// signals `Queue.timeline`
+    /// Submits after `waits`, the pending swapchain acquires and texture initializations.
+    /// Signals `Queue.timeline`.
     fn submitAfterAcquires(
         queue: *Queue,
         command_buffers: []const vk.CommandBufferSubmitInfo,
@@ -1218,20 +1218,20 @@ pub const Swapchain = struct {
 
     const Image = struct {
         texture: Object(Texture),
-        /// undefined -> general
+        /// Undefined -> general.
         acquire_command_buffer: vk.CommandBuffer,
-        /// general -> present_src
+        /// General -> present_src.
         present_command_buffer: vk.CommandBuffer,
-        /// binary, signaled by the present command buffer and waited by present
+        /// Binary, signaled by the present command buffer and waited by present.
         present_semaphore: vk.Semaphore,
-        /// signaled once the last present of the image released its resources, null without swapchain maintenance
+        /// Signaled once the last present of the image released its resources, null without swapchain maintenance.
         present_fence: vk.Fence,
     };
 
     const AcquireSemaphore = struct {
-        /// binary.
+        /// Binary.
         handle: vk.Semaphore,
-        /// `queue.timeline` value after which the semaphore has been waited on and can be reused.
+        /// The `queue.timeline` value after which the semaphore has been waited on and can be reused.
         reusable_value: u64,
     };
 
@@ -1239,7 +1239,7 @@ pub const Swapchain = struct {
         handle: vk.SwapchainKHR,
         images: []Image,
         acquire_semaphores: []AcquireSemaphore,
-        /// `queue.timeline` value after which no submission uses the swapchain
+        /// The `queue.timeline` value after which no submission uses the swapchain
         value: u64,
 
         fn destroy(retired: Retired, queue: *Queue) void {
@@ -1366,21 +1366,21 @@ pub const Swapchain = struct {
         for (0..32) |_| {
             if (swapchain.needs_recreate or (extent_changed and !std.meta.eql(extent, swapchain.extent))) {
                 const capabilities = try d.instance.handle.getPhysicalDeviceSurfaceCapabilitiesKHR(d.physical_device, swapchain.surface);
-                const min_extent = capabilities.min_image_extent;
-                const max_extent = capabilities.max_image_extent;
+                const extent_min = capabilities.min_image_extent;
+                const extent_max = capabilities.max_image_extent;
                 const image_extent: vk.Extent2D = if (capabilities.current_extent.width != std.math.maxInt(u32)) capabilities.current_extent else .{
-                    .width = std.math.clamp(extent.width, min_extent.width, max_extent.width),
-                    .height = std.math.clamp(extent.height, min_extent.height, max_extent.height),
+                    .width = std.math.clamp(extent.width, extent_min.width, extent_max.width),
+                    .height = std.math.clamp(extent.height, extent_min.height, extent_max.height),
                 };
                 if (image_extent.width == 0 or image_extent.height == 0) return error.NoBackbuffer;
 
-                var min_image_count = capabilities.min_image_count + 1;
-                if (capabilities.max_image_count != 0) min_image_count = @min(min_image_count, capabilities.max_image_count);
+                var image_count_min = capabilities.min_image_count + 1;
+                if (capabilities.max_image_count != 0) image_count_min = @min(image_count_min, capabilities.max_image_count);
 
                 if (!d.optional_features.swapchain_maintenance_1) try d.handle.queueWaitIdle(queue.handle);
-                const old_handle = swapchain.handle;
+                const handle_old = swapchain.handle;
                 try swapchain.retired.append(d.gpa, .{
-                    .handle = old_handle,
+                    .handle = handle_old,
                     .images = swapchain.images,
                     .acquire_semaphores = swapchain.acquire_semaphores,
                     .value = queue.last_submitted,
@@ -1394,7 +1394,7 @@ pub const Swapchain = struct {
                         .present_wait_2_khr = swapchain.present_wait_supported,
                     },
                     .surface = swapchain.surface,
-                    .min_image_count = min_image_count,
+                    .min_image_count = image_count_min,
                     .image_format = to_vk.format(swapchain.desc.format),
                     .image_color_space = to_vk.colorSpace(swapchain.desc.color_space),
                     .image_extent = image_extent,
@@ -1407,7 +1407,7 @@ pub const Swapchain = struct {
                     .composite_alpha = .{ .opaque_khr = true },
                     .present_mode = to_vk.presentMode(swapchain.desc.present_mode),
                     .clipped = .true,
-                    .old_swapchain = old_handle,
+                    .old_swapchain = handle_old,
                 }, null);
 
                 const vk_images = try d.handle.getSwapchainImagesAllocKHR(swapchain.handle, d.gpa);
@@ -1630,7 +1630,7 @@ pub const CommandPool = struct {
     }
     fn startCommandRecordingInner(pool: *CommandPool) !*Object(CommandBuffer) {
         const d = pool.d;
-        if (pool.used_count == pool.command_buffers.len) {
+        if (pool.used_count == pool.command_buffers.count) {
             const command_buffer = try pool.command_buffers.addOne(d.gpa);
             errdefer _ = pool.command_buffers.pop();
             var handle: vk.CommandBuffer = undefined;
@@ -2300,7 +2300,7 @@ pub const Texture = struct {
         return d.handle.createImageView(&.{
             .image = image,
             .view_type = to_vk.viewType(texture_desc.type, layer_count),
-            // Depth/stencil view formats only select the aspect.
+            // depth/stencil view formats only select the aspect
             .format = to_vk.format(if (view_desc.format == .none or !aspect_mask.color) texture_desc.format else view_desc.format),
             .subresource_range = .{
                 .aspect_mask = aspect_mask,
@@ -2359,7 +2359,7 @@ pub const Pipeline = struct {
         return pipeline_obj;
     }
 
-    // TODO: rename to createRaster?
+    // TODO: rename to createRaster
     pub fn createGraphics(
         d: *Object(Device),
         vertex_ir_size: usize,
@@ -2532,9 +2532,9 @@ pub const Pipeline = struct {
         pipeline.d.gpa.free(pipeline.samplers);
     }
 
-    /// set 0 => texture heap
-    /// set 1 => immutable samplers
-    /// push constants => root addresses.
+    /// Set 0 => texture heap.
+    /// Set 1 => immutable samplers.
+    /// Push constants => root addresses.
     fn createLayout(pipeline: *Pipeline, shaders: []const scir.Shader, root_stages: vk.ShaderStageFlags, root_address_count: u32) !void {
         const d = pipeline.d;
         var sampler_count: usize = 0;
@@ -2610,15 +2610,15 @@ pub fn Object(T: type) type {
 }
 
 const wrap_sc_allocator = struct {
-    fn alloc(user_data: *anyopaque, len: usize, alignment: std.mem.Alignment, ret_addr: usize) ?[*]u8 {
+    fn alloc(user_data: *anyopaque, size: usize, alignment: std.mem.Alignment, ret_addr: usize) ?[*]u8 {
         _ = ret_addr;
         const sc_gpa: *sc.HostAllocator = @ptrCast(@alignCast(user_data));
-        return sc_gpa.alloc(sc_gpa.user_data, len, alignment.toByteUnits());
+        return sc_gpa.alloc(sc_gpa.user_data, size, alignment.toByteUnits());
     }
-    fn remap(user_data: *anyopaque, memory: []u8, alignment: std.mem.Alignment, new_len: usize, ret_addr: usize) ?[*]u8 {
+    fn remap(user_data: *anyopaque, memory: []u8, alignment: std.mem.Alignment, size_new: usize, ret_addr: usize) ?[*]u8 {
         _ = ret_addr;
         const sc_gpa: *sc.HostAllocator = @ptrCast(@alignCast(user_data));
-        return sc_gpa.remap(sc_gpa.user_data, memory.ptr, memory.len, alignment.toByteUnits(), new_len);
+        return sc_gpa.remap(sc_gpa.user_data, memory.ptr, memory.len, alignment.toByteUnits(), size_new);
     }
     fn free(user_data: *anyopaque, memory: []u8, alignment: std.mem.Alignment, ret_addr: usize) void {
         _ = ret_addr;
@@ -2740,14 +2740,14 @@ fn semaphoreSubmitInfo(semaphore: vk.Semaphore, value: u64) vk.SemaphoreSubmitIn
     return .{ .semaphore = semaphore, .value = value, .stage_mask = .{ .all_commands = true }, .device_index = 0 };
 }
 
-fn layoutTransition(image: vk.Image, desc: sc.TextureDesc, old_layout: vk.ImageLayout, new_layout: vk.ImageLayout) vk.ImageMemoryBarrier2 {
+fn layoutTransition(image: vk.Image, desc: sc.TextureDesc, layout_old: vk.ImageLayout, layout_new: vk.ImageLayout) vk.ImageMemoryBarrier2 {
     return .{
         .src_stage_mask = .{ .all_commands = true },
         .src_access_mask = .{ .memory_write = true },
         .dst_stage_mask = .{ .all_commands = true },
         .dst_access_mask = .{ .memory_read = true, .memory_write = true },
-        .old_layout = old_layout,
-        .new_layout = new_layout,
+        .old_layout = layout_old,
+        .new_layout = layout_new,
         .src_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
         .dst_queue_family_index = vk.QUEUE_FAMILY_IGNORED,
         .image = image,

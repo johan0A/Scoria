@@ -433,7 +433,7 @@ pub const HostDeviceAddress = extern struct {
 
 pub const SwapchainDesc = extern struct {
     format: Format,
-    /// format must be supported by the surface for this color space.
+    /// Must be supported by the surface for this color space.
     color_space: ColorSpace = .srgb_nonlinear,
     present_mode: PresentMode,
     usage: TextureUsage,
@@ -521,7 +521,7 @@ pub const TextureDesc = extern struct {
     format: Format,
     usage: TextureUsage = .{},
     /// Additional formats this texture may be viewed as (must be format-compatible).
-    /// listing formats can disable lossless compression.
+    /// Listing formats can disable lossless compression.
     /// Only read during creation.
     view_formats: Formats = .{},
 };

@@ -92,23 +92,23 @@ pub const Encoder = struct {
         };
     }
 
-    pub fn bytecode(e: *Encoder, bytes: []const u8) std.Io.Writer.Error!void {
-        std.debug.assert(bytes.len <= e.bytecode_size_left);
-        e.bytecode_size_left -= @intCast(bytes.len);
-        try e.w.writeAll(bytes);
+    pub fn bytecode(encoder: *Encoder, bytes: []const u8) std.Io.Writer.Error!void {
+        std.debug.assert(bytes.len <= encoder.bytecode_size_left);
+        encoder.bytecode_size_left -= @intCast(bytes.len);
+        try encoder.w.writeAll(bytes);
     }
 
-    pub fn sampler(e: *Encoder, s: SamplerDesc) std.Io.Writer.Error!void {
-        std.debug.assert(e.bytecode_size_left == 0);
-        std.debug.assert(e.sampler_count_left != 0);
-        e.sampler_count_left -= 1;
-        try e.w.writeInt(u64, @bitCast(s), .little);
+    pub fn sampler(encoder: *Encoder, s: SamplerDesc) std.Io.Writer.Error!void {
+        std.debug.assert(encoder.bytecode_size_left == 0);
+        std.debug.assert(encoder.sampler_count_left != 0);
+        encoder.sampler_count_left -= 1;
+        try encoder.w.writeInt(u64, @bitCast(s), .little);
     }
 
-    pub fn end(e: *Encoder) void {
-        std.debug.assert(e.bytecode_size_left == 0);
-        std.debug.assert(e.sampler_count_left == 0);
-        e.* = undefined;
+    pub fn end(encoder: *Encoder) void {
+        std.debug.assert(encoder.bytecode_size_left == 0);
+        std.debug.assert(encoder.sampler_count_left == 0);
+        encoder.* = undefined;
     }
 };
 
@@ -154,7 +154,7 @@ pub fn validateBytecode(bytecode_kind: Bytecode, bytecode: []const u8) error{Mal
     }
 }
 
-/// usage: scir <output> <bytecode kind> <bytecode> [sampler as hex]...
+/// Usage: scir <output> <bytecode kind> <bytecode> [sampler as hex]...
 pub fn main(init: std.process.Init) !void {
     const arena = init.arena.allocator();
     const args = try init.minimal.args.toSlice(arena);
@@ -164,11 +164,11 @@ pub fn main(init: std.process.Init) !void {
     try validateBytecode(bytecode_kind, bytecode);
     const sampler_args = args[4..];
 
-    const out_file = try std.Io.Dir.createFile(.cwd(), init.io, args[1], .{});
-    var out_writer_buffer: [1024]u8 = undefined;
-    var out_writer = out_file.writer(init.io, &out_writer_buffer);
+    const output_file = try std.Io.Dir.createFile(.cwd(), init.io, args[1], .{});
+    var output_buffer: [1024]u8 = undefined;
+    var output_writer = output_file.writer(init.io, &output_buffer);
 
-    var encoder: Encoder = try .begin(&out_writer.interface, bytecode_kind, @intCast(bytecode.len), @intCast(sampler_args.len));
+    var encoder: Encoder = try .begin(&output_writer.interface, bytecode_kind, @intCast(bytecode.len), @intCast(sampler_args.len));
     try encoder.bytecode(bytecode);
     for (sampler_args) |arg| {
         var sampler_bytes: [8]u8 = undefined;
@@ -176,5 +176,5 @@ pub fn main(init: std.process.Init) !void {
         try encoder.sampler(@bitCast(std.mem.readInt(u64, &sampler_bytes, .little)));
     }
     encoder.end();
-    try out_writer.flush();
+    try output_writer.flush();
 }

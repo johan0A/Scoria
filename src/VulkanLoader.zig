@@ -1,7 +1,18 @@
-proc: vk.PfnGetInstanceProcAddr,
+const std = @import("std");
+const builtin = @import("builtin");
+const vk = @import("vulkan");
+const VulkanLoader = @This();
+
+getInstanceProcAddress: vk.PfnGetInstanceProcAddr,
 handle: Handle,
 
 const HMODULE = *opaque {};
+
+const Handle = switch (builtin.os.tag) {
+    .windows => HMODULE,
+    .linux, .macos => *anyopaque,
+    else => @compileError("unsupported"),
+};
 
 extern "kernel32" fn LoadLibraryA(
     name: [*:0]const u8,
@@ -15,12 +26,6 @@ extern "kernel32" fn GetProcAddress(
 extern "kernel32" fn FreeLibrary(
     module: HMODULE,
 ) callconv(.winapi) i32;
-
-const Handle = switch (builtin.os.tag) {
-    .windows => HMODULE,
-    .linux, .macos => *anyopaque,
-    else => @compileError("unsupported"),
-};
 
 pub fn open() error{VulkanLoaderNotFound}!VulkanLoader {
     return switch (builtin.os.tag) {
@@ -44,7 +49,7 @@ fn openWindows() !VulkanLoader {
     errdefer _ = FreeLibrary(module);
     const symbol = GetProcAddress(module, "vkGetInstanceProcAddr") orelse return error.VulkanLoaderNotFound;
     return .{
-        .proc = @ptrCast(symbol),
+        .getInstanceProcAddress = @ptrCast(symbol),
         .handle = module,
     };
 }
@@ -57,7 +62,7 @@ fn openPosix(names: []const [*:0]const u8) !VulkanLoader {
             continue;
         };
         return .{
-            .proc = @ptrCast(symbol),
+            .getInstanceProcAddress = @ptrCast(symbol),
             .handle = library,
         };
     }
@@ -71,8 +76,3 @@ pub fn close(loader: VulkanLoader) void {
         else => @compileError("unsupported"),
     }
 }
-
-const std = @import("std");
-const builtin = @import("builtin");
-const vk = @import("vulkan");
-const VulkanLoader = @This();

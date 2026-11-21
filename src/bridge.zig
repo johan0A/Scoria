@@ -160,7 +160,6 @@ pub const to_vk = struct {
         height: u32 = 1,
         size: u32,
     };
-
     pub fn blockForFormat(fmt: sc.Format) Block {
         return switch (fmt) {
             .none => unreachable,
@@ -238,8 +237,8 @@ pub const to_vk = struct {
         return out;
     }
 
-    pub fn textureDimension(tex: sc.TextureDimension) vk.ImageType {
-        return switch (tex) {
+    pub fn textureDimension(dimension: sc.TextureDimension) vk.ImageType {
+        return switch (dimension) {
             .@"1d" => .@"1d",
             .@"2d" => .@"2d",
             .@"3d" => .@"3d",
@@ -257,8 +256,8 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn viewType(tex: sc.TextureDimension, layer_count: u32) vk.ImageViewType {
-        return switch (tex) {
+    pub fn viewType(dimension: sc.TextureDimension, layer_count: u32) vk.ImageViewType {
+        return switch (dimension) {
             .@"1d" => if (layer_count > 1) .@"1d_array" else .@"1d",
             .@"2d" => if (layer_count > 1) .@"2d_array" else .@"2d",
             .@"3d" => .@"3d",
@@ -408,72 +407,11 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn samplerCreateInfo(s: SamplerDesc) vk.SamplerCreateInfo {
-        const mips_disabled = s.mip_filter == .none or s.coord == .pixel;
-        return .{
-            .flags = .{},
-            .mag_filter = filter(s.mag_filter),
-            .min_filter = filter(s.min_filter),
-            .mipmap_mode = samplerMipmapMode(s.mip_filter),
-            .address_mode_u = address(s.address.u),
-            .address_mode_v = address(s.address.v),
-            .address_mode_w = address(s.address.w),
-            .mip_lod_bias = if (mips_disabled) 0 else s.lod_bias.toF32(),
-            .anisotropy_enable = if (s.max_anisotropy != .x1) .true else .false,
-            .max_anisotropy = anisotropy(s.max_anisotropy),
-            .compare_enable = if (s.compare.enable) .true else .false,
-            .compare_op = switch (s.compare.op) {
-                inline else => |op| compareOp(@field(sc.CompareOp, @tagName(op))),
-            },
-            .min_lod = if (mips_disabled) 0 else s.lod_min.toF32(),
-            .max_lod = if (mips_disabled) 0 else s.lod_max.toF32(),
-            .border_color = switch (s.border_color) {
-                .transparent_black => .float_transparent_black,
-                .opaque_black => .float_opaque_black,
-                .opaque_white => .float_opaque_white,
-            },
-            .unnormalized_coordinates = switch (s.coord) {
-                .normalized => .false,
-                .pixel => .true,
-            },
-        };
-    }
-
     pub fn samplerReductionMode(r: SamplerDesc.Reduction) vk.SamplerReductionMode {
         return switch (r) {
             .weighted_average => .weighted_average,
             .minimum => .min,
             .maximum => .max,
-        };
-    }
-
-    pub fn filter(f: SamplerDesc.Filter) vk.Filter {
-        return switch (f) {
-            .linear => .linear,
-            .nearest => .nearest,
-        };
-    }
-
-    pub fn address(f: SamplerDesc.Address) vk.SamplerAddressMode {
-        return switch (f) {
-            .repeat => .repeat,
-            .mirrored_repeat => .mirrored_repeat,
-            .clamp_to_edge => .clamp_to_edge,
-            .clamp_to_border => .clamp_to_border,
-        };
-    }
-
-    pub fn anisotropy(a: SamplerDesc.Anisotropy) f32 {
-        return @floatFromInt(
-            @as(u32, 1) << @backingInt(a),
-        );
-    }
-
-    pub fn samplerMipmapMode(f: SamplerDesc.MipFilter) vk.SamplerMipmapMode {
-        return switch (f) {
-            .none => .nearest,
-            .linear => .linear,
-            .nearest => .nearest,
         };
     }
 
@@ -488,6 +426,65 @@ pub const to_vk = struct {
             .increment_wrap => .increment_and_wrap,
             .decrement_wrap => .decrement_and_wrap,
         };
+    }
+
+    pub fn samplerCreateInfo(s: SamplerDesc) vk.SamplerCreateInfo {
+        const mips_enabled = s.mip_filter != .none and s.coordinates != .pixel;
+        return .{
+            .flags = .{},
+            .mag_filter = filter(s.mag_filter),
+            .min_filter = filter(s.min_filter),
+            .mipmap_mode = samplerMipmapMode(s.mip_filter),
+            .address_mode_u = address(s.address.u),
+            .address_mode_v = address(s.address.v),
+            .address_mode_w = address(s.address.w),
+            .mip_lod_bias = if (mips_enabled) s.lod_bias.toF32() else 0,
+            .anisotropy_enable = if (s.anisotropy_max != .x1) .true else .false,
+            .max_anisotropy = anisotropy(s.anisotropy_max),
+            .compare_enable = if (s.compare.enabled) .true else .false,
+            .compare_op = switch (s.compare.op) {
+                inline else => |op| compareOp(@field(sc.CompareOp, @tagName(op))),
+            },
+            .min_lod = if (mips_enabled) s.lod_min.toF32() else 0,
+            .max_lod = if (mips_enabled) s.lod_max.toF32() else 0,
+            .border_color = switch (s.border_color) {
+                .transparent_black => .float_transparent_black,
+                .opaque_black => .float_opaque_black,
+                .opaque_white => .float_opaque_white,
+            },
+            .unnormalized_coordinates = switch (s.coordinates) {
+                .normalized => .false,
+                .pixel => .true,
+            },
+        };
+    }
+
+    pub fn filter(f: SamplerDesc.Filter) vk.Filter {
+        return switch (f) {
+            .linear => .linear,
+            .nearest => .nearest,
+        };
+    }
+
+    pub fn samplerMipmapMode(f: SamplerDesc.MipFilter) vk.SamplerMipmapMode {
+        return switch (f) {
+            .none => .nearest,
+            .linear => .linear,
+            .nearest => .nearest,
+        };
+    }
+
+    pub fn address(a: SamplerDesc.Address) vk.SamplerAddressMode {
+        return switch (a) {
+            .repeat => .repeat,
+            .mirrored_repeat => .mirrored_repeat,
+            .clamp_to_edge => .clamp_to_edge,
+            .clamp_to_border => .clamp_to_border,
+        };
+    }
+
+    pub fn anisotropy(a: SamplerDesc.Anisotropy) f32 {
+        return @floatFromInt(@as(u32, 1) << @backingInt(a));
     }
 
     pub fn compareOp(op: sc.CompareOp) vk.CompareOp {
