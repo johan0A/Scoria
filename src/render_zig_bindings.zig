@@ -564,10 +564,11 @@ fn renderSymbolMap(
     dispatch: Registry.Function.Dispatch,
 ) !void {
     try renderHeader(w, registry);
-    try w.writeAll(
-        \\const std = @import("std");
-        \\const sc = @import("sc_minimal.zig");
-    ++ "\n\n");
+    try w.writeAll("const std = @import(\"std\");\n");
+    try w.print("const sc = @import(\"{s}\");\n\n", .{switch (dispatch) {
+        .table => "../sc_minimal.zig",
+        .symbol => "sc_minimal.zig",
+    }});
 
     const handle_used = try arena.alloc(bool, registry.opaques.len);
     @memset(handle_used, false);

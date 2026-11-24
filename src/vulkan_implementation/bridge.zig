@@ -1,6 +1,6 @@
 const std = @import("std");
-const sc = @import("sc_minimal.zig");
-const SamplerDesc = @import("sampler_desc.zig").SamplerDesc;
+const sc = @import("../sc_minimal.zig");
+const SamplerDesc = @import("../sampler_desc.zig").SamplerDesc;
 const vk = @import("vulkan");
 
 pub const to_sc = struct {

@@ -2,7 +2,7 @@
 // version: 0.1.0
 
 const std = @import("std");
-const sc = @import("sc_minimal.zig");
+const sc = @import("../sc_minimal.zig");
 
 const HandleTypes = struct {
     Instance: type,

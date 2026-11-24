@@ -1,6 +1,6 @@
 const std = @import("std");
 const gpu = @import("sc_minimal.zig");
-const impl = @import("vulkan_implementation.zig");
+const impl = @import("vulkan_implementation/vulkan_implementation.zig");
 const symbol_map = @import("loader_symbol_map.zig");
 
 pub export fn scSymbol(name: [*:0]u8) callconv(gpu.@"callconv") *const anyopaque {

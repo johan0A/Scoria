@@ -79,7 +79,7 @@ pub fn build(b: *std.Build) void {
         update_source_files.addCopyFileToSource(bindings_minimal, "src/sc_minimal.zig");
         update_source_files.addCopyFileToSource(functions, "src/sc/functions.zig");
         update_source_files.addCopyFileToSource(reference, "src/sc/reference.zig");
-        update_source_files.addCopyFileToSource(driver_symbol_map, "src/driver_symbol_map.zig");
+        update_source_files.addCopyFileToSource(driver_symbol_map, "src/vulkan_implementation/driver_symbol_map.zig");
         update_source_files.addCopyFileToSource(loader_symbol_map, "src/loader_symbol_map.zig");
         generate_sc_bindings.dependOn(&update_source_files.step);
     }
