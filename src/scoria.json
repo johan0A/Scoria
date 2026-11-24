@@ -721,36 +721,24 @@
       "name": "ScStage",
       "backing_type": "uint32_t",
       "bits": [
-        { "name": "SC_STAGE_TRANSFER_BIT", "bit": 0, "doc": "" },
-        { "name": "SC_STAGE_COMPUTE_BIT", "bit": 1, "doc": "" },
-        { "name": "SC_STAGE_RASTER_COLOR_OUT_BIT", "bit": 2, "doc": "" },
-        { "name": "SC_STAGE_RASTER_DEPTH_OUT_BIT", "bit": 3, "doc": "" },
-        { "name": "SC_STAGE_PIXEL_SHADER_BIT", "bit": 4, "doc": "" },
-        { "name": "SC_STAGE_VERTEX_SHADER_BIT", "bit": 5, "doc": "" }
+        { "name": "SC_STAGE_INDIRECT_BIT", "bit": 0, "doc": "Indirect argument and index fetch, of draws and dispatches." },
+        { "name": "SC_STAGE_GEOMETRY_BIT", "bit": 1, "doc": "Vertex shading." },
+        { "name": "SC_STAGE_FRAGMENT_BIT", "bit": 2, "doc": "" },
+        { "name": "SC_STAGE_DEPTH_STENCIL_TESTS_BIT", "bit": 3, "doc": "Depth and stencil attachment reads and writes." },
+        { "name": "SC_STAGE_COLOR_OUTPUT_BIT", "bit": 4, "doc": "Color attachment reads and writes." },
+        { "name": "SC_STAGE_COMPUTE_BIT", "bit": 5, "doc": "" },
+        { "name": "SC_STAGE_TRANSFER_BIT", "bit": 6, "doc": "" },
+        { "name": "SC_STAGE_HOST_BIT", "bit": 7, "doc": "Only valid as `after`: makes writes visible to the host." },
+        { "name": "SC_STAGE_ALL_COMMANDS_BIT", "bit": 8, "doc": "" }
       ],
-      "combinations": [
-        {
-          "name": "SC_STAGE_ALL",
-          "bits": [
-            "SC_STAGE_TRANSFER_BIT",
-            "SC_STAGE_COMPUTE_BIT",
-            "SC_STAGE_RASTER_COLOR_OUT_BIT",
-            "SC_STAGE_RASTER_DEPTH_OUT_BIT",
-            "SC_STAGE_PIXEL_SHADER_BIT",
-            "SC_STAGE_VERTEX_SHADER_BIT"
-          ],
-          "doc": ""
-        }
-      ],
-      "doc": ""
+      "combinations": [],
+      "doc": "Graphics stages run in the order indirect, geometry, fragment, color_output, with depth_stencil_tests both before and after fragment.\nAs `before`, a graphics stage also covers all earlier ones; as `after`, all later ones."
     },
     {
       "name": "ScHazard",
       "backing_type": "uint32_t",
       "bits": [
-        { "name": "SC_HAZARD_DRAW_ARGUMENTS_BIT", "bit": 0, "doc": "" },
-        { "name": "SC_HAZARD_DESCRIPTORS_BIT", "bit": 1, "doc": "" },
-        { "name": "SC_HAZARD_DEPTH_STENCIL_BIT", "bit": 2, "doc": "" }
+        { "name": "SC_HAZARD_DESCRIPTORS_BIT", "bit": 0, "doc": "Descriptors written by the GPU before the barrier are read after it." }
       ],
       "combinations": [],
       "doc": ""
@@ -771,7 +759,8 @@
       "name": "ScAdapterFeatures",
       "backing_type": "uint32_t",
       "bits": [
-        { "name": "SC_ADAPTER_FEATURES_BLEND_STATE_BIT", "bit": 0, "doc": "ScBlendState is available and pipelines may omit their embedded blend state." }
+        { "name": "SC_ADAPTER_FEATURES_BLEND_STATE_BIT", "bit": 0, "doc": "ScBlendState is available and pipelines may omit their embedded blend state." },
+        { "name": "SC_ADAPTER_FEATURES_RENDER_PASS_BARRIER_BIT", "bit": 1, "doc": "scBarrier may be called inside a render pass." }
       ],
       "combinations": [],
       "doc": ""
@@ -1339,7 +1328,7 @@
         { "name": "after", "type": { "base": "ScStage" }, "doc": "" },
         { "name": "hazard", "type": { "base": "ScHazard" }, "doc": "" }
       ],
-      "doc": ""
+      "doc": "Inside a render pass, requires SC_ADAPTER_FEATURES_RENDER_PASS_BARRIER_BIT and only fragment, depth_stencil_tests and color_output are synchronized."
     },
     {
       "name": "scCopyTextureToMemory",

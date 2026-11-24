@@ -748,6 +748,7 @@ pub fn dispatchIndirect(
     );
 }
 
+/// Inside a render pass, requires SC_ADAPTER_FEATURES_RENDER_PASS_BARRIER_BIT and only fragment, depth_stencil_tests and color_output are synchronized.
 pub fn barrier(
     command_buffer: *sc.CommandBuffer,
     before: sc.Stage,

@@ -215,25 +215,190 @@ pub const to_vk = struct {
         };
     }
 
-    pub fn pipelineStage(stage: sc.Stage) vk.PipelineStageFlags2 {
+    pub fn srcStageMask(stage: sc.Stage) vk.PipelineStageFlags2 {
+        std.debug.assert(!stage.host);
         var out: vk.PipelineStageFlags2 = .{};
-        if (stage.transfer) out.all_transfer = true;
-        if (stage.compute) out.compute_shader = true;
-        if (stage.raster_color_out) out.color_attachment_output = true;
-        if (stage.raster_depth_out) {
-            out.early_fragment_tests = true;
-            out.late_fragment_tests = true;
-        }
-        if (stage.pixel_shader) out.fragment_shader = true;
-        if (stage.vertex_shader) {
-            out.vertex_shader = true;
-            out.index_input = true;
-        }
-        // TODO:
-        // if (stage.mesh_shader) {
-        //     out.task_shader_bit_ext = true;
-        //     out.mesh_shader_bit_ext = true;
-        // }
+        if (stage.indirect) out = out.merge(.{
+            .draw_indirect = true,
+            .index_input = true,
+        });
+        if (stage.geometry) out = out.merge(.{
+            .draw_indirect = true,
+            .index_input = true,
+            .vertex_shader = true,
+            // .task_shader_ext = true,
+            // .mesh_shader_ext = true,
+        });
+        if (stage.fragment) out = out.merge(.{
+            .draw_indirect = true,
+            .index_input = true,
+            .vertex_shader = true,
+            // .task_shader_ext = true,
+            // .mesh_shader_ext = true,
+            .early_fragment_tests = true,
+            .fragment_shader = true,
+        });
+        if (stage.depth_stencil_tests) out = out.merge(.{
+            .draw_indirect = true,
+            .index_input = true,
+            .vertex_shader = true,
+            // .task_shader_ext = true,
+            // .mesh_shader_ext = true,
+            .early_fragment_tests = true,
+            .fragment_shader = true,
+            .late_fragment_tests = true,
+        });
+        if (stage.color_output) out = out.merge(.{
+            .draw_indirect = true,
+            .index_input = true,
+            .vertex_shader = true,
+            // .task_shader_ext = true,
+            // .mesh_shader_ext = true,
+            .early_fragment_tests = true,
+            .fragment_shader = true,
+            .late_fragment_tests = true,
+            .color_attachment_output = true,
+        });
+        if (stage.compute) out = out.merge(.{
+            .compute_shader = true,
+        });
+        if (stage.transfer) out = out.merge(.{
+            .copy = true,
+        });
+        if (stage.all_commands) out = out.merge(.{
+            .all_commands = true,
+        });
+        return out;
+    }
+
+    pub fn srcAccessMask(stage: sc.Stage) vk.AccessFlags2 {
+        std.debug.assert(!stage.host);
+        var out: vk.AccessFlags2 = .{};
+        if (stage.geometry) out = out.merge(.{
+            .shader_storage_write = true,
+        });
+        if (stage.fragment) out = out.merge(.{
+            .shader_storage_write = true,
+            .depth_stencil_attachment_write = true,
+        });
+        if (stage.depth_stencil_tests) out = out.merge(.{
+            .shader_storage_write = true,
+            .depth_stencil_attachment_write = true,
+        });
+        if (stage.color_output) out = out.merge(.{
+            .shader_storage_write = true,
+            .depth_stencil_attachment_write = true,
+            .color_attachment_write = true,
+        });
+        if (stage.compute) out = out.merge(.{
+            .shader_storage_write = true,
+        });
+        if (stage.transfer) out = out.merge(.{
+            .transfer_write = true,
+        });
+        if (stage.all_commands) out = out.merge(.{
+            .memory_write = true,
+        });
+        return out;
+    }
+
+    pub fn dstStageMask(stage: sc.Stage) vk.PipelineStageFlags2 {
+        var out: vk.PipelineStageFlags2 = .{};
+        if (stage.indirect) out = out.merge(.{
+            .draw_indirect = true,
+            .index_input = true,
+            .compute_shader = true,
+            .vertex_shader = true,
+            // .task_shader_ext = true,
+            // .mesh_shader_ext = true,
+            .early_fragment_tests = true,
+            .fragment_shader = true,
+            .late_fragment_tests = true,
+            .color_attachment_output = true,
+        });
+        if (stage.geometry) out = out.merge(.{
+            .vertex_shader = true,
+            // .task_shader_ext = true,
+            // .mesh_shader_ext = true,
+            .early_fragment_tests = true,
+            .fragment_shader = true,
+            .late_fragment_tests = true,
+            .color_attachment_output = true,
+        });
+        if (stage.depth_stencil_tests) out = out.merge(.{
+            .early_fragment_tests = true,
+            .fragment_shader = true,
+            .late_fragment_tests = true,
+            .color_attachment_output = true,
+        });
+        if (stage.fragment) out = out.merge(.{
+            .fragment_shader = true,
+            .late_fragment_tests = true,
+            .color_attachment_output = true,
+        });
+        if (stage.color_output) out = out.merge(.{
+            .color_attachment_output = true,
+        });
+        if (stage.compute) out = out.merge(.{
+            .compute_shader = true,
+        });
+        if (stage.transfer) out = out.merge(.{
+            .copy = true,
+        });
+        if (stage.host) out = out.merge(.{
+            .host = true,
+        });
+        if (stage.all_commands) out = out.merge(.{
+            .all_commands = true,
+        });
+        return out;
+    }
+
+    pub fn dstAccessMask(stage: sc.Stage) vk.AccessFlags2 {
+        var out: vk.AccessFlags2 = .{};
+        if (stage.indirect) out = out.merge(.{
+            .indirect_command_read = true,
+            .index_read = true,
+            .shader_storage_read = true,
+            .shader_sampled_read = true,
+            .uniform_read = true,
+            .shader_storage_write = true,
+            .depth_stencil_attachment_read = true,
+            .depth_stencil_attachment_write = true,
+            .color_attachment_read = true,
+            .color_attachment_write = true,
+        });
+        if (stage.geometry or stage.depth_stencil_tests or stage.fragment) out = out.merge(.{
+            .shader_storage_read = true,
+            .shader_sampled_read = true,
+            .uniform_read = true,
+            .shader_storage_write = true,
+            .depth_stencil_attachment_read = true,
+            .depth_stencil_attachment_write = true,
+            .color_attachment_read = true,
+            .color_attachment_write = true,
+        });
+        if (stage.color_output) out = out.merge(.{
+            .color_attachment_read = true,
+            .color_attachment_write = true,
+        });
+        if (stage.compute) out = out.merge(.{
+            .shader_storage_read = true,
+            .shader_sampled_read = true,
+            .uniform_read = true,
+            .shader_storage_write = true,
+        });
+        if (stage.transfer) out = out.merge(.{
+            .transfer_read = true,
+            .transfer_write = true,
+        });
+        if (stage.host) out = out.merge(.{
+            .host_read = true,
+        });
+        if (stage.all_commands) out = out.merge(.{
+            .memory_read = true,
+            .memory_write = true,
+        });
         return out;
     }
 

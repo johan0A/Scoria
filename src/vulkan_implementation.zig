@@ -162,7 +162,10 @@ pub const Instance = struct {
         return .{
             .name = properties.device_name,
             .kind = to_sc.adapterKind(properties.device_type),
-            .features = .{ .blend_state = support.optional.extended_dynamic_state_3 },
+            .features = .{
+                .blend_state = support.optional.extended_dynamic_state_3,
+                .render_pass_barrier = support.optional.dynamic_rendering_local_read,
+            },
             .format_features = support.format_features,
         };
     }
@@ -1764,24 +1767,38 @@ pub const CommandBuffer = struct {
         hazard: sc.Hazard,
     ) void {
         const cb = cb_obj.body();
-        var dst_stage = to_vk.pipelineStage(after);
-        if (hazard.draw_arguments) dst_stage.draw_indirect = true;
-        if (hazard.depth_stencil) {
-            dst_stage.early_fragment_tests = true;
-            dst_stage.late_fragment_tests = true;
+        var src_stage = to_vk.srcStageMask(before);
+        const src_access = to_vk.srcAccessMask(before);
+        var dst_stage = to_vk.dstStageMask(after);
+        var dst_access = to_vk.dstAccessMask(after);
+        if (hazard.descriptors) {
+            std.debug.assert(after.indirect or after.geometry or
+                after.depth_stencil_tests or after.fragment or
+                after.compute or after.all_commands);
+            dst_access.descriptor_buffer_read_ext = true;
+        }
+        if (cb.in_render_pass) {
+            std.debug.assert(cb.d.optional_features.dynamic_rendering_local_read);
+            std.debug.assert(!before.compute and !before.transfer and !after.compute and !after.transfer and !after.host);
+            const stages: vk.PipelineStageFlags2 = .{
+                .early_fragment_tests = true,
+                .fragment_shader = true,
+                .late_fragment_tests = true,
+                .color_attachment_output = true,
+            };
+            src_stage = if (src_stage.all_commands) stages else src_stage.intersect(stages);
+            dst_stage = if (dst_stage.all_commands) stages else dst_stage.intersect(stages);
+            std.debug.assert(src_stage.toInt() != 0 and dst_stage.toInt() != 0);
+            dst_access = dst_access.subtract(.{ .indirect_command_read = true, .index_read = true });
         }
         cb.d.handle.cmdPipelineBarrier2(cb.handle, &.{
             .dependency_flags = .{ .by_region = cb.in_render_pass },
             .memory_barrier_count = 1,
             .p_memory_barriers = &.{.{
-                .src_stage_mask = to_vk.pipelineStage(before),
-                .src_access_mask = .{ .memory_write = true },
+                .src_stage_mask = src_stage,
+                .src_access_mask = src_access,
                 .dst_stage_mask = dst_stage,
-                .dst_access_mask = .{
-                    .memory_read = true,
-                    .memory_write = true,
-                    .descriptor_buffer_read_ext = hazard.descriptors,
-                },
+                .dst_access_mask = dst_access,
             }},
         });
     }

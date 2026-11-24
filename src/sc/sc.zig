@@ -118,6 +118,7 @@ pub const CommandBuffer = opaque {
     pub const setPipeline = functions.setPipeline;
     pub const dispatch = functions.dispatch;
     pub const dispatchIndirect = functions.dispatchIndirect;
+    /// Inside a render pass, requires `AdapterFeatures.render_pass_barrier` and only fragment, depth_stencil_tests and color_output are synchronized.
     pub const barrier = functions.barrier;
     pub const copyTextureToMemory = functions.copyTextureToMemory;
     pub const copyMemoryToTexture = functions.copyMemoryToTexture;
@@ -439,30 +440,33 @@ pub const StencilOp = enum(u32) {
     decrement_wrap = 7,
 };
 
+/// Graphics stages run in the order indirect, geometry, fragment, color_output, with depth_stencil_tests both before and after fragment.
+/// As `before`, a graphics stage also covers all earlier ones; as `after`, all later ones.
 pub const Stage = packed struct(u32) {
-    transfer: bool = false,
+    /// Indirect argument and index fetch, of draws and dispatches.
+    indirect: bool = false,
+    /// Vertex shading.
+    geometry: bool = false,
+    fragment: bool = false,
+    /// Depth and stencil attachment reads and writes.
+    depth_stencil_tests: bool = false,
+    /// Color attachment reads and writes.
+    color_output: bool = false,
     compute: bool = false,
-    raster_color_out: bool = false,
-    raster_depth_out: bool = false,
-    pixel_shader: bool = false,
-    vertex_shader: bool = false,
-    padding: u26 = 0,
+    transfer: bool = false,
+    /// Only valid as `after`: makes writes visible to the host.
+    host: bool = false,
+    all_commands: bool = false,
+    padding: u23 = 0,
 
-    pub const all: Stage = .{
-        .transfer = true,
-        .compute = true,
-        .raster_color_out = true,
-        .raster_depth_out = true,
-        .pixel_shader = true,
-        .vertex_shader = true,
-    };
+    pub const all: Stage = .{ .all_commands = true };
+    pub const none: Stage = .{};
 };
 
 pub const Hazard = packed struct(u32) {
-    draw_arguments: bool = false,
+    /// Descriptors written by the GPU before the barrier are read after it.
     descriptors: bool = false,
-    depth_stencil: bool = false,
-    padding: u29 = 0,
+    padding: u31 = 0,
 };
 
 pub const TextureUsage = packed struct(u32) {
@@ -477,7 +481,9 @@ pub const TextureUsage = packed struct(u32) {
 pub const AdapterFeatures = packed struct(u32) {
     /// `BlendState` is available and pipelines may omit their embedded blend state.
     blend_state: bool = false,
-    padding: u31 = 0,
+    /// `CommandBuffer.barrier` may be called inside a render pass.
+    render_pass_barrier: bool = false,
+    padding: u30 = 0,
 };
 
 /// Format capabilities beyond the guarantees of `Format`. At least one of `bc` and `astc` is always available.
