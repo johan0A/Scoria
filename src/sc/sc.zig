@@ -798,10 +798,8 @@ pub const GraphicsPipelineDesc = extern struct {
     alpha_to_coverage: bool = false,
     /// Must match the sample count of every attachment of the render pass.
     sample_count: u32 = 1,
-    /// `.none` for no depth attachment.
-    depth_format: Format = .none,
-    /// `.none` for no stencil attachment.
-    stencil_format: Format = .none,
+    /// `.none` for no depth/stencil attachment.
+    depth_stencil_format: Format = .none,
     color_targets: ColorTargets = .{},
     /// Embedded blend state, required without `AdapterFeatures.blend_state`.
     /// `null` to set it dynamically with `setBlendState`.

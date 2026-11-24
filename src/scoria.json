@@ -396,8 +396,7 @@
         { "name": "cull", "type": { "base": "ScCull" }, "default": "SC_CULL_NONE", "doc": "" },
         { "name": "alpha_to_coverage", "type": { "base": "bool" }, "default": false, "doc": "" },
         { "name": "sample_count", "type": { "base": "uint32_t" }, "default": 1, "doc": "Must match the sample count of every attachment of the render pass." },
-        { "name": "depth_format", "type": { "base": "ScFormat" }, "default": "SC_FORMAT_NONE", "doc": "SC_FORMAT_NONE for no depth attachment." },
-        { "name": "stencil_format", "type": { "base": "ScFormat" }, "default": "SC_FORMAT_NONE", "doc": "SC_FORMAT_NONE for no stencil attachment." },
+        { "name": "depth_stencil_format", "type": { "base": "ScFormat" }, "default": "SC_FORMAT_NONE", "doc": "SC_FORMAT_NONE for no depth/stencil attachment." },
         { "name": "color_targets", "type": { "base": "ScColorTargets" }, "default": {}, "doc": "" },
         { "name": "blend", "type": { "base": "ScBlendDesc", "ptr": [{ "const": true, "optional": true }] }, "default": null, "doc": "Embedded blend state, required without SC_ADAPTER_FEATURES_BLEND_STATE_BIT. NULL to set it dynamically with scSetBlendState." }
       ],

@@ -590,10 +590,8 @@ pub const GraphicsPipelineDesc = extern struct {
     alpha_to_coverage: bool = false,
     /// Must match the sample count of every attachment of the render pass.
     sample_count: u32 = 1,
-    /// SC_FORMAT_NONE for no depth attachment.
-    depth_format: sc.Format = .none,
-    /// SC_FORMAT_NONE for no stencil attachment.
-    stencil_format: sc.Format = .none,
+    /// SC_FORMAT_NONE for no depth/stencil attachment.
+    depth_stencil_format: sc.Format = .none,
     color_targets: sc.ColorTargets = .{},
     /// Embedded blend state, required without SC_ADAPTER_FEATURES_BLEND_STATE_BIT. NULL to set it dynamically with scSetBlendState.
     blend: ?*const sc.BlendDesc = null,
