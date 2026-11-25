@@ -160,7 +160,8 @@
         { "name": "name", "type": { "base": "uint8_t", "array": "ADAPTER_NAME_CAPACITY_BYTES" }, "doc": "UTF-8, null-terminated." },
         { "name": "kind", "type": { "base": "ScAdapterKind" }, "doc": "" },
         { "name": "features", "type": { "base": "ScAdapterFeatures" }, "doc": "" },
-        { "name": "format_features", "type": { "base": "ScFormatFeatures" }, "doc": "" }
+        { "name": "format_features", "type": { "base": "ScFormatFeatures" }, "doc": "" },
+        { "name": "descriptor_size_and_heap_align", "type": { "base": "ScSizeAlign" }, "doc": "" }
       ],
       "doc": ""
     },
@@ -856,14 +857,19 @@
       "group": "ScInstance",
       "dispatch": "symbol",
       "enumerate": true,
-      "return": { "base": "void" },
+      "return": { "base": "ScResult" },
+      "errors": [
+        "SC_RESULT_OUT_OF_MEMORY",
+        "SC_RESULT_OUT_OF_DEVICE_MEMORY",
+        "SC_RESULT_UNKNOWN"
+      ],
       "params": [
         { "name": "instance", "type": { "base": "ScInstance", "ptr": [{}] }, "doc": "" },
         { "name": "adapters_capacity", "type": { "base": "size_t" }, "doc": "" },
         { "name": "adapters", "type": { "base": "ScAdapter", "ptr": [{}, { "optional": true, "len": "adapters_capacity" }] }, "out": true, "doc": "" },
         { "name": "adapter_count", "type": { "base": "size_t", "ptr": [{}] }, "out": true, "doc": "" }
       ],
-      "doc": ""
+      "doc": "Lists the compatible adapters present now. And handles stay valid until the instance is destroyed. Not thread-safe."
     },
     {
       "name": "scCreateDevice",
@@ -887,15 +893,24 @@
       "doc": ""
     },
     {
-      "name": "scAdapterInfo",
-      "group": "ScInstance",
+      "name": "scDeviceInfo",
+      "group": "ScDevice",
       "dispatch": "table",
-      "return": { "base": "ScAdapterInfo" },
+      "return": { "base": "ScAdapterInfo", "ptr": [{ "const": true }] },
       "params": [
-        { "name": "instance", "type": { "base": "ScInstance", "ptr": [{}] }, "doc": "" },
+        { "name": "device", "type": { "base": "ScDevice", "ptr": [{}] }, "doc": "" }
+      ],
+      "doc": "Same as `scAdapterInfo` for the adapter the device was created from."
+    },
+    {
+      "name": "scAdapterInfo",
+      "group": "ScAdapter",
+      "dispatch": "table",
+      "return": { "base": "ScAdapterInfo", "ptr": [{ "const": true }] },
+      "params": [
         { "name": "adapter", "type": { "base": "ScAdapter", "ptr": [{}] }, "doc": "" }
       ],
-      "doc": ""
+      "doc": "Cheap to call. Valid until the instance is destroyed."
     },
     {
       "name": "scCreateSurfaceWin32",
@@ -1007,16 +1022,6 @@
       "params": [
         { "name": "device", "type": { "base": "ScDevice", "ptr": [{}] }, "doc": "" },
         { "name": "address", "type": { "base": "uint8_t", "device_ptr": [{ "len": "none" }] }, "doc": "" }
-      ],
-      "doc": ""
-    },
-    {
-      "name": "scDescriptorSizeAndHeapAlign",
-      "group": "ScDescriptor",
-      "dispatch": "table",
-      "return": { "base": "ScSizeAlign" },
-      "params": [
-        { "name": "device", "type": { "base": "ScDevice", "ptr": [{}] }, "doc": "" }
       ],
       "doc": ""
     },

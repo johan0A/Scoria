@@ -414,6 +414,7 @@ pub const AdapterInfo = extern struct {
     kind: sc.AdapterKind,
     features: sc.AdapterFeatures,
     format_features: sc.FormatFeatures,
+    descriptor_size_and_heap_align: sc.SizeAlign,
 };
 
 pub const SurfaceWin32Desc = extern struct {

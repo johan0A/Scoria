@@ -10,7 +10,7 @@ const vulkan_implementation = @This();
 
 pub const sc = @import("driver_bindings.zig").Bindings(struct {
     pub const Instance = Object(vulkan_implementation.Instance);
-    pub const Adapter = vulkan_implementation.Adapter;
+    pub const Adapter = Object(vulkan_implementation.Adapter);
     pub const Surface = Object(vulkan_implementation.Surface);
     pub const Device = Object(vulkan_implementation.Device);
     pub const Queue = Object(vulkan_implementation.Queue);
@@ -31,6 +31,10 @@ pub const Instance = struct {
     debug_messenger: vk.DebugUtilsMessengerEXT,
     sc_gpa: sc.HostAllocator,
     gpa: std.mem.Allocator,
+    /// Every compatible adapter seen.
+    adapters: std.ArrayList(*Object(Adapter)),
+    adapter_pool: std.heap.MemoryPool(Object(Adapter)),
+    physical_devices_incompatible: std.ArrayList(vk.PhysicalDevice),
 
     const SurfaceSupport = packed struct {
         surface: bool = false,
@@ -122,6 +126,7 @@ pub const Instance = struct {
             .message_type = .{ .general_ext = true, .validation_ext = true, .performance_ext = true },
             .pfn_user_callback = debugCallback,
         }, null) else .null;
+        errdefer if (debug_messenger != .null) handle.destroyDebugUtilsMessengerEXT(debug_messenger, null);
 
         instance_obj.set(undefined, .{
             .handle = handle,
@@ -130,6 +135,9 @@ pub const Instance = struct {
             .debug_messenger = debug_messenger,
             .sc_gpa = sc_gpa.*,
             .gpa = gpa,
+            .adapters = .empty,
+            .adapter_pool = .empty,
+            .physical_devices_incompatible = .empty,
         });
         return instance_obj;
     }
@@ -139,6 +147,9 @@ pub const Instance = struct {
         if (instance.debug_messenger != .null) instance.handle.destroyDebugUtilsMessengerEXT(instance.debug_messenger, null);
         instance.handle.destroyInstance(null);
         instance.loader.close();
+        instance.adapters.deinit(instance.gpa);
+        instance.adapter_pool.deinit(instance.gpa);
+        instance.physical_devices_incompatible.deinit(instance.gpa);
         instance.gpa.destroy(instance.handle.wrapper);
         instance.gpa.destroy(instance_obj);
     }
@@ -146,43 +157,73 @@ pub const Instance = struct {
     pub fn enumerateAdapters(
         instance_obj: *Object(Instance),
         adapters_capacity: usize,
-        adapters: ?[*]*Adapter,
+        adapters: ?[*]*Object(Adapter),
         adapter_count: *usize,
-    ) void {
-        var arena_impl: std.heap.ArenaAllocator = .init(instance_obj.body().gpa);
-        defer arena_impl.deinit();
-        const compatible_adapters = compatibleAdapters(instance_obj.body(), arena_impl.allocator()) catch @panic("TODO");
-        writeEnumeration(*Adapter, compatible_adapters, adapters_capacity, adapters, adapter_count);
+    ) !void {
+        enumerateAdaptersInner(instance_obj.body(), instance_obj.header, adapters_capacity, adapters, adapter_count) catch |err| return switch (err) {
+            error.OutOfHostMemory, error.OutOfMemory => error.OutOfMemory,
+            error.OutOfDeviceMemory => error.OutOfDeviceMemory,
+            error.InitializationFailed, error.LayerNotPresent, error.Unknown => error.Unknown,
+        };
     }
-    fn compatibleAdapters(instance: *Instance, arena: std.mem.Allocator) ![]*Adapter {
+    fn enumerateAdaptersInner(
+        instance: *Instance,
+        table: *anyopaque,
+        adapters_capacity: usize,
+        adapters: ?[*]*Object(Adapter),
+        adapter_count: *usize,
+    ) !void {
+        var arena_impl: std.heap.ArenaAllocator = .init(instance.gpa);
+        defer arena_impl.deinit();
+        const arena = arena_impl.allocator();
+
         const physical_devices = try instance.handle.enumeratePhysicalDevicesAlloc(arena);
-        var adapters: std.ArrayList(*Adapter) = try .initCapacity(arena, physical_devices.len);
-        for (physical_devices) |physical_device| {
+        var adapters_present: std.ArrayList(*Object(Adapter)) = try .initCapacity(arena, physical_devices.len);
+        physical_devices: for (physical_devices) |physical_device| {
+            for (instance.adapters.items) |adapter| {
+                if (adapter.body().physical_device != physical_device) continue;
+                adapters_present.appendAssumeCapacity(adapter);
+                continue :physical_devices;
+            }
+            if (std.mem.indexOfScalar(vk.PhysicalDevice, instance.physical_devices_incompatible.items, physical_device) != null) continue;
+
             const support: Adapter.Support = try .query(instance, physical_device, arena);
-            if (support.compatible) {
-                adapters.appendAssumeCapacity(.fromPhysicalDevice(physical_device));
-            } else {
+            if (!support.compatible) {
                 const properties = instance.handle.getPhysicalDeviceProperties(physical_device);
                 std.log.info("incompatible vulkan adapter: {s}", .{std.mem.sliceTo(&properties.device_name, 0)});
+                try instance.physical_devices_incompatible.append(instance.gpa, physical_device);
+                continue;
             }
-        }
-        return adapters.items;
-    }
 
-    pub fn adapterInfo(instance: *Object(Instance), adapter: *Adapter) sc.AdapterInfo {
-        const properties = instance.body().handle.getPhysicalDeviceProperties(adapter.asPhysicalDevice());
-        var arena_impl: std.heap.ArenaAllocator = .init(instance.body().gpa);
-        defer arena_impl.deinit();
-        const support: Adapter.Support = Adapter.Support.query(instance.body(), adapter.asPhysicalDevice(), arena_impl.allocator()) catch @panic("TODO");
-        return .{
-            .name = properties.device_name,
-            .kind = to_sc.adapterKind(properties.device_type),
-            .features = .{
-                .blend_state = support.optional.extended_dynamic_state_3,
-                .render_pass_barrier = support.optional.dynamic_rendering_local_read,
-            },
-            .format_features = support.format_features,
-        };
+            var descriptor_buffer_properties = std.mem.zeroInit(vk.PhysicalDeviceDescriptorBufferPropertiesEXT, .{});
+            var properties_2: vk.PhysicalDeviceProperties2 = .{ .p_next = &descriptor_buffer_properties, .properties = undefined };
+            instance.handle.getPhysicalDeviceProperties2(physical_device, &properties_2);
+            const properties = properties_2.properties;
+
+            try instance.adapters.ensureUnusedCapacity(instance.gpa, 1);
+            const adapter = try instance.adapter_pool.create(instance.gpa);
+            adapter.set(table, .{
+                .physical_device = physical_device,
+                .support = support,
+                .descriptor_buffer_properties = descriptor_buffer_properties,
+                .adapter_info = .{
+                    .name = properties.device_name,
+                    .kind = to_sc.adapterKind(properties.device_type),
+                    .features = .{
+                        .blend_state = support.optional.extended_dynamic_state_3,
+                        .render_pass_barrier = support.optional.dynamic_rendering_local_read,
+                    },
+                    .format_features = support.format_features,
+                    .descriptor_size_and_heap_align = .{
+                        .size = @max(descriptor_buffer_properties.sampled_image_descriptor_size, descriptor_buffer_properties.storage_image_descriptor_size),
+                        .alignment = descriptor_buffer_properties.descriptor_buffer_offset_alignment,
+                    },
+                },
+            });
+            instance.adapters.appendAssumeCapacity(adapter);
+            adapters_present.appendAssumeCapacity(adapter);
+        }
+        writeEnumeration(*Object(Adapter), adapters_present.items, adapters_capacity, adapters, adapter_count);
     }
 };
 
@@ -238,9 +279,9 @@ pub const Surface = struct {
         };
         errdefer instance.handle.destroySurfaceKHR(handle, null);
 
-        const vk_capabilities = try instance.handle.getPhysicalDeviceSurfaceCapabilitiesKHR(d.physical_device, handle);
+        const vk_capabilities = try instance.handle.getPhysicalDeviceSurfaceCapabilitiesKHR(d.adapter.physical_device, handle);
 
-        const vk_formats = try instance.handle.getPhysicalDeviceSurfaceFormatsAllocKHR(d.physical_device, handle, scratch);
+        const vk_formats = try instance.handle.getPhysicalDeviceSurfaceFormatsAllocKHR(d.adapter.physical_device, handle, scratch);
         var formats: std.EnumArray(sc.ColorSpace, []sc.Format) = .initFill(&.{});
         for (&formats.values) |*color_space_formats| color_space_formats.ptr = (try arena.alloc(sc.Format, vk_formats.len)).ptr;
         for (vk_formats) |vk_format| {
@@ -253,7 +294,7 @@ pub const Surface = struct {
             slice.len += 1;
         }
 
-        const vk_present_modes = try instance.handle.getPhysicalDeviceSurfacePresentModesAllocKHR(d.physical_device, handle, scratch);
+        const vk_present_modes = try instance.handle.getPhysicalDeviceSurfacePresentModesAllocKHR(d.adapter.physical_device, handle, scratch);
         var present_modes: std.ArrayList(sc.PresentMode) = try .initCapacity(arena, vk_present_modes.len);
         for (vk_present_modes) |vk_present_mode| {
             present_modes.appendAssumeCapacity(to_sc.presentMode(vk_present_mode) orelse continue);
@@ -300,10 +341,11 @@ pub const Surface = struct {
     }
 };
 
-pub const Adapter = opaque {
-    comptime {
-        std.debug.assert(@sizeOf(vk.PhysicalDevice) == @sizeOf(*Adapter));
-    }
+pub const Adapter = struct {
+    physical_device: vk.PhysicalDevice,
+    support: Support,
+    descriptor_buffer_properties: vk.PhysicalDeviceDescriptorBufferPropertiesEXT,
+    adapter_info: sc.AdapterInfo,
 
     const required_extensions = [_][*:0]const u8{
         vk.device_extensions.ext_descriptor_buffer.name,
@@ -480,6 +522,10 @@ pub const Adapter = opaque {
         }
     };
 
+    pub fn info(adapter: *Object(Adapter)) *const sc.AdapterInfo {
+        return &adapter.body().adapter_info;
+    }
+
     fn hasRequiredFormats(
         instance: *const Instance,
         physical_device: vk.PhysicalDevice,
@@ -554,20 +600,12 @@ pub const Adapter = opaque {
             .astc = features.texture_compression_astc_ldr == .true,
         };
     }
-
-    fn asPhysicalDevice(adapter: *Adapter) vk.PhysicalDevice {
-        return @ptrCast(adapter);
-    }
-
-    fn fromPhysicalDevice(physical_device: vk.PhysicalDevice) *Adapter {
-        return @ptrCast(physical_device);
-    }
 };
 
 pub const Device = struct {
     handle: vk.DeviceProxy,
     instance: *Instance,
-    physical_device: vk.PhysicalDevice,
+    adapter: *Adapter,
     gpa: std.mem.Allocator,
     table: *anyopaque,
 
@@ -581,9 +619,6 @@ pub const Device = struct {
     has_host_visible_device_local: bool,
     /// Memory types able to hold most common textures, `.device_local` allocations must use one of them.
     image_memory_type_bits: u32,
-    descriptor_buffer_properties: vk.PhysicalDeviceDescriptorBufferPropertiesEXT,
-    swapchain_supported: bool,
-    optional_features: Adapter.Features.Optional,
 
     texture_heap_set_layout: vk.DescriptorSetLayout,
 
@@ -641,18 +676,16 @@ pub const Device = struct {
         }
     };
 
-    pub fn create(instance: *Object(Instance), adapter: *Adapter) *Object(Device) {
-        return createInner(instance.body(), instance.header, adapter) catch @panic("TODO");
+    pub fn create(instance: *Object(Instance), adapter: *Object(Adapter)) *Object(Device) {
+        return createInner(instance.body(), instance.header, adapter.body()) catch @panic("TODO");
     }
     fn createInner(instance: *Instance, table: *anyopaque, adapter: *Adapter) !*Object(Device) {
         const gpa = instance.gpa;
-        const physical_device = adapter.asPhysicalDevice();
+        const physical_device = adapter.physical_device;
+        const support = adapter.support;
         var arena_impl: std.heap.ArenaAllocator = .init(gpa);
         defer arena_impl.deinit();
         const arena = arena_impl.allocator();
-
-        const support: Adapter.Support = try .query(instance, physical_device, arena);
-        if (!support.compatible) return error.FeatureNotPresent;
 
         const d_obj = try gpa.create(Object(Device));
         errdefer gpa.destroy(d_obj);
@@ -793,10 +826,6 @@ pub const Device = struct {
             image_memory_type_bits &= Texture.memoryRequirements(handle, desc).memory_type_bits;
         }
 
-        var descriptor_buffer_properties = std.mem.zeroInit(vk.PhysicalDeviceDescriptorBufferPropertiesEXT, .{});
-        var properties: vk.PhysicalDeviceProperties2 = .{ .p_next = &descriptor_buffer_properties, .properties = undefined };
-        instance.handle.getPhysicalDeviceProperties2(physical_device, &properties);
-
         const has_host_visible_device_local = for (memory_properties.memory_types[0..memory_properties.memory_type_count]) |memory_type| {
             // heuristic to check if ReBAR is on
             if (memory_type.property_flags.device_local and
@@ -807,7 +836,7 @@ pub const Device = struct {
         d_obj.set(table, .{
             .handle = handle,
             .instance = instance,
-            .physical_device = physical_device,
+            .adapter = adapter,
             .gpa = gpa,
             .table = table,
 
@@ -820,9 +849,6 @@ pub const Device = struct {
             .memory_properties = memory_properties,
             .has_host_visible_device_local = has_host_visible_device_local,
             .image_memory_type_bits = image_memory_type_bits,
-            .descriptor_buffer_properties = descriptor_buffer_properties,
-            .swapchain_supported = support.swapchain,
-            .optional_features = support.optional,
 
             .texture_heap_set_layout = texture_heap_set_layout,
 
@@ -875,6 +901,10 @@ pub const Device = struct {
         d.depth_stencil_states.deinit(gpa);
         d.blend_states.deinit(gpa);
         gpa.destroy(d_obj);
+    }
+
+    pub fn info(d: *Object(Device)) *const sc.AdapterInfo {
+        return &d.body().adapter.adapter_info;
     }
 
     pub fn hostFromDevicePointer(d: *Object(Device), ptr: sc.DeviceAddress) *anyopaque {
@@ -1281,13 +1311,13 @@ pub const Swapchain = struct {
         const d = queue.d;
 
         // TODO: move to adapter picking
-        std.debug.assert(d.swapchain_supported and try queue.d.instance.handle.getPhysicalDeviceSurfaceSupportKHR(queue.d.physical_device, queue.family, surface.handle) == .true);
+        std.debug.assert(d.adapter.support.swapchain and try queue.d.instance.handle.getPhysicalDeviceSurfaceSupportKHR(queue.d.adapter.physical_device, queue.family, surface.handle) == .true);
 
-        const present_wait_supported = d.optional_features.present_wait_2 and supported: {
+        const present_wait_supported = d.adapter.support.optional.present_wait_2 and supported: {
             var wait_capabilities: vk.SurfaceCapabilitiesPresentWait2KHR = .{ .present_wait_2_supported = .false };
             var id_capabilities: vk.SurfaceCapabilitiesPresentId2KHR = .{ .p_next = &wait_capabilities, .present_id_2_supported = .false };
             var capabilities: vk.SurfaceCapabilities2KHR = .{ .p_next = &id_capabilities, .surface_capabilities = undefined };
-            try d.instance.handle.getPhysicalDeviceSurfaceCapabilities2KHR(d.physical_device, &.{ .surface = surface.handle }, &capabilities);
+            try d.instance.handle.getPhysicalDeviceSurfaceCapabilities2KHR(d.adapter.physical_device, &.{ .surface = surface.handle }, &capabilities);
             break :supported id_capabilities.present_id_2_supported == .true and wait_capabilities.present_wait_2_supported == .true;
         };
 
@@ -1378,7 +1408,7 @@ pub const Swapchain = struct {
 
         for (0..32) |_| {
             if (swapchain.needs_recreate or (extent_changed and !std.meta.eql(extent, swapchain.extent))) {
-                const capabilities = try d.instance.handle.getPhysicalDeviceSurfaceCapabilitiesKHR(d.physical_device, swapchain.surface);
+                const capabilities = try d.instance.handle.getPhysicalDeviceSurfaceCapabilitiesKHR(d.adapter.physical_device, swapchain.surface);
                 const extent_min = capabilities.min_image_extent;
                 const extent_max = capabilities.max_image_extent;
                 const image_extent: vk.Extent2D = if (capabilities.current_extent.width != std.math.maxInt(u32)) capabilities.current_extent else .{
@@ -1390,7 +1420,7 @@ pub const Swapchain = struct {
                 var image_count_min = capabilities.min_image_count + 1;
                 if (capabilities.max_image_count != 0) image_count_min = @min(image_count_min, capabilities.max_image_count);
 
-                if (!d.optional_features.swapchain_maintenance_1) try d.handle.queueWaitIdle(queue.handle);
+                if (!d.adapter.support.optional.swapchain_maintenance_1) try d.handle.queueWaitIdle(queue.handle);
                 const handle_old = swapchain.handle;
                 try swapchain.retired.append(d.gpa, .{
                     .handle = handle_old,
@@ -1446,7 +1476,7 @@ pub const Swapchain = struct {
                     errdefer d.handle.destroyImageView(default_view, null);
                     const present_semaphore = try d.handle.createSemaphore(&.{}, null);
                     errdefer d.handle.destroySemaphore(present_semaphore, null);
-                    const present_fence: vk.Fence = if (d.optional_features.swapchain_maintenance_1)
+                    const present_fence: vk.Fence = if (d.adapter.support.optional.swapchain_maintenance_1)
                         try d.handle.createFence(&.{ .flags = .{ .signaled = true } }, null)
                     else
                         .null;
@@ -1788,7 +1818,7 @@ pub const CommandBuffer = struct {
             dst_access.descriptor_buffer_read_ext = true;
         }
         if (cb.in_render_pass) {
-            std.debug.assert(cb.d.optional_features.dynamic_rendering_local_read);
+            std.debug.assert(cb.d.adapter.support.optional.dynamic_rendering_local_read);
             std.debug.assert(!before.compute and !before.transfer and !after.compute and !after.transfer and !after.host);
             const stages: vk.PipelineStageFlags2 = .{
                 .early_fragment_tests = true,
@@ -1984,7 +2014,7 @@ pub const CommandBuffer = struct {
         cb.d.handle.cmdSetDepthBiasEnable(cb.handle, .false);
         cb.d.handle.cmdSetStencilTestEnable(cb.handle, .false);
         cb.blend_state = .fromDesc(cb.d, .{});
-        if (cb.d.optional_features.extended_dynamic_state_3 and !cb.blend_state_embedded) cb.applyBlendState();
+        if (cb.d.adapter.support.optional.extended_dynamic_state_3 and !cb.blend_state_embedded) cb.applyBlendState();
     }
     fn renderingAttachment(
         texture: *sc.Texture,
@@ -2131,7 +2161,7 @@ pub const BlendState = struct {
     d: *Device,
 
     pub fn create(d: *Object(Device), desc: sc.BlendDesc, blend_state: **Object(BlendState)) !void {
-        std.debug.assert(d.body().optional_features.extended_dynamic_state_3);
+        std.debug.assert(d.body().adapter.support.optional.extended_dynamic_state_3);
         blend_state.* = try d.body().blend_states.create(d.body().gpa);
         blend_state.*.set(d.body().table, .fromDesc(d.body(), desc));
     }
@@ -2167,16 +2197,6 @@ pub const Texture = struct {
 
     const Desc = sc.TextureDesc;
 
-    pub const Descriptor = opaque {
-        pub fn sizeAndHeapAlign(d: *Object(Device)) sc.SizeAlign {
-            const properties = &d.body().descriptor_buffer_properties;
-            return .{
-                .size = @max(properties.sampled_image_descriptor_size, properties.storage_image_descriptor_size),
-                .alignment = properties.descriptor_buffer_offset_alignment,
-            };
-        }
-    };
-
     pub fn sizeAlign(d: *Object(Device), desc: Desc) sc.SizeAlign {
         const requirements = memoryRequirements(d.body().handle, desc);
         return .{ .size = requirements.size, .alignment = requirements.alignment };
@@ -2197,7 +2217,7 @@ pub const Texture = struct {
         var view_formats: [to_vk.view_format_count_max]vk.Format = undefined;
         const create_info = to_vk.imageCreateInfo(desc, &format_list, &view_formats);
         var properties: vk.ImageFormatProperties2 = .{ .image_format_properties = undefined };
-        d.instance.handle.getPhysicalDeviceImageFormatProperties2(d.physical_device, &.{
+        d.instance.handle.getPhysicalDeviceImageFormatProperties2(d.adapter.physical_device, &.{
             .p_next = create_info.p_next,
             .format = create_info.format,
             .type = create_info.image_type,
@@ -2296,7 +2316,7 @@ pub const Texture = struct {
             break :view entry.value_ptr.*;
         };
         const image_info: vk.DescriptorImageInfo = .{ .image_view = view, .image_layout = .general, .sampler = .null };
-        const properties = &d.descriptor_buffer_properties;
+        const properties = &d.adapter.descriptor_buffer_properties;
         var descriptor: sc.Descriptor = .{ .data = @splat(0) };
         switch (descriptor_type) {
             .storage_image => d.handle.getDescriptorEXT(&.{
@@ -2452,7 +2472,7 @@ pub const Pipeline = struct {
             .color_blend_equation_ext,
             .color_write_mask_ext,
         };
-        std.debug.assert(desc.blend != null or d.optional_features.extended_dynamic_state_3);
+        std.debug.assert(desc.blend != null or d.adapter.support.optional.extended_dynamic_state_3);
         const dynamic_state_count: u32 = if (desc.blend == null) dynamic_states.len else dynamic_states.len - 3;
 
         var blend_attachments: [sc.color_target_count_max]vk.PipelineColorBlendAttachmentState = undefined;
@@ -2659,17 +2679,17 @@ const wrap_sc_allocator = struct {
 
 pub export fn symbol(name: [*:0]const u8) callconv(sc.@"callconv") *const anyopaque {
     const map = sc.symbolMap(.{
-        .adapterInfo = Instance.adapterInfo,
+        .adapterInfo = Adapter.info,
         .createSurfaceWin32 = Surface.createSurfaceWin32,
         .createSurfaceXlib = Surface.createSurfaceXlib,
         .destroySurface = Surface.destroy,
         .surfaceSupportedUsage = Surface.supportedUsage,
         .surfaceSupportedFormats = Surface.supportedFormats,
         .surfacePresentModes = Surface.presentModes,
+        .deviceInfo = Device.info,
         .hostFromDevicePointer = Device.hostFromDevicePointer,
         .alloc = Device.alloc,
         .free = Device.free,
-        .descriptorSizeAndHeapAlign = Texture.Descriptor.sizeAndHeapAlign,
         .getQueue = Queue.getQueue,
         .textureCopyGranularity = Queue.textureCopyGranularity,
         .createCommandPool = CommandPool.create,

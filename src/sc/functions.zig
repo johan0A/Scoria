@@ -29,18 +29,30 @@ pub fn destroyInstance(
     );
 }
 
+/// Lists the compatible adapters present now. And handles stay valid until the instance is destroyed. Not thread-safe.
 pub fn enumerateAdapters(
     instance: *sc.Instance,
     adapters: ?[]*sc.Adapter,
-) usize {
+) error{
+    OutOfMemory,
+    OutOfDeviceMemory,
+    Unknown,
+}!usize {
     const f = internal.enumerate_adapters.?;
     var adapter_count: usize = undefined;
-    f(
+    const result = f(
         instance,
         @intCast((if (adapters) |unwrapped| unwrapped.len else 0)),
         (if (adapters) |unwrapped| unwrapped.ptr else null),
         &adapter_count,
     );
+    switch (result) {
+        .ok => {},
+        .out_of_memory => return error.OutOfMemory,
+        .out_of_device_memory => return error.OutOfDeviceMemory,
+        .unknown => return error.Unknown,
+        else => unreachable,
+    }
     return adapter_count;
 }
 
@@ -49,11 +61,13 @@ pub fn enumerateAdaptersAlloc(
     gpa: std.mem.Allocator,
 ) error{
     OutOfMemory,
+    OutOfDeviceMemory,
+    Unknown,
 }![]*sc.Adapter {
     var adapters: []*sc.Adapter = &.{};
     errdefer gpa.free(adapters);
     while (true) {
-        const adapter_count = enumerateAdapters(
+        const adapter_count = try enumerateAdapters(
             instance,
             adapters,
         );
@@ -82,16 +96,26 @@ pub fn destroyDevice(
     );
 }
 
-pub fn adapterInfo(
-    instance: *sc.Instance,
-    adapter: *sc.Adapter,
-) sc.AdapterInfo {
+/// Same as `scAdapterInfo` for the adapter the device was created from.
+pub fn deviceInfo(
+    device: *sc.Device,
+) *const sc.AdapterInfo {
     const f: *const fn (
-        instance: *sc.Instance,
-        adapter: *sc.Adapter,
-    ) callconv(@"callconv") sc.AdapterInfo = @ptrCast(internal.table(instance)[internal.slots.adapter_info]);
+        device: *sc.Device,
+    ) callconv(@"callconv") *const sc.AdapterInfo = @ptrCast(internal.table(device)[internal.slots.device_info]);
     return f(
-        instance,
+        device,
+    );
+}
+
+/// Cheap to call. Valid until the instance is destroyed.
+pub fn adapterInfo(
+    adapter: *sc.Adapter,
+) *const sc.AdapterInfo {
+    const f: *const fn (
+        adapter: *sc.Adapter,
+    ) callconv(@"callconv") *const sc.AdapterInfo = @ptrCast(internal.table(adapter)[internal.slots.adapter_info]);
+    return f(
         adapter,
     );
 }
@@ -285,17 +309,6 @@ pub fn free(
     return f(
         device,
         address,
-    );
-}
-
-pub fn descriptorSizeAndHeapAlign(
-    device: *sc.Device,
-) sc.SizeAlign {
-    const f: *const fn (
-        device: *sc.Device,
-    ) callconv(@"callconv") sc.SizeAlign = @ptrCast(internal.table(device)[internal.slots.descriptor_size_and_heap_align]);
-    return f(
-        device,
     );
 }
 
@@ -1335,7 +1348,7 @@ const internal = struct {
         adapters_capacity: usize,
         adapters: ?[*]*sc.Adapter,
         adapter_count: *usize,
-    ) callconv(@"callconv") void = null;
+    ) callconv(@"callconv") sc.Result = null;
     var create_device: ?*const fn (
         instance: *sc.Instance,
         adapter: *sc.Adapter,
@@ -1345,6 +1358,7 @@ const internal = struct {
     ) callconv(@"callconv") void = null;
 
     var slots: struct {
+        device_info: usize = 0,
         adapter_info: usize = 0,
         create_surface_win32: usize = 0,
         create_surface_xlib: usize = 0,
@@ -1355,7 +1369,6 @@ const internal = struct {
         host_from_device_pointer: usize = 0,
         alloc: usize = 0,
         free: usize = 0,
-        descriptor_size_and_heap_align: usize = 0,
         get_queue: usize = 0,
         texture_copy_granularity: usize = 0,
         create_command_pool: usize = 0,
@@ -1415,6 +1428,7 @@ const internal = struct {
     }
 
     fn loadSlots(instance: *sc.Instance) void {
+        slots.device_info = get_slot.?(instance, "scDeviceInfo");
         slots.adapter_info = get_slot.?(instance, "scAdapterInfo");
         slots.create_surface_win32 = get_slot.?(instance, "scCreateSurfaceWin32");
         slots.create_surface_xlib = get_slot.?(instance, "scCreateSurfaceXlib");
@@ -1425,7 +1439,6 @@ const internal = struct {
         slots.host_from_device_pointer = get_slot.?(instance, "scHostFromDevicePointer");
         slots.alloc = get_slot.?(instance, "scAlloc");
         slots.free = get_slot.?(instance, "scFree");
-        slots.descriptor_size_and_heap_align = get_slot.?(instance, "scDescriptorSizeAndHeapAlign");
         slots.get_queue = get_slot.?(instance, "scGetQueue");
         slots.texture_copy_granularity = get_slot.?(instance, "scTextureCopyGranularity");
         slots.create_command_pool = get_slot.?(instance, "scCreateCommandPool");

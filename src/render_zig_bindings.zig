@@ -204,6 +204,7 @@ fn renderEnumerateAlloc(w: *std.Io.Writer, registry: Registry, function: Registr
     }
     try w.writeAll("gpa: std.mem.Allocator,) error{ OutOfMemory, ");
     for (function.errors) |@"error"| {
+        if (std.mem.eql(u8, @"error".name, "SC_RESULT_OUT_OF_MEMORY")) continue;
         try renderErrorName(w, registry, @"error");
         try w.writeAll(", ");
     }

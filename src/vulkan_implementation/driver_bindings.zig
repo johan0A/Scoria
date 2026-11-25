@@ -419,6 +419,7 @@ pub fn Bindings(comptime handles: type) type {
             kind: AdapterKind,
             features: AdapterFeatures,
             format_features: FormatFeatures,
+            descriptor_size_and_heap_align: SizeAlign,
         };
 
         pub const SurfaceWin32Desc = extern struct {
@@ -625,10 +626,12 @@ pub fn Bindings(comptime handles: type) type {
         };
 
         pub const Functions = struct {
+            deviceInfo: fn (
+                device: *Device,
+            ) *const AdapterInfo,
             adapterInfo: fn (
-                instance: *Instance,
                 adapter: *Adapter,
-            ) AdapterInfo,
+            ) *const AdapterInfo,
             createSurfaceWin32: fn (
                 device: *Device,
                 desc: SurfaceWin32Desc,
@@ -674,9 +677,6 @@ pub fn Bindings(comptime handles: type) type {
                 device: *Device,
                 address: DeviceAddress,
             ) void,
-            descriptorSizeAndHeapAlign: fn (
-                device: *Device,
-            ) SizeAlign,
             getQueue: fn (
                 device: *Device,
                 queue_kind: QueueKind,
@@ -1019,12 +1019,18 @@ pub fn Bindings(comptime handles: type) type {
                     };
                 }
 
+                pub fn deviceInfo(
+                    device: *Device,
+                ) callconv(@"callconv") *const AdapterInfo {
+                    return functions.deviceInfo(
+                        device,
+                    );
+                }
+
                 pub fn adapterInfo(
-                    instance: *Instance,
                     adapter: *Adapter,
-                ) callconv(@"callconv") AdapterInfo {
+                ) callconv(@"callconv") *const AdapterInfo {
                     return functions.adapterInfo(
-                        instance,
                         adapter,
                     );
                 }
@@ -1128,14 +1134,6 @@ pub fn Bindings(comptime handles: type) type {
                     return functions.free(
                         device,
                         address,
-                    );
-                }
-
-                pub fn descriptorSizeAndHeapAlign(
-                    device: *Device,
-                ) callconv(@"callconv") SizeAlign {
-                    return functions.descriptorSizeAndHeapAlign(
-                        device,
                     );
                 }
 
@@ -1706,6 +1704,7 @@ pub fn Bindings(comptime handles: type) type {
         pub fn symbolMap(comptime functions: Functions) std.StaticStringMap(*const anyopaque) {
             const c_functions = CFunctions(functions);
             return .initComptime(@as([]const struct { []const u8, *const anyopaque }, &.{
+                .{ "scDeviceInfo", @ptrCast(&c_functions.deviceInfo) },
                 .{ "scAdapterInfo", @ptrCast(&c_functions.adapterInfo) },
                 .{ "scCreateSurfaceWin32", @ptrCast(&c_functions.createSurfaceWin32) },
                 .{ "scCreateSurfaceXlib", @ptrCast(&c_functions.createSurfaceXlib) },
@@ -1716,7 +1715,6 @@ pub fn Bindings(comptime handles: type) type {
                 .{ "scHostFromDevicePointer", @ptrCast(&c_functions.hostFromDevicePointer) },
                 .{ "scAlloc", @ptrCast(&c_functions.alloc) },
                 .{ "scFree", @ptrCast(&c_functions.free) },
-                .{ "scDescriptorSizeAndHeapAlign", @ptrCast(&c_functions.descriptorSizeAndHeapAlign) },
                 .{ "scGetQueue", @ptrCast(&c_functions.getQueue) },
                 .{ "scTextureCopyGranularity", @ptrCast(&c_functions.textureCopyGranularity) },
                 .{ "scCreateCommandPool", @ptrCast(&c_functions.createCommandPool) },

@@ -42,9 +42,9 @@ pub fn main(init: std.process.Init) !void {
     const adapters = try instance.enumerateAdaptersAlloc(arena);
     if (adapters.len == 0) return error.NoAdapter;
     const adapter = for (adapters) |adapter| {
-        if (instance.adapterInfo(adapter).kind == .discrete_gpu) break adapter;
+        if (adapter.info().kind == .discrete_gpu) break adapter;
     } else adapters[0];
-    std.log.info("selected device: {s}", .{std.mem.sliceTo(&instance.adapterInfo(adapter).name, 0)});
+    std.log.info("selected device: {s}", .{std.mem.sliceTo(&adapter.info().name, 0)});
 
     const device = instance.createDevice(adapter);
     defer device.destroy();

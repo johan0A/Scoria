@@ -20,7 +20,11 @@ fn Functions(sc: type) type {
             adapters_capacity: usize,
             adapters: ?[*]*sc.Adapter,
             adapter_count: *usize,
-        ) void,
+        ) error{
+            OutOfMemory,
+            OutOfDeviceMemory,
+            Unknown,
+        }!void,
         createDevice: fn (
             instance: *sc.Instance,
             adapter: *sc.Adapter,
@@ -90,13 +94,13 @@ fn CFunctions(comptime sc: type, comptime functions: Functions(sc)) type {
             adapters_capacity: usize,
             adapters: ?[*]*sc.Adapter,
             adapter_count: *usize,
-        ) callconv(sc.@"callconv") void {
-            return functions.enumerateAdapters(
+        ) callconv(sc.@"callconv") sc.Result {
+            return cResult(functions.enumerateAdapters(
                 instance,
                 adapters_capacity,
                 adapters,
                 adapter_count,
-            );
+            ));
         }
 
         pub fn createDevice(

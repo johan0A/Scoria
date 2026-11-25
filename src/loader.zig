@@ -40,8 +40,8 @@ fn enumerateAdapters(
     adapters_capacity: usize,
     adapters: ?[*]*sc.Adapter,
     adapter_count: *usize,
-) void {
-    impl.Instance.enumerateAdapters(instance, adapters_capacity, adapters, adapter_count);
+) !void {
+    return impl.Instance.enumerateAdapters(instance, adapters_capacity, adapters, adapter_count);
 }
 
 fn createDevice(instance: *sc.Instance, adapter: *sc.Adapter) *sc.Device {

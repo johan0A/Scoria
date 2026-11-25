@@ -52,7 +52,6 @@ pub const Instance = opaque {
     pub const enumerateAdapters = functions.enumerateAdapters;
     pub const enumerateAdaptersAlloc = functions.enumerateAdaptersAlloc;
     pub const createDevice = functions.createDevice;
-    pub const adapterInfo = functions.adapterInfo;
 };
 
 pub const Surface = opaque {
@@ -66,15 +65,17 @@ pub const Surface = opaque {
     pub const presentModesAlloc = functions.surfacePresentModesAlloc;
 };
 
-pub const Adapter = opaque {};
+pub const Adapter = opaque {
+    pub const info = functions.adapterInfo;
+};
 
 pub const Device = opaque {
     pub const create = functions.createDevice;
     pub const destroy = functions.destroyDevice;
+    pub const info = functions.deviceInfo;
     pub const hostFromPointer = functions.hostFromDevicePointer;
     pub const alloc = functions.alloc;
     pub const free = functions.free;
-    pub const descriptorSizeAndHeapAlign = functions.descriptorSizeAndHeapAlign;
     pub const getQueue = functions.getQueue;
     pub const textureSizeAlign = functions.textureSizeAlign;
     pub const textureSampleCountMax = functions.textureSampleCountMax;
@@ -612,6 +613,7 @@ pub const AdapterInfo = extern struct {
     kind: AdapterKind,
     features: AdapterFeatures,
     format_features: FormatFeatures,
+    descriptor_size_and_heap_align: SizeAlign,
 };
 
 pub const SurfaceWin32Desc = extern struct {
