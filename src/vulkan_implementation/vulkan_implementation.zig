@@ -1,13 +1,28 @@
 const build_options = @import("options");
 const std = @import("std");
 const SegmentedList = @import("segmented_list.zig").SegmentedList;
-const sc = @import("../sc_minimal.zig");
 const to_sc = @import("bridge.zig").to_sc;
 const to_vk = @import("bridge.zig").to_vk;
 const scir = @import("../scir.zig");
 const vk = @import("vulkan");
 const VulkanLoader = @import("VulkanLoader.zig");
-const symbol_map = @import("driver_symbol_map.zig");
+const vulkan_implementation = @This();
+
+pub const sc = @import("driver_bindings.zig").Bindings(struct {
+    pub const Instance = Object(vulkan_implementation.Instance);
+    pub const Adapter = vulkan_implementation.Adapter;
+    pub const Surface = Object(vulkan_implementation.Surface);
+    pub const Device = Object(vulkan_implementation.Device);
+    pub const Queue = Object(vulkan_implementation.Queue);
+    pub const Timeline = Object(vulkan_implementation.Timeline);
+    pub const Swapchain = Object(vulkan_implementation.Swapchain);
+    pub const CommandPool = Object(vulkan_implementation.CommandPool);
+    pub const CommandBuffer = Object(vulkan_implementation.CommandBuffer);
+    pub const Texture = Object(vulkan_implementation.Texture);
+    pub const Pipeline = Object(vulkan_implementation.Pipeline);
+    pub const DepthStencilState = Object(vulkan_implementation.DepthStencilState);
+    pub const BlendState = Object(vulkan_implementation.BlendState);
+});
 
 pub const Instance = struct {
     handle: vk.InstanceProxy,
@@ -1071,7 +1086,7 @@ pub const Queue = struct {
             d.pending_texture_inits.clearRetainingCapacity();
         }
 
-        const signal_info = if (signal) |s| semaphoreSubmitInfo(Timeline.fromHandle(s.timeline).handle, s.value) else null;
+        const signal_info = if (signal) |s| semaphoreSubmitInfo(s.timeline.body().handle, s.value) else null;
         try queue.submitAfterAcquires(submit_infos, waits, signal_info);
     }
 
@@ -1098,7 +1113,7 @@ pub const Queue = struct {
         @memcpy(submit_infos[acquires.len..], command_buffers);
         wait_infos[acquires.len] = semaphoreSubmitInfo(d.texture_init_timeline.semaphore, d.texture_init_timeline.value);
         for (waits, wait_infos[acquires.len + 1 ..]) |point, *wait_info| {
-            wait_info.* = semaphoreSubmitInfo(Timeline.fromHandle(point.timeline).handle, point.value);
+            wait_info.* = semaphoreSubmitInfo(point.timeline.body().handle, point.value);
         }
 
         const signals = [2]vk.SemaphoreSubmitInfo{
@@ -1168,16 +1183,11 @@ pub const Timeline = struct {
     }
 
     pub fn wait(point: sc.TimelinePoint) !void {
-        const timeline = fromHandle(point.timeline);
+        const timeline = point.timeline.body();
         waitTimeline(timeline.d.handle, timeline.handle, point.value) catch |err| return switch (err) {
             error.OutOfHostMemory => error.OutOfMemory,
             error.OutOfDeviceMemory, error.Unknown, error.DeviceLost => |e| e,
         };
-    }
-
-    fn fromHandle(handle: *sc.Timeline) *Timeline {
-        const timeline_obj: *Object(Timeline) = @ptrCast(@alignCast(handle));
-        return timeline_obj.body();
     }
 
     fn createTimeline(device: vk.DeviceProxy, initial_value: u64) !vk.Semaphore {
@@ -1504,7 +1514,7 @@ pub const Swapchain = struct {
             swapchain.acquire_semaphore = acquire_semaphore;
             swapchain.current = result.image_index;
             queue.pending_acquires.appendAssumeCapacity(swapchain);
-            return .{ .extent = swapchain.extent, .texture = @ptrCast(&swapchain.images[result.image_index].texture) };
+            return .{ .extent = swapchain.extent, .texture = &swapchain.images[result.image_index].texture };
         }
         return error.NoBackbuffer;
     }
@@ -1923,8 +1933,8 @@ pub const CommandBuffer = struct {
                 .color = .{ .float_32 = target.clear_color },
             });
             if (target.resolve_texture) |resolve_texture_obj| {
-                const resolve_texture = textureFromHandle(resolve_texture_obj);
-                const texture_desc = textureFromHandle(target.texture).desc;
+                const resolve_texture = resolve_texture_obj.body();
+                const texture_desc = target.texture.body().desc;
                 std.debug.assert(texture_desc.sample_count > 1 and resolve_texture.desc.sample_count == 1);
                 std.debug.assert(texture_desc.format == resolve_texture.desc.format);
                 const is_integer = to_vk.isIntegerFormat(texture_desc.format);
@@ -1945,7 +1955,7 @@ pub const CommandBuffer = struct {
         }) else null;
 
         const first_texture = if (color_targets.len > 0) color_targets[0].texture else d.texture orelse s.texture.?;
-        const first_texture_extent = textureFromHandle(first_texture).desc.extent;
+        const first_texture_extent = first_texture.body().desc.extent;
         const extent: vk.Extent2D = .{ .width = first_texture_extent.width, .height = first_texture_extent.height };
 
         cb.d.handle.cmdBeginRendering(cb.handle, &.{
@@ -1983,7 +1993,7 @@ pub const CommandBuffer = struct {
         clear_value: vk.ClearValue,
     ) vk.RenderingAttachmentInfo {
         return .{
-            .image_view = textureFromHandle(texture).default_view,
+            .image_view = texture.body().default_view,
             .image_layout = .general,
             .resolve_mode = .{},
             .resolve_image_view = .null,
@@ -1992,10 +2002,6 @@ pub const CommandBuffer = struct {
             .store_op = to_vk.attachmentStoreOp(store_op),
             .clear_value = clear_value,
         };
-    }
-    fn textureFromHandle(texture: *sc.Texture) *Texture {
-        const texture_obj: *Object(Texture) = @ptrCast(@alignCast(texture));
-        return texture_obj.body();
     }
     fn applyBlendState(cb: *CommandBuffer) void {
         cb.d.handle.cmdSetColorBlendEnableEXT(cb.handle, 0, &cb.blend_state.enables);
@@ -2652,21 +2658,7 @@ const wrap_sc_allocator = struct {
 };
 
 pub export fn symbol(name: [*:0]const u8) callconv(sc.@"callconv") *const anyopaque {
-    const map = symbol_map.map(.{
-        .Instance = Object(Instance),
-        .Adapter = Adapter,
-        .Surface = Object(Surface),
-        .Device = Object(Device),
-        .Queue = Object(Queue),
-        .Timeline = Object(Timeline),
-        .Swapchain = Object(Swapchain),
-        .CommandPool = Object(CommandPool),
-        .CommandBuffer = Object(CommandBuffer),
-        .DepthStencilState = Object(DepthStencilState),
-        .BlendState = Object(BlendState),
-        .Texture = Object(Texture),
-        .Pipeline = Object(Pipeline),
-    }, .{
+    const map = sc.symbolMap(.{
         .adapterInfo = Instance.adapterInfo,
         .createSurfaceWin32 = Surface.createSurfaceWin32,
         .createSurfaceXlib = Surface.createSurfaceXlib,

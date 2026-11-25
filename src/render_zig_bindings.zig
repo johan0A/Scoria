@@ -2,10 +2,9 @@ const std = @import("std");
 const Registry = @import("registry.zig").Registry;
 
 const Command = enum {
-    bindings_minimal,
     functions,
     reference,
-    driver_symbol_map,
+    driver_bindings,
     loader_symbol_map,
 };
 
@@ -15,7 +14,8 @@ pub fn main(init: std.process.Init) !void {
     const args = try init.minimal.args.toSlice(arena);
     const cwd: std.Io.Dir = .cwd();
 
-    const command = std.meta.stringToEnum(Command, stripPrefix(args[1], "--")) orelse return error.InvalidCommand;
+    const command = std.meta.stringToEnum(Command, stripPrefix(args[1], "--")) orelse
+        return error.InvalidCommand;
     const registry_path = args[2];
     const output_path = args[3];
 
@@ -25,11 +25,10 @@ pub fn main(init: std.process.Init) !void {
     var output: std.Io.Writer.Allocating = .init(arena);
     const w = &output.writer;
     switch (command) {
-        .bindings_minimal => try renderMinimal(w, registry),
         .functions => try renderFunctions(w, registry),
         .reference => try renderReference(w, registry),
-        .driver_symbol_map => try renderSymbolMap(w, arena, registry, .table),
-        .loader_symbol_map => try renderSymbolMap(w, arena, registry, .symbol),
+        .driver_bindings => try renderDriverBindings(w, registry),
+        .loader_symbol_map => try renderLoaderSymbolMap(w, registry),
     }
     try w.flush();
 
@@ -51,27 +50,34 @@ fn renderHeader(w: *std.Io.Writer, registry: Registry) !void {
 }
 
 const BindingStyle = enum {
+    /// Driver side: handles come from the driver, device pointers are plain addresses.
     minimal,
     normal,
 };
 
-fn renderMinimal(w: *std.Io.Writer, registry: Registry) !void {
+fn renderDriverBindings(w: *std.Io.Writer, registry: Registry) !void {
     try renderHeader(w, registry);
     try w.writeAll(
         \\const std = @import("std");
         \\const target = @import("builtin").target;
         \\
-        \\pub const @"callconv": std.lang.CallingConvention = switch (target.os.tag) {
-        \\    .windows => if (target.cpu.arch == .x86) .{ .x86_stdcall = .{} } else .c,
-        \\    else => .c,
-        \\};
+        \\/// `handles` holds the driver's type for each handle.
+        \\pub fn Bindings(comptime handles: type) type {
+        \\    return struct {
+        \\        pub const @"callconv": std.lang.CallingConvention = switch (target.os.tag) {
+        \\            .windows => if (target.cpu.arch == .x86) .{ .x86_stdcall = .{} } else .c,
+        \\            else => .c,
+        \\        };
     ++ "\n\n");
     try renderTypes(w, registry, .minimal);
-    for (registry.functions) |function| {
-        if (function.role == .get_slot) continue;
-        try renderFunction(w, registry, function, .minimal);
-    }
-    try renderInternal(w, registry, .minimal);
+    try renderSymbolMap(w, registry, .table);
+    try w.writeAll("};\n}\n");
+}
+
+fn renderLoaderSymbolMap(w: *std.Io.Writer, registry: Registry) !void {
+    try renderHeader(w, registry);
+    try w.writeAll("const std = @import(\"std\");\n\n");
+    try renderSymbolMap(w, registry, .symbol);
 }
 
 /// Files living next to the hand written sc.zig refer to its declarations.
@@ -88,10 +94,10 @@ fn renderFunctions(w: *std.Io.Writer, registry: Registry) !void {
     try w.writeAll(sc_imports);
     for (registry.functions) |function| {
         if (function.role == .get_slot) continue;
-        try renderFunction(w, registry, function, .normal);
+        try renderFunction(w, registry, function);
         if (function.enumerate) try renderEnumerateAlloc(w, registry, function);
     }
-    try renderInternal(w, registry, .normal);
+    try renderInternal(w, registry);
 }
 
 fn renderReference(w: *std.Io.Writer, registry: Registry) !void {
@@ -117,8 +123,20 @@ fn renderTypes(w: *std.Io.Writer, registry: Registry, style: BindingStyle) !void
     }
     try w.writeByte('\n');
     for (registry.opaques) |@"opaque"| {
-        try renderDeclStart(w, registry, @"opaque".doc, @"opaque".name);
-        try w.writeAll("opaque {};\n");
+        switch (style) {
+            .minimal => {
+                try renderDoc(w, @"opaque".doc);
+                try w.writeAll("pub const ");
+                try renderTypeName(w, registry, @"opaque".name);
+                try w.writeAll(": type = handles.");
+                try renderTypeName(w, registry, @"opaque".name);
+                try w.writeAll(";\n");
+            },
+            .normal => {
+                try renderDeclStart(w, registry, @"opaque".doc, @"opaque".name);
+                try w.writeAll("opaque {};\n");
+            },
+        }
     }
     try w.writeByte('\n');
     for (registry.enums) |@"enum"| {
@@ -229,24 +247,18 @@ fn renderEnumerateAlloc(w: *std.Io.Writer, registry: Registry, function: Registr
     try w.writeAll(");\n}\n}\n\n");
 }
 
-fn renderFunction(
-    w: *std.Io.Writer,
-    registry: Registry,
-    function: Registry.Function,
-    style: BindingStyle,
-) !void {
-    const normal = style == .normal;
+fn renderFunction(w: *std.Io.Writer, registry: Registry, function: Registry.Function) !void {
+    const style: BindingStyle = .normal;
     const is_create_instance = function.role == .create_instance;
-    const returns_error = normal and function.errors.len != 0;
-    const out_param_index = if (normal) try outParamIndex(function) else null;
+    const returns_error = function.errors.len != 0;
+    const out_param_index = try outParamIndex(function);
 
     try renderDoc(w, function.doc);
     try w.writeAll("pub fn ");
     try renderFnName(w, registry, function.name);
     try w.writeByte('(');
     for (function.params, 0..) |param, param_index| {
-        const role: ParamRole = if (normal) paramRole(function, param_index, out_param_index) else .plain;
-        switch (role) {
+        switch (paramRole(function, param_index, out_param_index)) {
             .returned, .slice_length => continue,
             .plain => {
                 try renderId(w, param.name);
@@ -314,7 +326,7 @@ fn renderFunction(
         try w.writeAll(" = undefined;\n");
     }
 
-    if (normal) for (function.params, 0..) |param, param_index| {
+    for (function.params, 0..) |param, param_index| {
         const length_index = sliceLengthIndex(function, param) orelse continue;
         const first_slice_index = sliceIndexForLength(function, length_index).?;
         if (first_slice_index == param_index) continue;
@@ -323,7 +335,7 @@ fn renderFunction(
         try w.writeAll(" == ");
         try renderSliceField(w, param, .len);
         try w.writeAll(");\n");
-    };
+    }
 
     if (is_create_instance) {
         try w.writeAll("const instance = ");
@@ -334,8 +346,7 @@ fn renderFunction(
     }
     try w.writeAll("f(");
     for (function.params, 0..) |param, param_index| {
-        const role: ParamRole = if (normal) paramRole(function, param_index, out_param_index) else .plain;
-        switch (role) {
+        switch (paramRole(function, param_index, out_param_index)) {
             .plain => try renderId(w, param.name),
             .returned => {
                 try w.writeByte('&');
@@ -505,7 +516,8 @@ fn outParamIndex(function: Registry.Function) !?usize {
     return found;
 }
 
-fn renderInternal(w: *std.Io.Writer, registry: Registry, style: BindingStyle) !void {
+fn renderInternal(w: *std.Io.Writer, registry: Registry) !void {
+    const style: BindingStyle = .normal;
     try w.writeAll(
         \\const internal = struct {
         \\    inline fn table(handle: *const anyopaque) [*]const *const anyopaque {
@@ -557,38 +569,16 @@ fn renderInternal(w: *std.Io.Writer, registry: Registry, style: BindingStyle) !v
     try w.writeAll("}\n};\n");
 }
 
-fn renderSymbolMap(
-    w: *std.Io.Writer,
-    arena: std.mem.Allocator,
-    registry: Registry,
-    dispatch: Registry.Function.Dispatch,
-) !void {
-    try renderHeader(w, registry);
-    try w.writeAll("const std = @import(\"std\");\n");
-    try w.print("const sc = @import(\"{s}\");\n\n", .{switch (dispatch) {
-        .table => "../sc_minimal.zig",
-        .symbol => "sc_minimal.zig",
-    }});
+fn renderSymbolMap(w: *std.Io.Writer, registry: Registry, dispatch: Registry.Function.Dispatch) !void {
+    const qualifier: TypeQualifier = switch (dispatch) {
+        .table => .{},
+        .symbol => .{ .decl = "sc.", .handle = "sc." },
+    };
 
-    const handle_used = try arena.alloc(bool, registry.opaques.len);
-    @memset(handle_used, false);
-    for (registry.functions) |function| {
-        if (function.dispatch != dispatch) continue;
-        markHandle(handle_used, function.return_type);
-        for (function.params) |param| markHandle(handle_used, param.type);
-    }
-
-    try w.writeAll("const HandleTypes = struct {\n");
-    for (registry.opaques, handle_used) |@"opaque", used| {
-        if (!used) continue;
-        try renderTypeName(w, registry, @"opaque".name);
-        try w.writeAll(": type,\n");
-    }
-    try w.writeAll("};\n\n");
-
-    const qualifier: TypeQualifier = .{ .decl = "sc.", .handle = "handle_types." };
-
-    try w.writeAll("fn Functions(handle_types: HandleTypes) type {\nreturn struct {\n");
+    try w.writeAll(switch (dispatch) {
+        .table => "pub const Functions = struct {\n",
+        .symbol => "fn Functions(sc: type) type {\nreturn struct {\n",
+    });
     for (registry.functions) |function| {
         if (function.dispatch != dispatch) continue;
         try renderFnName(w, registry, function.name);
@@ -603,14 +593,21 @@ fn renderSymbolMap(
         }
         try w.writeAll(",\n");
     }
-    try w.writeAll("};\n}\n\n");
+    try w.writeAll(switch (dispatch) {
+        .table => "};\n\n",
+        .symbol => "};\n}\n\n",
+    });
 
-    const result_enum = registry.resultEnum();
-    try w.writeAll("const Error = ");
+    try w.writeAll(switch (dispatch) {
+        .table => "fn CFunctions(comptime functions: Functions) type {\n",
+        .symbol => "fn CFunctions(comptime sc: type, comptime functions: Functions(sc)) type {\n",
+    });
+    try w.writeAll("return struct {\nconst Error = ");
     try renderErrorSet(w, registry, resultErrors(registry));
     try w.writeAll(";\n\n");
 
-    try w.writeAll("fn cResult(result: anytype) sc.");
+    const result_enum = registry.resultEnum();
+    try w.print("fn cResult(result: anytype) {s}", .{qualifier.decl});
     try renderTypeName(w, registry, result_enum.name);
     try w.writeAll(" {\nif (result) return .");
     try renderMemberName(w, registry, result_enum.name, resultOk(registry).name);
@@ -624,14 +621,13 @@ fn renderSymbolMap(
     }
     try w.writeAll("};\n}\n\n");
 
-    try w.writeAll("fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(handle_types)) type {\nreturn struct {\n");
     for (registry.functions) |function| {
         if (function.dispatch != dispatch) continue;
         try w.writeAll("pub fn ");
         try renderFnName(w, registry, function.name);
         try w.writeByte('(');
         try renderParams(w, registry, .minimal, function.params, qualifier);
-        try w.writeAll(") callconv(sc.@\"callconv\") ");
+        try w.print(") callconv({s}@\"callconv\") ", .{qualifier.decl});
         try renderQualifiedType(w, registry, .minimal, function.return_type, qualifier);
         try w.writeAll(" {\nreturn ");
 
@@ -650,15 +646,19 @@ fn renderSymbolMap(
     }
     try w.writeAll("};\n}\n\n");
 
-    try w.writeAll(
-        \\pub fn map(
-        \\    comptime handle_types: HandleTypes,
-        \\    comptime functions: Functions(handle_types),
-        \\) std.StaticStringMap(*const anyopaque) {
-        \\    const c_functions = CFunctions(handle_types, functions);
-        \\    return .initComptime(@as([]const struct { []const u8, *const anyopaque }, &.{
+    try w.writeAll(switch (dispatch) {
+        .table =>
+        \\pub fn symbolMap(comptime functions: Functions) std.StaticStringMap(*const anyopaque) {
+        \\    const c_functions = CFunctions(functions);
         \\
-    );
+        ,
+        .symbol =>
+        \\pub fn map(comptime sc: type, comptime functions: Functions(sc)) std.StaticStringMap(*const anyopaque) {
+        \\    const c_functions = CFunctions(sc, functions);
+        \\
+        ,
+    });
+    try w.writeAll("return .initComptime(@as([]const struct { []const u8, *const anyopaque }, &.{\n");
     for (registry.functions) |function| {
         if (function.dispatch != dispatch) continue;
         try w.print(".{{ \"{s}\", @ptrCast(&c_functions.", .{function.name});
@@ -666,10 +666,6 @@ fn renderSymbolMap(
         try w.writeAll(") },\n");
     }
     try w.writeAll("}));\n}\n");
-}
-
-fn markHandle(handle_used: []bool, @"type": Registry.Type) void {
-    if (@"type".base == .@"opaque") handle_used[@backingInt(@"type".base.@"opaque")] = true;
 }
 
 fn renderDeclStart(

@@ -274,12 +274,6 @@ pub const Stage = packed struct(u32) {
     host: bool = false,
     all_commands: bool = false,
     padding: u23 = 0,
-
-    pub const all: sc.Stage = .{
-        .all_commands = true,
-    };
-
-    pub const none: sc.Stage = .{};
 };
 
 pub const Hazard = packed struct(u32) {

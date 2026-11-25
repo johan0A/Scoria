@@ -1,5 +1,5 @@
 const std = @import("std");
-const sc = @import("../sc_minimal.zig");
+const sc = @import("vulkan_implementation.zig").sc;
 const SamplerDesc = @import("../sampler_desc.zig").SamplerDesc;
 const vk = @import("vulkan");
 

@@ -2,80 +2,73 @@
 // version: 0.1.0
 
 const std = @import("std");
-const sc = @import("sc_minimal.zig");
 
-const HandleTypes = struct {
-    Instance: type,
-    Adapter: type,
-    Device: type,
-};
-
-fn Functions(handle_types: HandleTypes) type {
+fn Functions(sc: type) type {
     return struct {
         createInstance: fn (
             allocator: ?*sc.HostAllocator,
-        ) *handle_types.Instance,
+        ) *sc.Instance,
         destroyInstance: fn (
-            instance: *handle_types.Instance,
+            instance: *sc.Instance,
         ) void,
         getSlot: fn (
-            instance: *handle_types.Instance,
+            instance: *sc.Instance,
             name: [*:0]const u8,
         ) usize,
         enumerateAdapters: fn (
-            instance: *handle_types.Instance,
+            instance: *sc.Instance,
             adapters_capacity: usize,
-            adapters: ?[*]*handle_types.Adapter,
+            adapters: ?[*]*sc.Adapter,
             adapter_count: *usize,
         ) void,
         createDevice: fn (
-            instance: *handle_types.Instance,
-            adapter: *handle_types.Adapter,
-        ) *handle_types.Device,
+            instance: *sc.Instance,
+            adapter: *sc.Adapter,
+        ) *sc.Device,
         destroyDevice: fn (
-            device: *handle_types.Device,
+            device: *sc.Device,
         ) void,
     };
 }
 
-const Error = error{
-    Unknown,
-    OutOfMemory,
-    OutOfDeviceMemory,
-    DeviceLost,
-    SurfaceLost,
-    NoBackbuffer,
-    MalformedScir,
-    UnsupportedScirVersion,
-    UnsupportedScirBytecode,
-};
-
-fn cResult(result: anytype) sc.Result {
-    if (result) return .ok else |err| return switch (@as(Error, err)) {
-        error.Unknown => .unknown,
-        error.OutOfMemory => .out_of_memory,
-        error.OutOfDeviceMemory => .out_of_device_memory,
-        error.DeviceLost => .device_lost,
-        error.SurfaceLost => .surface_lost,
-        error.NoBackbuffer => .no_backbuffer,
-        error.MalformedScir => .malformed_scir,
-        error.UnsupportedScirVersion => .unsupported_scir_version,
-        error.UnsupportedScirBytecode => .unsupported_scir_bytecode,
-    };
-}
-
-fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(handle_types)) type {
+fn CFunctions(comptime sc: type, comptime functions: Functions(sc)) type {
     return struct {
+        const Error = error{
+            Unknown,
+            OutOfMemory,
+            OutOfDeviceMemory,
+            DeviceLost,
+            SurfaceLost,
+            NoBackbuffer,
+            MalformedScir,
+            UnsupportedScirVersion,
+            UnsupportedScirBytecode,
+        };
+
+        fn cResult(result: anytype) sc.Result {
+            if (result) return .ok else |err| return switch (@as(Error, err)) {
+                error.Unknown => .unknown,
+                error.OutOfMemory => .out_of_memory,
+                error.OutOfDeviceMemory => .out_of_device_memory,
+                error.DeviceLost => .device_lost,
+                error.SurfaceLost => .surface_lost,
+                error.NoBackbuffer => .no_backbuffer,
+                error.MalformedScir => .malformed_scir,
+                error.UnsupportedScirVersion => .unsupported_scir_version,
+                error.UnsupportedScirBytecode => .unsupported_scir_bytecode,
+            };
+        }
+
         pub fn createInstance(
             allocator: ?*sc.HostAllocator,
-        ) callconv(sc.@"callconv") *handle_types.Instance {
+        ) callconv(sc.@"callconv") *sc.Instance {
             return functions.createInstance(
                 allocator,
             );
         }
 
         pub fn destroyInstance(
-            instance: *handle_types.Instance,
+            instance: *sc.Instance,
         ) callconv(sc.@"callconv") void {
             return functions.destroyInstance(
                 instance,
@@ -83,7 +76,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
         }
 
         pub fn getSlot(
-            instance: *handle_types.Instance,
+            instance: *sc.Instance,
             name: [*:0]const u8,
         ) callconv(sc.@"callconv") usize {
             return functions.getSlot(
@@ -93,9 +86,9 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
         }
 
         pub fn enumerateAdapters(
-            instance: *handle_types.Instance,
+            instance: *sc.Instance,
             adapters_capacity: usize,
-            adapters: ?[*]*handle_types.Adapter,
+            adapters: ?[*]*sc.Adapter,
             adapter_count: *usize,
         ) callconv(sc.@"callconv") void {
             return functions.enumerateAdapters(
@@ -107,9 +100,9 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
         }
 
         pub fn createDevice(
-            instance: *handle_types.Instance,
-            adapter: *handle_types.Adapter,
-        ) callconv(sc.@"callconv") *handle_types.Device {
+            instance: *sc.Instance,
+            adapter: *sc.Adapter,
+        ) callconv(sc.@"callconv") *sc.Device {
             return functions.createDevice(
                 instance,
                 adapter,
@@ -117,7 +110,7 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
         }
 
         pub fn destroyDevice(
-            device: *handle_types.Device,
+            device: *sc.Device,
         ) callconv(sc.@"callconv") void {
             return functions.destroyDevice(
                 device,
@@ -126,11 +119,8 @@ fn CFunctions(comptime handle_types: HandleTypes, comptime functions: Functions(
     };
 }
 
-pub fn map(
-    comptime handle_types: HandleTypes,
-    comptime functions: Functions(handle_types),
-) std.StaticStringMap(*const anyopaque) {
-    const c_functions = CFunctions(handle_types, functions);
+pub fn map(comptime sc: type, comptime functions: Functions(sc)) std.StaticStringMap(*const anyopaque) {
+    const c_functions = CFunctions(sc, functions);
     return .initComptime(@as([]const struct { []const u8, *const anyopaque }, &.{
         .{ "scCreateInstance", @ptrCast(&c_functions.createInstance) },
         .{ "scDestroyInstance", @ptrCast(&c_functions.destroyInstance) },
