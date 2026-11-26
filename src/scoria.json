@@ -224,7 +224,7 @@
         { "name": "texture", "type": { "base": "ScTexture", "ptr": [{ "optional": true }] }, "default": null, "doc": "" },
         { "name": "load_op", "type": { "base": "ScLoadOp" }, "default": "SC_LOAD_OP_LOAD", "doc": "" },
         { "name": "store_op", "type": { "base": "ScStoreOp" }, "default": "SC_STORE_OP_STORE", "doc": "" },
-        { "name": "clear_value", "type": { "base": "float" }, "default": 1.0, "doc": "" }
+        { "name": "clear_value", "type": { "base": "float" }, "default": 0.0, "doc": "" }
       ],
       "doc": ""
     },
@@ -418,7 +418,7 @@
       "name": "ScDepthStencilDesc",
       "fields": [
         { "name": "depth_mode", "type": { "base": "ScDepthFlags" }, "default": 0, "doc": "" },
-        { "name": "depth_test", "type": { "base": "ScCompareOp" }, "default": "SC_COMPARE_OP_ALWAYS", "doc": "" },
+        { "name": "depth_test", "type": { "base": "ScCompareOp" }, "default": "SC_COMPARE_OP_GREATER_EQUAL", "doc": "" },
         { "name": "depth_bias", "type": { "base": "float" }, "default": 0, "doc": "" },
         { "name": "depth_bias_slope_factor", "type": { "base": "float" }, "default": 0, "doc": "" },
         { "name": "depth_bias_clamp", "type": { "base": "float" }, "default": 0, "doc": "" },

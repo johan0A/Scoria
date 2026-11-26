@@ -461,7 +461,7 @@ pub fn Bindings(comptime handles: type) type {
             texture: ?*Texture = null,
             load_op: LoadOp = .load,
             store_op: StoreOp = .store,
-            clear_value: f32 = 1,
+            clear_value: f32 = 0,
         };
 
         pub const StencilAttachment = extern struct {
@@ -615,7 +615,7 @@ pub fn Bindings(comptime handles: type) type {
 
         pub const DepthStencilDesc = extern struct {
             depth_mode: DepthFlags = .{},
-            depth_test: CompareOp = .always,
+            depth_test: CompareOp = .greater_equal,
             depth_bias: f32 = 0,
             depth_bias_slope_factor: f32 = 0,
             depth_bias_clamp: f32 = 0,
