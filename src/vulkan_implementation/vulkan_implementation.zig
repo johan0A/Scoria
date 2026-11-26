@@ -2496,8 +2496,8 @@ pub const Pipeline = struct {
             .view_mask = 0,
             .color_attachment_count = @intCast(color_targets.len),
             .p_color_attachment_formats = &color_formats,
-            .depth_attachment_format = to_vk.format(desc.depth_stencil_format),
-            .stencil_attachment_format = to_vk.format(desc.depth_stencil_format),
+            .depth_attachment_format = if (to_vk.aspectsForFormat(desc.depth_stencil_format).depth) to_vk.format(desc.depth_stencil_format) else .undefined,
+            .stencil_attachment_format = if (to_vk.aspectsForFormat(desc.depth_stencil_format).stencil) to_vk.format(desc.depth_stencil_format) else .undefined,
         };
         const stencil_placeholder = std.mem.zeroInit(vk.StencilOpState, .{});
         _ = try d.handle.createGraphicsPipelines(.null, &.{.{
