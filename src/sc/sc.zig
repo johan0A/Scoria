@@ -565,6 +565,10 @@ pub const Extent3D = extern struct {
     width: u32,
     height: u32,
     depth: u32,
+
+    pub fn fromExtent2D(extent: Extent2D) Extent3D {
+        return .{ .width = extent.width, .height = extent.height, .depth = 1 };
+    }
 };
 
 pub const Offset2D = extern struct {
